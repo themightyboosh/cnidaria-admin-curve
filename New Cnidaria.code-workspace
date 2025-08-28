@@ -1,0 +1,68 @@
+{
+  "folders": [
+    {
+      "name": "📁 New Cnidaria (Root)",
+      "path": "."
+    },
+    {
+      "name": "🚀 API",
+      "path": "./API"
+    },
+    {
+      "name": "⚙️ Admin",
+      "path": "./Admin"
+    },
+    {
+      "name": "🎮 Unity",
+      "path": "./Unity"
+    },
+    {
+      "name": "📚 Shared Docs",
+      "path": "./Docs"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/Thumbs.db": true,
+      "**/node_modules": true,
+      "**/Library": true,
+      "**/Temp": true,
+      "**/Obj": true,
+      "**/Build": true,
+      "**/Builds": true,
+      "**/Logs": true,
+      "**/UserSettings": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/Library": true,
+      "**/Temp": true,
+      "**/Obj": true,
+      "**/Build": true,
+      "**/Builds": true,
+      "**/Logs": true,
+      "**/UserSettings": true
+    },
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/Library/**": true,
+      "**/Temp/**": true,
+      "**/Obj/**": true,
+      "**/Build/**": true,
+      "**/Builds/**": true,
+      "**/Logs/**": true,
+      "**/UserSettings/**": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.vscode-typescript-next",
+      "bradlc.vscode-tailwindcss",
+      "ms-vscode.vscode-json",
+      "ms-dotnettools.csharp",
+      "unity.unity-debug",
+      "ms-vscode.vscode-node-azure-pack"
+    ]
+  }
+}

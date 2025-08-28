@@ -1,0 +1,47 @@
+{
+  "name": "cnidaria-api-tests",
+  "version": "1.0.0",
+  "description": "Testing suite for Cnidaria API mathematical pipeline and grid visualization",
+  "main": "runTests.js",
+  "scripts": {
+    "test": "node runTests.js comprehensive",
+    "test:single": "node runTests.js single 50 50 highDistortion",
+    "test:grid": "node runTests.js grid 0 0 10 10 lowDistortion",
+    "test:visualize": "node runTests.js visualize 0 0 20 20 highDistortion",
+    "test:curves": "node runTests.js curve-types",
+    "test:distortion": "node runTests.js distortion",
+    "test:scaling": "node runTests.js scaling",
+    "demo": "node demo.js",
+    "help": "node runTests.js help",
+    "clean": "rm -f *.html",
+    "clean:all": "rm -f *.html && rm -rf node_modules package-lock.json"
+  },
+  "keywords": [
+    "testing",
+    "mathematical-pipeline",
+    "grid-visualization",
+    "terrain-generation",
+    "cnidaria",
+    "api"
+  ],
+  "author": "Daniel Crowder",
+  "license": "MIT",
+  "dependencies": {
+    "perlin-noise": "^0.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danielcrowder/cnidaria-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/danielcrowder/cnidaria-api/issues"
+  },
+  "homepage": "https://github.com/danielcrowder/cnidaria-api#readme"
+}

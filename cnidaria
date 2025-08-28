@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Simple alias for the New Cnidaria project switcher
+# Usage: ./cnidaria [project_name]
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Run the project switcher
+"$SCRIPT_DIR/switch-project.sh" "$@"

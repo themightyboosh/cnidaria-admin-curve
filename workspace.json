@@ -1,0 +1,40 @@
+{
+  "workspace": "New Cnidaria",
+  "description": "Game development workspace with API, Admin, Unity, and shared documentation",
+  "projects": {
+    "API": {
+      "name": "cnidaria-api",
+      "description": "Game API backend service",
+      "type": "backend",
+      "tech": ["nodejs", "express"],
+      "repository": "https://github.com/danielcrowder/cnidaria-api",
+      "path": "./API",
+      "shared_docs": "../Docs"
+    },
+    "Admin": {
+      "name": "cnidaria-admin",
+      "description": "React-based admin interface",
+      "type": "frontend",
+      "tech": ["react", "typescript"],
+      "repository": "https://github.com/danielcrowder/cnidaria-admin",
+      "path": "./Admin",
+      "shared_docs": "../Docs"
+    },
+    "Unity": {
+      "name": "cnidaria-unity",
+      "description": "Unity game client",
+      "type": "game",
+      "tech": ["unity", "csharp"],
+      "repository": "https://github.com/danielcrowder/cnidaria-unity",
+      "path": "./Unity",
+      "shared_docs": "../Docs"
+    }
+  },
+  "shared": {
+    "docs": "./Docs",
+    "tests": "./Tests",
+    "description": "Shared documentation, testing, and resources"
+  },
+  "created": "2024-01-01",
+  "version": "1.0.0"
+}

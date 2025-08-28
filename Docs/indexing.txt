@@ -1,0 +1,200 @@
+# Indexing System Requirements
+
+## Overview
+This document defines the requirements for how the indexing system works in relation to curve width, distance from the center, and retrieving terrain values in the Cnidaria terrain generation system.
+
+## 1. Curve Width and Index Mapping
+
+### 1.1 Curve Width Definition
+- **Curve Width**: The curve is defined with a specific `width` parameter (e.g., 4895 points as seen in the API responses)
+- **Index Range**: Valid indices range from `0` to `width - 1` (e.g., 0 to 4894 for a 4895-point curve)
+- **Seamless Looping**: The curve is designed to loop seamlessly, where `data[width-1]` should equal `data[0]` for continuous terrain generation
+
+### 1.2 Index Structure
+```
+Curve Data Array: [value_0, value_1, value_2, ..., value_width-1]
+Index Range:      0        1        2         ...  width-1
+```
+
+## 2. Coordinate Modes and Index Calculation
+
+### 2.1 Radial Mode (Distance-Based)
+- **Center Point**: The canvas center serves as the origin (0,0)
+- **Distance Calculation**: For any pixel at coordinates (x,y), calculate the Euclidean distance from center:
+  ```
+  distance = sqrt((x - center_x)² + (y - center_y)²)
+  ```
+- **Index Mapping**: Map the distance to a curve index:
+  ```
+  index = (distance / max_distance) * curve_width
+  index = clamp(index, 0, curve_width - 1)
+  ```
+- **Value Retrieval**: Use the calculated index to get the terrain value:
+  ```
+  value = curve_data[index]
+  ```
+
+### 2.2 Cartesian Mode (Direct Mapping)
+- **Coordinate Mapping**: Map canvas coordinates directly to curve indices:
+  ```
+  x_index = (x / canvas_width) * curve_width
+  y_index = (y / canvas_height) * curve_width
+  ```
+- **Index Selection**: Choose either x or y index based on the view orientation, or combine them
+- **Value Retrieval**: Use the selected index to get the terrain value:
+  ```
+  value = curve_data[index]
+  ```
+
+## 3. Value Retrieval Process
+
+### 3.1 API-First Approach
+1. **Coordinate Input**: Send (x,y) coordinates to the API
+2. **Index Calculation**: API calculates the appropriate curve index based on coordinate mode
+3. **Transformation Pipeline**: API applies the full 6-step transformation:
+   - Base Index
+   - Index Distortion
+   - Noise Generation
+   - Value Scaling
+   - Offset
+   - Shelf Clipping
+4. **Value Return**: API returns the processed terrain value for that coordinate
+
+### 3.2 Local Fallback
+1. **Index Calculation**: Calculate index locally using the same formulas
+2. **Direct Access**: Access `curve_data[index]` directly from the loaded curve
+3. **No Transformation**: Use raw curve values (no noise/distortion applied)
+
+## 4. Grid Generation Requirements
+
+### 4.1 Batch Processing
+- **Grid Dimensions**: Process entire grid of coordinates in single API call
+- **Coordinate Array**: Send array of (x,y) coordinates to `/api/curves/:id/grid` endpoint
+- **Bulk Response**: Receive array of processed values corresponding to each coordinate
+- **Efficiency**: Avoid individual API calls for each pixel
+
+### 4.2 Cell Size Optimization
+- **Adaptive Resolution**: Adjust cell size based on performance requirements
+- **Caching**: Cache grid results to avoid redundant API calls
+- **Progressive Loading**: Load grid in chunks for large canvases
+
+## 5. Index Bounds and Error Handling
+
+### 5.1 Bounds Checking
+- **Valid Range**: Ensure calculated index is within `[0, curve_width - 1]`
+- **Clamping**: Clamp out-of-bounds indices to valid range
+- **Edge Cases**: Handle coordinates at canvas boundaries
+
+### 5.2 Fallback Values
+- **Default Value**: Return neutral terrain value (e.g., 0.5) for invalid indices
+- **Error Logging**: Log index calculation errors for debugging
+- **Graceful Degradation**: Continue rendering with fallback values
+
+## 6. Performance Considerations
+
+### 6.1 Index Calculation Caching
+- **Coordinate Hash**: Cache index calculations for repeated coordinates
+- **Spatial Locality**: Optimize for coordinates that are spatially close
+- **Memory Management**: Clear cache when curve parameters change
+
+### 6.2 Batch Optimization
+- **Coordinate Batching**: Group coordinates into optimal batch sizes
+- **API Rate Limiting**: Respect API rate limits for large grids
+- **Progressive Rendering**: Render grid progressively as data becomes available
+
+## 7. Implementation Examples
+
+### 7.1 Radial Index Calculation
+```python
+def calculate_radial_index(x, y, center_x, center_y, max_distance, curve_width):
+    # Calculate distance from center
+    distance = math.sqrt((x - center_x)**2 + (y - center_y)**2)
+    
+    # Map distance to curve index
+    index = (distance / max_distance) * curve_width
+    
+    # Clamp to valid range
+    index = max(0, min(index, curve_width - 1))
+    
+    return int(index)
+```
+
+### 7.2 Cartesian Index Calculation
+```python
+def calculate_cartesian_index(x, y, canvas_width, canvas_height, curve_width):
+    # Map canvas coordinates to curve indices
+    x_index = (x / canvas_width) * curve_width
+    y_index = (y / canvas_height) * curve_width
+    
+    # Choose primary index (could be x, y, or combination)
+    index = int(x_index)  # or y_index, or (x_index + y_index) / 2
+    
+    # Clamp to valid range
+    index = max(0, min(index, curve_width - 1))
+    
+    return index
+```
+
+### 7.3 Value Retrieval with Fallback
+```python
+def get_terrain_value(index, curve_data, default_value=0.5):
+    try:
+        # Validate index bounds
+        if 0 <= index < len(curve_data):
+            return curve_data[index]
+        else:
+            print(f"Warning: Index {index} out of bounds, using default value")
+            return default_value
+    except Exception as e:
+        print(f"Error retrieving value at index {index}: {e}")
+        return default_value
+```
+
+## 8. Coordinate Mode Switching
+
+### 8.1 Mode Persistence
+- **Curve Property**: Coordinate mode is stored as a property of the curve data
+- **API Integration**: Mode is saved/loaded via the API with curve data
+- **UI Synchronization**: UI dropdown reflects the current curve's coordinate mode
+
+### 8.2 Real-time Switching
+- **Immediate Effect**: Coordinate mode changes take effect immediately
+- **Grid Redraw**: Switching modes triggers a complete grid redraw
+- **Performance**: Mode switching is optimized to avoid unnecessary API calls
+
+## 9. Quality Assurance
+
+### 9.1 Index Accuracy
+- **Precision**: Index calculations must maintain sufficient precision for smooth terrain
+- **Consistency**: Same coordinates must always produce the same index (given same parameters)
+- **Validation**: Index values must be validated before use
+
+### 9.2 Performance Metrics
+- **Response Time**: Index calculation and value retrieval must be fast (< 1ms per coordinate)
+- **Memory Usage**: Index caching must not exceed reasonable memory limits
+- **API Efficiency**: Batch processing must reduce API calls by at least 90%
+
+## 10. Future Enhancements
+
+### 10.1 Advanced Indexing
+- **Multi-scale Indexing**: Support for multiple curve resolutions
+- **Adaptive Indexing**: Dynamic index calculation based on terrain complexity
+- **Custom Index Functions**: User-defined index calculation algorithms
+
+### 10.2 Performance Improvements
+- **GPU Acceleration**: Offload index calculations to GPU when available
+- **Predictive Caching**: Pre-calculate indices for likely coordinate patterns
+- **Compression**: Compress index data for large grids
+
+---
+
+## Summary
+
+This indexing system ensures that:
+- **Radial mode** creates organic, circular terrain patterns radiating from the center
+- **Cartesian mode** creates structured, grid-aligned terrain patterns
+- **Value retrieval** is efficient and consistent across both modes
+- **Performance** is optimized through batching and caching
+- **Fallbacks** ensure the app remains functional even when the API is unavailable
+
+The system provides a robust foundation for terrain generation while maintaining flexibility for different coordinate modes and ensuring optimal performance through intelligent caching and batch processing.
