@@ -6,6 +6,7 @@ interface Curve {
   id: string
   "curve-name": string
   "curve-description": string
+  "curve-tags"?: string[]
   "curve-type": string
   "curve-width": number
   "curve-data": number[]
@@ -41,6 +42,8 @@ function App() {
     view: true,
     settings: true
   })
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [newTagInput, setNewTagInput] = useState('')
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -63,6 +66,15 @@ function App() {
           const curvesData = data.data?.curves || data.curves || []
           console.log('Setting curves:', curvesData)
           setCurves(curvesData)
+          
+          // Extract all unique tags from curves
+          const allTags = new Set<string>()
+          curvesData.forEach((curve: Curve) => {
+            if (curve["curve-tags"]) {
+              curve["curve-tags"].forEach(tag => allTags.add(tag))
+            }
+          })
+          setAvailableTags(Array.from(allTags).sort())
         } else {
           console.error('API returned success: false:', data)
           setError('Failed to load curves: API returned error')
@@ -257,6 +269,35 @@ function App() {
       ...prev,
       [sectionName]: !prev[sectionName]
     }))
+  }
+
+  // Add tag to curve
+  const addTagToCurve = (tag: string) => {
+    if (!editingCurve) return
+    
+    const currentTags = editingCurve["curve-tags"] || []
+    if (!currentTags.includes(tag)) {
+      handleFieldChange("curve-tags", [...currentTags, tag])
+    }
+  }
+
+  // Remove tag from curve
+  const removeTagFromCurve = (tagToRemove: string) => {
+    if (!editingCurve) return
+    
+    const currentTags = editingCurve["curve-tags"] || []
+    const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
+    handleFieldChange("curve-tags", updatedTags)
+  }
+
+  // Add new tag to system
+  const addNewTag = () => {
+    if (newTagInput.trim() && !availableTags.includes(newTagInput.trim())) {
+      const newTag = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+      setAvailableTags(prev => [...prev, newTag])
+      addTagToCurve(newTag)
+      setNewTagInput('')
+    }
   }
 
   // Save curve changes
@@ -479,6 +520,88 @@ function App() {
                 </h3>
                 {expandedSections.settings && (
                   <div className="section-content">
+                    {/* Curve Name */}
+                    <div className="form-group">
+                      <label>Curve Name:</label>
+                      <input
+                        type="text"
+                        value={editingCurve["curve-name"] || ""}
+                        onChange={(e) => handleFieldChange("curve-name", e.target.value)}
+                        title="The name of this curve"
+                      />
+                    </div>
+
+                    {/* Curve Description */}
+                    <div className="form-group description-group">
+                      <label>Description:</label>
+                      <textarea
+                        value={editingCurve["curve-description"] || ""}
+                        onChange={(e) => handleFieldChange("curve-description", e.target.value)}
+                        title="Description of this curve"
+                        rows={3}
+                        className="description-textarea"
+                      />
+                    </div>
+
+                    {/* Curve Tags */}
+                    <div className="form-group tags-group">
+                      <label>Tags:</label>
+                      <div className="tags-container">
+                        {/* Current tags as pills */}
+                        {(editingCurve["curve-tags"] || []).map(tag => (
+                          <span key={tag} className="tag-pill">
+                            {tag}
+                            <button
+                              type="button"
+                              className="remove-tag"
+                              onClick={() => removeTagFromCurve(tag)}
+                              title={`Remove tag: ${tag}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        
+                        {/* Available tags to add */}
+                        <div className="available-tags">
+                          {availableTags
+                            .filter(tag => !editingCurve["curve-tags"]?.includes(tag))
+                            .map(tag => (
+                              <button
+                                key={tag}
+                                type="button"
+                                className="add-tag-btn"
+                                onClick={() => addTagToCurve(tag)}
+                                title={`Add tag: ${tag}`}
+                              >
+                                + {tag}
+                              </button>
+                            ))}
+                        </div>
+                        
+                        {/* Add new tag input */}
+                        <div className="new-tag-input">
+                          <input
+                            type="text"
+                            placeholder="New tag..."
+                            value={newTagInput}
+                            onChange={(e) => setNewTagInput(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && addNewTag()}
+                            className="new-tag-field"
+                          />
+                          <button
+                            type="button"
+                            onClick={addNewTag}
+                            disabled={!newTagInput.trim()}
+                            className="add-new-tag-btn"
+                            title="Add new tag"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="form-group">
                       <label>Curve Type:</label>
                       <select
