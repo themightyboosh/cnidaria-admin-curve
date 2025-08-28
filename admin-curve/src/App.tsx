@@ -6,6 +6,7 @@ interface Curve {
   "curve-name": string
   "curve-description": string
   "curve-type": string
+  "curve-width": number
   "curve-data": number[]
 }
 
@@ -23,6 +24,9 @@ function App() {
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
   const [cellColors, setCellColors] = useState<Map<string, string>>(new Map())
   const [isLoadingCurves, setIsLoadingCurves] = useState(false)
+  const [isProcessingCoordinates, setIsProcessingCoordinates] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 })
+  const [error, setError] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -30,6 +34,7 @@ function App() {
   // Load curves from API
   const loadCurves = async () => {
     setIsLoadingCurves(true)
+    setError(null)
     console.log('Loading curves from API...')
     try {
       const response = await fetch('https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves')
@@ -46,12 +51,15 @@ function App() {
           setCurves(curvesData)
         } else {
           console.error('API returned success: false:', data)
+          setError('Failed to load curves: API returned error')
         }
       } else {
         console.error('API request failed:', response.status, response.statusText)
+        setError(`Failed to load curves: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
       console.error('Failed to load curves:', error)
+      setError('Failed to load curves: Network error')
     } finally {
       setIsLoadingCurves(false)
       console.log('Finished loading curves')
@@ -142,49 +150,77 @@ function App() {
   const processCurveCoordinates = async (curve: Curve) => {
     if (!curve) return
     
+    setIsProcessingCoordinates(true)
+    setError(null)
+    setProcessingProgress({ current: 0, total: 0 })
+    
     const { topLeft, bottomRight } = getVisibleCoordinates()
     
     try {
+      console.log(`Processing coordinates for curve: ${curve["curve-name"]}`)
+      console.log(`Grid bounds: (${topLeft[0]}, ${topLeft[1]}) to (${bottomRight[0]}, ${bottomRight[1]})`)
+      
       // Call GetCurveIndexValue API with visible coordinates
       const response = await fetch(
         `https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
         {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate'
           }
         }
       )
       
       if (response.ok) {
         const data = await response.json()
+        console.log('API Response:', data)
         
         // The API returns data in format: {"curve-name": [results]}
         const curveName = Object.keys(data)[0]
         const results = data[curveName]
         
         if (results && Array.isArray(results)) {
+          console.log(`Processing ${results.length} coordinate results`)
+          
           // Process results and update cell colors
           const newCellColors = new Map(cellColors)
           
-          results.forEach((result: ProcessCoordinateResponse) => {
+          results.forEach((result: ProcessCoordinateResponse, index: number) => {
             const coordKey = `${result["cell-coordinates"][0]}_${result["cell-coordinates"][1]}`
             const hue = Math.max(0, Math.min(255, result["index-value"]))
             const color = `hsl(${hue}, 70%, 50%)`
             newCellColors.set(coordKey, color)
+            
+            // Update progress
+            setProcessingProgress({ current: index + 1, total: results.length })
           })
           
           setCellColors(newCellColors)
+          console.log(`Successfully processed ${results.length} coordinates`)
+        } else {
+          setError('Invalid response format from API')
         }
+      } else {
+        const errorText = await response.text()
+        console.error('API request failed:', response.status, response.statusText, errorText)
+        setError(`API request failed: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
       console.error('Failed to process curve coordinates:', error)
+      setError('Failed to process coordinates: Network error')
+    } finally {
+      setIsProcessingCoordinates(false)
+      setProcessingProgress({ current: 0, total: 0 })
     }
   }
 
   // Handle curve selection
   const handleCurveSelect = (curve: Curve) => {
     setSelectedCurve(curve)
+    setError(null)
+    // Clear existing colors before processing new curve
+    setCellColors(new Map())
     processCurveCoordinates(curve)
   }
 
@@ -196,53 +232,64 @@ function App() {
         clearTimeout(processingTimeoutRef.current)
       }
       
-      // Set a new timeout to wait for user to stop zooming/moving
+      // Set new timeout for processing coordinates
       processingTimeoutRef.current = setTimeout(() => {
         processCurveCoordinates(selectedCurve)
-      }, 500) // Wait 500ms after last change
+      }, 500) // 500ms debounce delay
     }
     
-    // Cleanup timeout on unmount
     return () => {
       if (processingTimeoutRef.current) {
         clearTimeout(processingTimeoutRef.current)
       }
     }
-  }, [cellSize, gridDimensions])
+  }, [cellSize, gridDimensions, selectedCurve])
 
-  // Generate grid cells with colors
+  // Generate random colors for initial grid
+  const generateRandomGridColors = () => {
+    const newCellColors = new Map<string, string>()
+    const { width, height } = gridDimensions
+    
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
+        const hue = Math.floor(Math.random() * 360)
+        const color = `hsl(${hue}, 70%, 50%)`
+        newCellColors.set(coordKey, color)
+      }
+    }
+    
+    setCellColors(newCellColors)
+  }
+
+  // Generate random colors when grid dimensions change
+  useEffect(() => {
+    if (gridDimensions.width > 0 && gridDimensions.height > 0) {
+      generateRandomGridColors()
+    }
+  }, [gridDimensions])
+
+  // Render grid cells
   const renderGridCells = () => {
-    if (!canvasRef.current) return null
-    
-    const rect = canvasRef.current.getBoundingClientRect()
-    const width = Math.ceil(rect.width / cellSize)
-    const height = Math.ceil(rect.height / cellSize)
-    
+    const { width, height } = gridDimensions
     const cells = []
     
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        // Calculate actual coordinates relative to center (0,0)
-        const coordX = x - Math.floor(width / 2)
-        const coordY = Math.floor(height / 2) - y  // Invert Y so positive is up
-        const coordKey = `${coordX}_${coordY}`
-        
-        // Get color for this coordinate - default to transparent if none
-        const color = cellColors.get(coordKey) || 'transparent'
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
+        const color = cellColors.get(coordKey) || '#333'
         
         cells.push(
           <div
             key={coordKey}
             className="grid-cell"
             style={{
-              position: 'absolute',
-              left: x * (cellSize + 1),
-              top: y * (cellSize + 1),
-              width: cellSize,
-              height: cellSize,
+              width: `${cellSize - 1}px`,
+              height: `${cellSize - 1}px`,
               backgroundColor: color,
-              border: 'none',
-              boxSizing: 'border-box'
+              position: 'absolute',
+              left: `${x * cellSize}px`,
+              top: `${y * cellSize}px`
             }}
           />
         )
@@ -253,30 +300,27 @@ function App() {
   }
 
   return (
-    <div className="App">
-      {/* Fixed Height Header - 150px */}
-      <header className="app-header">
-        <h1>New Cnidaria Admin Tool</h1>
+    <div className="app">
+      {/* Header */}
+      <header className="header">
+        <h1>Admin Curve Tool</h1>
       </header>
-
-      {/* Main Content Area */}
+      
       <div className="main-content">
-        {/* Fixed Width Left Pane - 400px */}
-        <aside className="left-pane">
-          <h2>Control Panel</h2>
-          <div className="control-section">
-            <h3>Curve Management</h3>
-            <button className="control-btn">Create Curve</button>
-            <div className="curve-selector">
-              <label htmlFor="curve-select">Load Curve:</label>
+        {/* Left Pane */}
+        <div className="left-pane">
+          <div className="curve-selector">
+            <h3>Curve Selection</h3>
+            {isLoadingCurves ? (
+              <div className="loading">Loading curves...</div>
+            ) : (
               <select
-                id="curve-select"
                 value={selectedCurve?.id || ''}
                 onChange={(e) => {
                   const curve = curves.find(c => c.id === e.target.value)
                   if (curve) handleCurveSelect(curve)
                 }}
-                disabled={isLoadingCurves}
+                disabled={curves.length === 0}
               >
                 <option value="">Select a curve...</option>
                 {curves.map(curve => (
@@ -285,55 +329,61 @@ function App() {
                   </option>
                 ))}
               </select>
-              {isLoadingCurves && <span>Loading curves...</span>}
-            </div>
-            <button className="control-btn">Save Curve</button>
+            )}
           </div>
-          <div className="control-section">
-            <h3>Grid Settings</h3>
-            <div className="grid-info">
-              <span>Cell Size: {cellSize}×{cellSize}px</span>
-              <span>Grid: {gridDimensions.width}×{gridDimensions.height}</span>
-              {selectedCurve && (
-                <span>Loaded: {selectedCurve["curve-name"]}</span>
-              )}
-              <span>Total Curves: {curves.length}</span>
+          
+          {selectedCurve && (
+            <div className="curve-info">
+              <h3>Curve Info</h3>
+              <div className="info-item">
+                <strong>Type:</strong> {selectedCurve["curve-type"]}
+              </div>
+              <div className="info-item">
+                <strong>Width:</strong> {selectedCurve["curve-width"]}
+              </div>
+              <div className="info-item">
+                <strong>Status:</strong> 
+                {isProcessingCoordinates ? (
+                  <span className="processing-indicator">
+                    <span className="spinner"></span>
+                    Processing...
+                    {processingProgress.total > 0 && (
+                      <span className="progress-text">
+                        {processingProgress.current}/{processingProgress.total}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  'Ready'
+                )}
+              </div>
             </div>
-            <div className="grid-controls">
-              <button 
-                className="control-btn"
-                onClick={() => setCellSize(30)}
-              >
-                Reset to 30×30
-              </button>
-              <button 
-                className="control-btn"
-                onClick={() => setCellSize(prev => Math.max(8, prev - 2))}
-              >
-                Decrease Size
-              </button>
-              <button 
-                className="control-btn"
-                onClick={() => setCellSize(prev => Math.min(150, prev + 2))}
-              >
-                Increase Size
-              </button>
+          )}
+          
+          {error && (
+            <div className="error-message">
+              <h3>Error</h3>
+              <p>{error}</p>
+              <button onClick={() => setError(null)}>Dismiss</button>
             </div>
+          )}
+        </div>
+        
+        {/* Canvas Area */}
+        <div className="canvas-area">
+          <div 
+            ref={canvasRef}
+            className="grid-canvas"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              backgroundColor: '#000'
+            }}
+          >
+            {renderGridCells()}
           </div>
-
-        </aside>
-
-        {/* Liquid Canvas - Takes remaining space */}
-        <main className="canvas-area">
-          <div className="canvas-container" ref={canvasRef}>
-            <div className="grid-overlay">
-              {/* Grid cells with colors */}
-              {renderGridCells()}
-              
-
-            </div>
-          </div>
-        </main>
+        </div>
       </div>
     </div>
   )

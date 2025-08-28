@@ -1,4 +1,4 @@
-// API Service for New Cnidaria Admin Tool
+// API Service for Admin Curve Tool
 // Connects to the live cnidaria-api
 
 const API_BASE_URL = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
