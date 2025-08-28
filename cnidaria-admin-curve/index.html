@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Admin Curve Tool for managing and visualizing Cnidaria curves" />
-    <meta name="keywords" content="cnidaria, curves, admin, visualization, grid" />
+    <meta name="description" content="Cnidaria Admin Curve Tool - Interactive curve visualization and management tool" />
+    <meta name="keywords" content="cnidaria, curves, visualization, admin, mathematical, grid" />
     <meta name="author" content="New Cnidaria Team" />
     
     <!-- Cache busting -->
@@ -18,17 +18,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <title>Admin Curve Tool v1.3</title>
+    <title>Cnidaria Admin Curve Tool v1.3</title>
     
-    <!-- Force refresh script to prevent browser caching -->
+    <!-- Force refresh for development -->
     <script>
-      // Force refresh on page load to prevent caching issues
-      if (performance.navigation.type === 1) {
-        // Page was refreshed
-        console.log('Page refreshed - clearing any cached data');
-      } else {
-        // Page was loaded normally - force refresh to get latest version
-        window.location.reload();
+      // Force refresh to prevent caching issues during development
+      if (window.location.hostname === 'localhost') {
+        window.addEventListener('load', function() {
+          if (performance.navigation.type === 1) {
+            console.log('Page refreshed');
+          }
+        });
       }
     </script>
   </head>
