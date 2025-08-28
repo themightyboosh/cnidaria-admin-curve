@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import Header from './components/Header'
+import { apiUrl } from './config/environments'
 
 interface Curve {
   id: string
@@ -55,7 +56,7 @@ function App() {
     setError(null)
     console.log('Loading curves from API...')
     try {
-      const response = await fetch('https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves')
+      const response = await fetch(`${apiUrl}/api/curves`)
       console.log('API Response status:', response.status)
       
       if (response.ok) {
@@ -189,7 +190,7 @@ function App() {
       
       // Call GetCurveIndexValue API with visible coordinates
       const response = await fetch(
-        `https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
+        `${apiUrl}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
         {
           method: 'GET',
           headers: {
@@ -360,7 +361,7 @@ function App() {
     
     try {
       const response = await fetch(
-        `https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves/${selectedCurve.id}`,
+        `${apiUrl}/api/curves/${selectedCurve.id}`,
         {
           method: 'PUT',
           headers: {

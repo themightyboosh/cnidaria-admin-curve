@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Environment Management Script for Cnidaria Admin Curve
+# Frontend Environment Management Script for Cnidaria Admin Curves
 # This script helps manage environment branches and deployments
 
 set -e
@@ -102,33 +102,24 @@ sync_environment() {
             ;;
     esac
     
-    print_status "$env environment synced with master"
+    print_status "Environment $env synced with master"
 }
 
-# Function to build and deploy for environment
+# Function to deploy to environment
 deploy_environment() {
     local env=$1
     
-    print_status "Building and preparing $env environment..."
+    print_status "Deploying to $env environment..."
     
     case $env in
         dev|development)
-            git checkout dev
-            print_status "Building development version..."
-            npm run build
-            print_status "Development build complete! Ready for deployment."
+            ./deploy-frontend-dev.sh
             ;;
         stage|staging)
-            git checkout stage
-            print_status "Building staging version..."
-            npm run build
-            print_status "Staging build complete! Ready for deployment."
+            ./deploy-frontend-stage.sh
             ;;
         prod|production)
-            git checkout prod
-            print_status "Building production version..."
-            npm run build
-            print_status "Production build complete! Ready for deployment."
+            ./deploy-frontend-prod.sh
             ;;
         *)
             print_error "Invalid environment: $env"
@@ -137,35 +128,57 @@ deploy_environment() {
     esac
 }
 
-# Function to commit and push changes
-commit_and_push() {
+# Function to show environment configuration
+show_config() {
     local env=$1
-    local message=$2
     
-    if [ -z "$message" ]; then
-        message="Update $env environment - $(date)"
-    fi
-    
-    print_status "Committing and pushing changes to $env..."
+    print_header "Environment Configuration for $env"
     
     case $env in
         dev|development)
-            git checkout dev
-            git add .
-            git commit -m "$message"
-            git push origin dev
+            if [ -f ".env.dev" ]; then
+                cat .env.dev
+            else
+                print_error ".env.dev file not found"
+            fi
             ;;
         stage|staging)
-            git checkout stage
-            git add .
-            git commit -m "$message"
-            git push origin stage
+            if [ -f ".env.stage" ]; then
+                cat .env.stage
+            else
+                print_error ".env.stage file not found"
+            fi
             ;;
         prod|production)
-            git checkout prod
-            git add .
-            git commit -m "$message"
-            git push origin prod
+            if [ -f ".env.prod" ]; then
+                cat .env.prod
+            else
+                print_error ".env.prod file not found"
+            fi
+            ;;
+        *)
+            print_error "Invalid environment: $env"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to build for environment
+build_environment() {
+    local env=$1
+    
+    print_status "Building for $env environment..."
+    
+    # Load environment variables
+    case $env in
+        dev|development)
+            export $(cat .env.dev | xargs)
+            ;;
+        stage|staging)
+            export $(cat .env.stage | xargs)
+            ;;
+        prod|production)
+            export $(cat .env.prod | xargs)
             ;;
         *)
             print_error "Invalid environment: $env"
@@ -173,32 +186,71 @@ commit_and_push() {
             ;;
     esac
     
-    print_status "Changes committed and pushed to $env branch"
+    # Build the app
+    npm run build
+    
+    if [ -d "dist" ]; then
+        print_status "Build completed successfully for $env"
+        print_status "Environment: $VITE_ENVIRONMENT"
+        print_status "API URL: $VITE_API_URL"
+        print_status "App Title: $VITE_APP_TITLE"
+    else
+        print_error "Build failed - dist directory not found"
+        exit 1
+    fi
+}
+
+# Function to run locally
+run_local() {
+    print_status "Starting local development server..."
+    
+    # Ensure we're on dev branch
+    if [ "$(git branch --show-current)" != "dev" ]; then
+        print_warning "Not on dev branch, switching..."
+        git checkout dev
+    fi
+    
+    # Load dev environment
+    if [ -f ".env.dev" ]; then
+        export $(cat .env.dev | xargs)
+        print_status "Loaded dev environment configuration"
+    fi
+    
+    print_status "Starting development server..."
+    print_status "Environment: $VITE_ENVIRONMENT"
+    print_status "API URL: $VITE_API_URL"
+    print_status "Local URL: http://localhost:5173"
+    
+    npm run dev
 }
 
 # Function to show help
 show_help() {
-    echo "Usage: $0 [COMMAND] [ENVIRONMENT] [OPTIONS]"
+    echo "Frontend Environment Management Script"
+    echo ""
+    echo "Usage: $0 [COMMAND] [ENVIRONMENT]"
     echo ""
     echo "Commands:"
     echo "  status                    Show current environment status"
     echo "  switch <env>             Switch to environment (dev/stage/prod)"
-    echo "  sync <env>               Sync environment with master branch"
-    echo "  deploy <env>             Build environment for deployment"
-    echo "  commit <env> [message]   Commit and push changes to environment"
+    echo "  sync <env>               Sync environment with master"
+    echo "  deploy <env>             Deploy to environment"
+    echo "  config <env>             Show environment configuration"
+    echo "  build <env>              Build for environment"
+    echo "  local                    Run local development server"
     echo "  help                     Show this help message"
     echo ""
     echo "Environments:"
-    echo "  dev, development         Development environment (dev branch)"
-    echo "  stage, staging          Staging environment (stage branch)"
-    echo "  prod, production        Production environment (prod branch)"
+    echo "  dev                      Development environment"
+    echo "  stage                    Staging environment"
+    echo "  prod                     Production environment"
     echo ""
     echo "Examples:"
-    echo "  $0 status"
-    echo "  $0 switch dev"
-    echo "  $0 sync stage"
-    echo "  $0 deploy prod"
-    echo "  $0 commit dev 'Add new feature'"
+    echo "  $0 status                # Show current status"
+    echo "  $0 switch dev            # Switch to development"
+    echo "  $0 deploy stage          # Deploy to staging"
+    echo "  $0 build prod            # Build for production"
+    echo "  $0 local                 # Run local development server"
 }
 
 # Main script logic
@@ -230,13 +282,24 @@ case $1 in
         fi
         deploy_environment $2
         ;;
-    commit)
+    config)
         if [ -z "$2" ]; then
             print_error "Please specify an environment"
             show_help
             exit 1
         fi
-        commit_and_push $2 "$3"
+        show_config $2
+        ;;
+    build)
+        if [ -z "$2" ]; then
+            print_error "Please specify an environment"
+            show_help
+            exit 1
+        fi
+        build_environment $2
+        ;;
+    local)
+        run_local
         ;;
     help|--help|-h)
         show_help

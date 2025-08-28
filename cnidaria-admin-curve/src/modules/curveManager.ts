@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 // API Configuration
-const API_BASE_URL = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
+import { apiUrl } from '../config/environments';
+
+const API_BASE_URL = apiUrl;
 
 // Types
 export interface CurveData {
