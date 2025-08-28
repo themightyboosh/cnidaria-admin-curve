@@ -386,6 +386,7 @@ function App() {
                   if (curve) handleCurveSelect(curve)
                 }}
                 disabled={curves.length === 0}
+                title="Choose a curve to edit and visualize"
               >
                 <option value="">Select a curve...</option>
                 {curves.map(curve => (
@@ -398,12 +399,10 @@ function App() {
           </div>
           
           {selectedCurve && editingCurve && (
-            <div className="curve-info">
-              <h3>Curve Info</h3>
-              
-              {/* Basic Info (Read-only) */}
+            <>
+              {/* Curve Properties - Read-only info */}
               <div className="info-section">
-                <h4>Basic Properties</h4>
+                <h3>Curve Properties</h3>
                 <div className="info-item">
                   <strong>Width:</strong> {selectedCurve["curve-width"]}
                 </div>
@@ -425,14 +424,15 @@ function App() {
                 </div>
               </div>
 
-              {/* Editable Settings */}
+              {/* Curve Settings - Editable parameters */}
               <div className="info-section">
-                <h4>Settings</h4>
+                <h3>Curve Settings</h3>
                 <div className="form-group">
                   <label>Curve Type:</label>
                   <select
                     value={editingCurve["curve-type"] || "Radial"}
                     onChange={(e) => handleFieldChange("curve-type", e.target.value)}
+                    title="Select the coordinate system for this curve"
                   >
                     <option value="Radial">Radial</option>
                     <option value="Cartesian X">Cartesian X</option>
@@ -450,8 +450,8 @@ function App() {
                     max="5.0"
                     value={editingCurve["curve-index-scaling"] || 1.0}
                     onChange={(e) => handleFieldChange("curve-index-scaling", parseFloat(e.target.value) || 1.0)}
+                    title="Controls how many cells of distance are needed to move to the next index position"
                   />
-                  <small className="form-help">Controls how many cells of distance are needed to move to the next index position</small>
                 </div>
 
                 {/* Coordinate Noise - Universal for all curve types */}
@@ -464,8 +464,8 @@ function App() {
                     max="3"
                     value={editingCurve["coordinate-noise-strength"] || 0}
                     onChange={(e) => handleFieldChange("coordinate-noise-strength", parseFloat(e.target.value) || 0)}
+                    title="How much to distort the input coordinates before curve processing"
                   />
-                  <small className="form-help">How much to distort the input coordinates before curve processing</small>
                 </div>
                 <div className="form-group">
                   <label>Coordinate Noise Scale:</label>
@@ -476,8 +476,8 @@ function App() {
                     max="1.0"
                     value={editingCurve["coordinate-noise-scale"] || 0.1}
                     onChange={(e) => handleFieldChange("coordinate-noise-scale", parseFloat(e.target.value) || 0.1)}
+                    title="Scale of the noise pattern (lower = larger patterns)"
                   />
-                  <small className="form-help">Scale of the noise pattern (lower = larger patterns)</small>
                 </div>
                 <div className="form-group">
                   <label>Coordinate Noise Seed:</label>
@@ -488,8 +488,16 @@ function App() {
                     max="9999"
                     value={editingCurve["coordinate-noise-seed"] || 0}
                     onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
+                    title="Random seed for consistent noise patterns"
                   />
-                  <small className="form-help">Random seed for consistent noise patterns</small>
+                </div>
+              </div>
+
+              {/* Curve View - Placeholder for future features */}
+              <div className="info-section">
+                <h3>Curve View</h3>
+                <div className="info-item">
+                  <em>Additional viewing options will be added here</em>
                 </div>
               </div>
 
@@ -505,7 +513,7 @@ function App() {
                   </button>
                 </div>
               )}
-            </div>
+            </>
           )}
           
           {error && (
