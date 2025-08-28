@@ -35,6 +35,12 @@ function App() {
   const [editingCurve, setEditingCurve] = useState<Curve | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [expandedSections, setExpandedSections] = useState({
+    selection: true,
+    properties: true,
+    view: true,
+    settings: true
+  })
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -245,6 +251,14 @@ function App() {
     setHasUnsavedChanges(true)
   }
 
+  // Toggle section expansion
+  const toggleSection = (sectionName: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }))
+  }
+
   // Save curve changes
   const saveCurveChanges = async () => {
     if (!editingCurve || !selectedCurve) return
@@ -374,27 +388,38 @@ function App() {
       <div className="main-content">
         {/* Left Pane */}
         <div className="left-pane">
-          <div className="curve-selector">
-            <h3>Curve Selection</h3>
-            {isLoadingCurves ? (
-              <div className="loading">Loading curves...</div>
-            ) : (
-              <select
-                value={selectedCurve?.id || ''}
-                onChange={(e) => {
-                  const curve = curves.find(c => c.id === e.target.value)
-                  if (curve) handleCurveSelect(curve)
-                }}
-                disabled={curves.length === 0}
-                title="Choose a curve to edit and visualize"
-              >
-                <option value="">Select a curve...</option>
-                {curves.map(curve => (
-                  <option key={curve.id} value={curve.id}>
-                    {curve["curve-name"]}
-                  </option>
-                ))}
-              </select>
+          {/* Curve Selection */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('selection')}>
+              <span className="toggle-icon">{expandedSections.selection ? '▼' : '▶'}</span>
+              Curve Selection
+            </h3>
+            {expandedSections.selection && (
+              <div className="section-content">
+                {isLoadingCurves ? (
+                  <div className="loading">Loading curves...</div>
+                ) : (
+                  <div className="form-group">
+                    <label>Select Curve:</label>
+                    <select
+                      value={selectedCurve?.id || ''}
+                      onChange={(e) => {
+                        const curve = curves.find(c => c.id === e.target.value)
+                        if (curve) handleCurveSelect(curve)
+                      }}
+                      disabled={curves.length === 0}
+                      title="Choose a curve to edit and visualize"
+                    >
+                      <option value="">Select a curve...</option>
+                      {curves.map(curve => (
+                        <option key={curve.id} value={curve.id}>
+                          {curve["curve-name"]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           
@@ -402,103 +427,124 @@ function App() {
             <>
               {/* Curve Properties - Read-only info */}
               <div className="info-section">
-                <h3>Curve Properties</h3>
-                <div className="info-item">
-                  <strong>Width:</strong> {selectedCurve["curve-width"]}
-                </div>
-                <div className="info-item">
-                  <strong>Status:</strong> 
-                  {isProcessingCoordinates ? (
-                    <span className="processing-indicator">
-                      <span className="spinner"></span>
-                      Processing...
-                      {processingProgress.total > 0 && (
-                        <span className="progress-text">
-                          {processingProgress.current}/{processingProgress.total}
+                <h3 className="collapsible-header" onClick={() => toggleSection('properties')}>
+                  <span className="toggle-icon">{expandedSections.properties ? '▼' : '▶'}</span>
+                  Curve Properties
+                </h3>
+                {expandedSections.properties && (
+                  <div className="section-content">
+                    <div className="info-item">
+                      <strong>Width:</strong> {selectedCurve["curve-width"]}
+                    </div>
+                    <div className="info-item">
+                      <strong>Status:</strong> 
+                      {isProcessingCoordinates ? (
+                        <span className="processing-indicator">
+                          <span className="spinner"></span>
+                          Processing...
+                          {processingProgress.total > 0 && (
+                            <span className="progress-text">
+                              {processingProgress.current}/{processingProgress.total}
+                            </span>
+                          )}
                         </span>
+                      ) : (
+                        'Ready'
                       )}
-                    </span>
-                  ) : (
-                    'Ready'
-                  )}
-                </div>
-              </div>
-
-              {/* Curve Settings - Editable parameters */}
-              <div className="info-section">
-                <h3>Curve Settings</h3>
-                <div className="form-group">
-                  <label>Curve Type:</label>
-                  <select
-                    value={editingCurve["curve-type"] || "Radial"}
-                    onChange={(e) => handleFieldChange("curve-type", e.target.value)}
-                    title="Select the coordinate system for this curve"
-                  >
-                    <option value="Radial">Radial</option>
-                    <option value="Cartesian X">Cartesian X</option>
-                    <option value="Cartesian Y">Cartesian Y</option>
-                  </select>
-                </div>
-                
-                {/* Universal Index Scaling */}
-                <div className="form-group">
-                  <label>Index Scaling:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.1"
-                    max="5.0"
-                    value={editingCurve["curve-index-scaling"] || 1.0}
-                    onChange={(e) => handleFieldChange("curve-index-scaling", parseFloat(e.target.value) || 1.0)}
-                    title="Controls how many cells of distance are needed to move to the next index position"
-                  />
-                </div>
-
-                {/* Coordinate Noise - Universal for all curve types */}
-                <div className="form-group">
-                  <label>Coordinate Noise Strength:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="3"
-                    value={editingCurve["coordinate-noise-strength"] || 0}
-                    onChange={(e) => handleFieldChange("coordinate-noise-strength", parseFloat(e.target.value) || 0)}
-                    title="How much to distort the input coordinates before curve processing"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Coordinate Noise Scale:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max="1.0"
-                    value={editingCurve["coordinate-noise-scale"] || 0.1}
-                    onChange={(e) => handleFieldChange("coordinate-noise-scale", parseFloat(e.target.value) || 0.1)}
-                    title="Scale of the noise pattern (lower = larger patterns)"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Coordinate Noise Seed:</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="9999"
-                    value={editingCurve["coordinate-noise-seed"] || 0}
-                    onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
-                    title="Random seed for consistent noise patterns"
-                  />
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Curve View - Placeholder for future features */}
               <div className="info-section">
-                <h3>Curve View</h3>
-                <div className="info-item">
-                  <em>Additional viewing options will be added here</em>
-                </div>
+                <h3 className="collapsible-header" onClick={() => toggleSection('view')}>
+                  <span className="toggle-icon">{expandedSections.view ? '▼' : '▶'}</span>
+                  Curve View
+                </h3>
+                {expandedSections.view && (
+                  <div className="section-content">
+                    <div className="info-item">
+                      <em>Additional viewing options will be added here</em>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Curve Settings - Editable parameters */}
+              <div className="info-section">
+                <h3 className="collapsible-header" onClick={() => toggleSection('settings')}>
+                  <span className="toggle-icon">{expandedSections.settings ? '▼' : '▶'}</span>
+                  Curve Settings
+                </h3>
+                {expandedSections.settings && (
+                  <div className="section-content">
+                    <div className="form-group">
+                      <label>Curve Type:</label>
+                      <select
+                        value={editingCurve["curve-type"] || "Radial"}
+                        onChange={(e) => handleFieldChange("curve-type", e.target.value)}
+                        title="Select the coordinate system for this curve"
+                      >
+                        <option value="Radial">Radial</option>
+                        <option value="Cartesian X">Cartesian X</option>
+                        <option value="Cartesian Y">Cartesian Y</option>
+                      </select>
+                    </div>
+                    
+                    {/* Universal Index Scaling */}
+                    <div className="form-group">
+                      <label>Index Scaling:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        max="5.0"
+                        value={editingCurve["curve-index-scaling"] || 1.0}
+                        onChange={(e) => handleFieldChange("curve-index-scaling", parseFloat(e.target.value) || 1.0)}
+                        title="Controls how many cells of distance are needed to move to the next index position"
+                      />
+                    </div>
+
+                    {/* Coordinate Noise - Universal for all curve types */}
+                    <div className="form-group">
+                      <label>Coordinate Noise Strength:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="3"
+                        value={editingCurve["coordinate-noise-strength"] || 0}
+                        onChange={(e) => handleFieldChange("coordinate-noise-strength", parseFloat(e.target.value) || 0)}
+                        title="How much to distort the input coordinates before curve processing"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Coordinate Noise Scale:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max="1.0"
+                        value={editingCurve["coordinate-noise-scale"] || 0.1}
+                        onChange={(e) => handleFieldChange("coordinate-noise-scale", parseFloat(e.target.value) || 0.1)}
+                        title="Scale of the noise pattern (lower = larger patterns)"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Coordinate Noise Seed:</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="9999"
+                        value={editingCurve["coordinate-noise-seed"] || 0}
+                        onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
+                        title="Random seed for consistent noise patterns"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Save Button */}

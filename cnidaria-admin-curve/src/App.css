@@ -130,11 +130,34 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.collapsible-header:hover {
+  color: var(--accent-secondary);
+}
+
+.toggle-icon {
+  display: inline-block;
+  width: 20px;
+  margin-right: 8px;
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.section-content {
+  margin-top: 1rem;
+}
+
 .info-item {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: 0.85rem;
 }
 
 .info-item:last-child {
@@ -142,27 +165,31 @@ body {
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
+  min-width: 140px;
   font-weight: 500;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  text-align: right;
 }
 
 .form-group input,
 .form-group select {
-  width: 100%;
-  padding: 0.5rem;
+  flex: 1;
+  padding: 0.4rem 0.5rem;
   background-color: var(--background-color);
   color: var(--foreground-color);
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-family: 'Gothic A1', sans-serif;
+  min-width: 0;
 }
 
 .form-group input:focus,
