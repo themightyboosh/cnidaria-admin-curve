@@ -1,0 +1,14 @@
+# Simple Dockerfile for serving pre-built static files
+FROM nginx:alpine
+
+# Copy the pre-built dist folder
+COPY dist/ /usr/share/nginx/html/
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

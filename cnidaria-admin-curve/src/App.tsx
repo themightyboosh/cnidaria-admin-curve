@@ -256,13 +256,20 @@ function App() {
 
   // Handle field changes
   const handleFieldChange = (field: string, value: any) => {
-    if (!editingCurve) return
-    
-    setEditingCurve(prev => ({
-      ...prev!,
-      [field]: value
-    }))
-    setHasUnsavedChanges(true)
+    try {
+      if (!editingCurve) return
+      
+      setEditingCurve(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          [field]: value
+        }
+      })
+      setHasUnsavedChanges(true)
+    } catch (error) {
+      console.error('Error in handleFieldChange:', error, { field, value });
+    }
   }
 
   // Toggle section expansion
@@ -614,6 +621,13 @@ function App() {
                           onChange={(e) => setNewTagInput(e.target.value)}
                           onKeyPress={(e) => e.key === 'Enter' && addNewTag()}
                           className="new-tag-field"
+                          style={{
+                            backgroundColor: '#2a2a2a',
+                            color: '#ffffff',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            padding: '8px 12px'
+                          }}
                         />
                         <button
                           type="button"
@@ -646,6 +660,13 @@ function App() {
                         value={editingCurve["curve-name"] || ""}
                         onChange={(e) => handleFieldChange("curve-name", e.target.value)}
                         title="The name of this curve"
+                        style={{
+                          backgroundColor: '#2a2a2a',
+                          color: '#ffffff',
+                          border: '1px solid #444',
+                          borderRadius: '4px',
+                          padding: '8px 12px'
+                        }}
                       />
                     </div>
 
@@ -658,6 +679,14 @@ function App() {
                         title="Description of this curve"
                         rows={3}
                         className="description-textarea"
+                        style={{
+                          backgroundColor: '#2a2a2a',
+                          color: '#ffffff',
+                          border: '1px solid #444',
+                          borderRadius: '4px',
+                          padding: '8px 12px',
+                          resize: 'vertical'
+                        }}
                       />
                     </div>
 
@@ -679,51 +708,72 @@ function App() {
                       <label>Index Scaling:</label>
                       <input
                         type="number"
-                        step="0.01"
-                        min="0.1"
-                        max="5.0"
-                        value={editingCurve["curve-index-scaling"] || 1.0}
-                        onChange={(e) => handleFieldChange("curve-index-scaling", parseFloat(e.target.value) || 1.0)}
-                        title="Controls how many cells of distance are needed to move to the next index position"
+                        step="0.000001"
+                        min="0.001"
+                        max="1.0"
+                        value={Number(editingCurve["curve-index-scaling"]) || 1.0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          handleFieldChange("curve-index-scaling", isNaN(val) ? 1.0 : val);
+                        }}
+                        title="Controls how many cells of distance are needed to move to the next index position (0.001 to 1.0)"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                       />
                     </div>
 
-                    {/* Coordinate Noise - Universal for all curve types */}
+                    {/* Noise - Universal for all curve types */}
                     <div className="form-group">
-                      <label>Coordinate Noise Strength:</label>
+                      <label>Noise Strength:</label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.000001"
                         min="0"
                         max="3"
-                        value={editingCurve["coordinate-noise-strength"] || 0}
-                        onChange={(e) => handleFieldChange("coordinate-noise-strength", parseFloat(e.target.value) || 0)}
-                        title="How much to distort the input coordinates before curve processing"
+                        value={Number(editingCurve["coordinate-noise-strength"]) || 0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          handleFieldChange("coordinate-noise-strength", isNaN(val) ? 0 : val);
+                        }}
+                        title="How much to distort the input coordinates before curve processing (0 = no noise)"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                       />
                     </div>
                     <div className="form-group">
-                      <label>Coordinate Noise Scale:</label>
+                      <label>Noise Scale:</label>
                       <input
                         type="number"
-                        step="0.01"
-                        min="0.01"
-                        max="1.0"
-                        value={editingCurve["coordinate-noise-scale"] || 0.1}
-                        onChange={(e) => handleFieldChange("coordinate-noise-scale", parseFloat(e.target.value) || 0.1)}
-                        title="Scale of the noise pattern (lower = larger patterns)"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Coordinate Noise Seed:</label>
-                      <input
-                        type="number"
-                        step="1"
+                        step="0.000001"
                         min="0"
-                        max="9999"
-                        value={editingCurve["coordinate-noise-seed"] || 0}
-                        onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
-                        title="Random seed for consistent noise patterns"
+                        max="1"
+                        value={Number(editingCurve["coordinate-noise-scale"]) || 0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          handleFieldChange("coordinate-noise-scale", isNaN(val) ? 0 : val);
+                        }}
+                        title="Scale of the noise pattern (0 = no noise)"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                       />
+                    </div>
+                    <div className="form-group">
+                      <label>Noise Seed:</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={editingCurve["coordinate-noise-seed"]?.toString() || "0"}
+                        onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
+                        title="Random seed for consistent noise patterns (0 = no seed)"
+                      />
+                    </div>
+
+                    {/* Debug Values - Simple */}
+                    <div className="form-group" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '6px' }}>
+                      <label style={{ color: '#ff6b6b', fontWeight: 'bold' }}>🔍 Debug: Current Values</label>
+                      <div style={{ fontSize: '12px', color: '#ccc', marginTop: '8px' }}>
+                        <div>Noise Strength: <code>{editingCurve["coordinate-noise-strength"]}</code></div>
+                        <div>Noise Scale: <code>{editingCurve["coordinate-noise-scale"]}</code></div>
+                        <div>Index Scaling: <code>{editingCurve["curve-index-scaling"]}</code></div>
+                      </div>
                     </div>
                   </div>
                 )}
