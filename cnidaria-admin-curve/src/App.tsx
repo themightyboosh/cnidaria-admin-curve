@@ -40,6 +40,7 @@ function App() {
     selection: true,
     properties: true,
     view: true,
+    tags: true,
     settings: true
   })
   const [availableTags, setAvailableTags] = useState<string[]>([])
@@ -271,31 +272,81 @@ function App() {
     }))
   }
 
-  // Add tag to curve
-  const addTagToCurve = (tag: string) => {
+  // Add tag to curve and update API immediately
+  const addTagToCurve = async (tag: string) => {
     if (!editingCurve) return
     
     const currentTags = editingCurve["curve-tags"] || []
     if (!currentTags.includes(tag)) {
-      handleFieldChange("curve-tags", [...currentTags, tag])
+      const updatedTags = [...currentTags, tag]
+      
+      try {
+        const response = await fetch(`/api/curves/${editingCurve.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ "curve-tags": updatedTags })
+        })
+        
+        if (response.ok) {
+          // Update local state
+          handleFieldChange("curve-tags", updatedTags)
+          // Update the main curves array
+          setCurves(prev => prev.map(curve => 
+            curve.id === editingCurve.id 
+              ? { ...curve, "curve-tags": updatedTags }
+              : curve
+          ))
+        } else {
+          console.error('Failed to update tags:', response.statusText)
+        }
+      } catch (error) {
+        console.error('Error updating tags:', error)
+      }
     }
   }
 
-  // Remove tag from curve
-  const removeTagFromCurve = (tagToRemove: string) => {
+  // Remove tag from curve and update API immediately
+  const removeTagFromCurve = async (tagToRemove: string) => {
     if (!editingCurve) return
     
     const currentTags = editingCurve["curve-tags"] || []
     const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
-    handleFieldChange("curve-tags", updatedTags)
+    
+    try {
+      const response = await fetch(`/api/curves/${editingCurve.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ "curve-tags": updatedTags })
+      })
+      
+      if (response.ok) {
+        // Update local state
+        handleFieldChange("curve-tags", updatedTags)
+        // Update the main curves array
+        setCurves(prev => prev.map(curve => 
+          curve.id === editingCurve.id 
+            ? { ...curve, "curve-tags": updatedTags }
+            : curve
+        ))
+      } else {
+        console.error('Failed to update tags:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error updating tags:', error)
+    }
   }
 
-  // Add new tag to system
-  const addNewTag = () => {
+  // Add new tag to system and curve
+  const addNewTag = async () => {
     if (newTagInput.trim() && !availableTags.includes(newTagInput.trim())) {
       const newTag = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+      
+      // Add to available tags
       setAvailableTags(prev => [...prev, newTag])
-      addTagToCurve(newTag)
+      
+      // Add to current curve via API
+      await addTagToCurve(newTag)
+      
       setNewTagInput('')
     }
   }
@@ -512,6 +563,72 @@ function App() {
                 )}
               </div>
 
+              {/* Curve Tags Section */}
+              <div className="info-section">
+                <h3 className="collapsible-header" onClick={() => toggleSection('tags')}>
+                  <span className="toggle-icon">{expandedSections.tags ? '▼' : '▶'}</span>
+                  Curve Tags
+                </h3>
+                {expandedSections.tags && (
+                  <div className="section-content">
+                    <div className="tags-container">
+                      {/* Current tags as pills */}
+                      {(editingCurve["curve-tags"] || []).map(tag => (
+                        <span key={tag} className="tag-pill">
+                          {tag}
+                          <button
+                            type="button"
+                            className="remove-tag"
+                            onClick={() => removeTagFromCurve(tag)}
+                            title={`Remove tag: ${tag}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      
+                      {/* Available tags to add */}
+                      <div className="available-tags">
+                        {availableTags
+                          .filter(tag => !editingCurve["curve-tags"]?.includes(tag))
+                          .map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              className="add-tag-btn"
+                              onClick={() => addTagToCurve(tag)}
+                              title={`Add tag: ${tag}`}
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                      </div>
+                      
+                      {/* Add new tag input */}
+                      <div className="new-tag-input">
+                        <input
+                          type="text"
+                          placeholder="New tag..."
+                          value={newTagInput}
+                          onChange={(e) => setNewTagInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && addNewTag()}
+                          className="new-tag-field"
+                        />
+                        <button
+                          type="button"
+                          onClick={addNewTag}
+                          disabled={!newTagInput.trim()}
+                          className="add-new-tag-btn"
+                          title="Add new tag"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Curve Settings - Editable parameters */}
               <div className="info-section">
                 <h3 className="collapsible-header" onClick={() => toggleSection('settings')}>
@@ -541,65 +658,6 @@ function App() {
                         rows={3}
                         className="description-textarea"
                       />
-                    </div>
-
-                    {/* Curve Tags */}
-                    <div className="form-group tags-group">
-                      <label>Tags:</label>
-                      <div className="tags-container">
-                        {/* Current tags as pills */}
-                        {(editingCurve["curve-tags"] || []).map(tag => (
-                          <span key={tag} className="tag-pill">
-                            {tag}
-                            <button
-                              type="button"
-                              className="remove-tag"
-                              onClick={() => removeTagFromCurve(tag)}
-                              title={`Remove tag: ${tag}`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        
-                        {/* Available tags to add */}
-                        <div className="available-tags">
-                          {availableTags
-                            .filter(tag => !editingCurve["curve-tags"]?.includes(tag))
-                            .map(tag => (
-                              <button
-                                key={tag}
-                                type="button"
-                                className="add-tag-btn"
-                                onClick={() => addTagToCurve(tag)}
-                                title={`Add tag: ${tag}`}
-                              >
-                                + {tag}
-                              </button>
-                            ))}
-                        </div>
-                        
-                        {/* Add new tag input */}
-                        <div className="new-tag-input">
-                          <input
-                            type="text"
-                            placeholder="New tag..."
-                            value={newTagInput}
-                            onChange={(e) => setNewTagInput(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && addNewTag()}
-                            className="new-tag-field"
-                          />
-                          <button
-                            type="button"
-                            onClick={addNewTag}
-                            disabled={!newTagInput.trim()}
-                            className="add-new-tag-btn"
-                            title="Add new tag"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="form-group">
