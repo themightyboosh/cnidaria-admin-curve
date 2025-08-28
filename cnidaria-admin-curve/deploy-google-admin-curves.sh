@@ -1,16 +1,17 @@
 #!/bin/bash
 
-# Admin Curve Tool - Google Cloud Run Deployment Script
+# Cnidaria Admin Curves - Google Cloud Run Deployment Script
 # This script builds and deploys the React app to Google Cloud Run
+# Designed to be deployed to a folder called 'cnidaria-admin-curves'
 
 set -e
 
-echo "🚀 Deploying Admin Curve Tool to Google Cloud Run..."
+echo "🚀 Deploying Cnidaria Admin Curves to Google Cloud Run..."
 
 # Configuration
 PROJECT_ID="zone-eaters"
 REGION="us-central1"
-SERVICE_NAME="admin-curve"
+SERVICE_NAME="cnidaria-admin-curves"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
 
 echo "📋 Configuration:"
@@ -76,9 +77,12 @@ echo "✅ Deployment completed successfully!"
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --project=$PROJECT_ID --format='value(status.url)')
 
 echo "🌐 Service URL: $SERVICE_URL"
-echo "🎉 Admin Curve Tool is now live!"
+echo "🎉 Cnidaria Admin Curves is now live!"
 echo ""
 echo "📝 Next steps:"
 echo "  - Test the application at: $SERVICE_URL"
 echo "  - Monitor logs: gcloud logs tail --service=$SERVICE_NAME --region=$REGION"
 echo "  - View service: gcloud run services describe $SERVICE_NAME --region=$REGION"
+echo ""
+echo "📁 Note: This service is designed to be part of the cnidaria-admin-curves folder structure"
+echo "   for future integration with other admin tools."

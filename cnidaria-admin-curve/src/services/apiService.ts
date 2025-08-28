@@ -1,73 +1,198 @@
-// API Service for Cnidaria Admin Curve Tool
-// Handles communication with the cnidaria-api backend
+// API Service for Admin Curve Tool
+// Connects to the live cnidaria-api
 
-const API_BASE_URL = 'https://us-central1-cnidaria-api.cloudfunctions.net';
+const API_BASE_URL = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
 
 export interface Curve {
   id: string;
   'curve-name': string;
+  'curve-description'?: string;
+  'curve-tags'?: string[];
+  'curve-width': number;
+  'curve-height': number;
   'curve-type': string;
-  width: number;
+  'curve-index-scaling': number;
   'curve-data': number[];
   'generator-noise-type': string;
-  'curve-index-scaling': number;
-  'angular-distortion': number;
-  'coordinate-distortion': number;
-  'perlin-noise-seed': number;
-  'perlin-noise-scale': number;
-  'perlin-noise-octaves': number;
-  'perlin-noise-persistence': number;
-  'perlin-noise-lacunarity': number;
-  createdAt: string;
-  updatedAt: string;
+  'generator-noise-setting'?: any;
+  'generator-top-shelf': number;
+  'generator-bottom-shelf': number;
+  'generator-value-fill': number;
+  'generator-value-offset': number;
+  'index-distortion-distortion_level': number;
+  'index-distortion-frequency': number;
+  'index-distortion-angular': number;
 }
 
-export interface ProcessedCoordinate {
-  'cell-coordinates': [number, number];
-  coordKey: string;
-  'index-position': number;
-  'index-value': number;
+export interface ProcessCoordinateResponse {
+  [curveName: string]: {
+    'cell-coordinates': [number, number];
+    'coordKey': string;
+    'index-position': number;
+    'index-value': number;
+  };
 }
 
-export const apiService = {
-  // Get all curves
-  async getCurves(): Promise<Curve[]> {
-    const response = await fetch(`${API_BASE_URL}/api/curves`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch curves: ${response.statusText}`);
+export interface GridProcessResponse {
+  [curveName: string]: Array<{
+    'cell-coordinates': [number, number];
+    'coordKey': string;
+    'index-position': number;
+    'index-value': number;
+  }>;
+}
+
+export interface CacheStats {
+  activeEntries: number;
+  totalKeys: number;
+  hits: number;
+  misses: number;
+  hitRate: number;
+}
+
+class ApiService {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = API_BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  // Generic request method
+  private async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
     }
-    const data = await response.json();
-    return data.curves || [];
-  },
+  }
 
-  // Process coordinates for a curve
-  async processCoordinates(
+  // Health check
+  async getHealth(): Promise<any> {
+    return this.request('/health');
+  }
+
+  // Test endpoint
+  async testApi(): Promise<any> {
+    return this.request('/api/test');
+  }
+
+  // Curve Management
+  async createCurve(curveData: Partial<Curve>): Promise<{ success: boolean; data: { id: string; curve: Curve } }> {
+    return this.request('/api/curves', {
+      method: 'POST',
+      body: JSON.stringify(curveData),
+    });
+  }
+
+  async getCurve(id: string): Promise<{ success: boolean; data: { curve: Curve } }> {
+    return this.request(`/api/curves/${id}`);
+  }
+
+  async updateCurve(id: string, curveData: Partial<Curve>): Promise<{ success: boolean; data: { curve: Curve } }> {
+    return this.request(`/api/curves/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(curveData),
+    });
+  }
+
+  async listCurves(): Promise<{ success: boolean; data: { curves: Curve[]; total: number } }> {
+    return this.request('/api/curves');
+  }
+
+  async deleteCurve(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/curves/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteAllCurves(): Promise<{ success: boolean; message: string; deletedCount: number }> {
+    return this.request('/api/curves', {
+      method: 'DELETE',
+    });
+  }
+
+  // Coordinate Processing
+  async processCoordinate(
     curveId: string, 
     x: number, 
-    y: number, 
-    x2?: number, 
-    y2?: number
-  ): Promise<ProcessedCoordinate[]> {
-    const params = new URLSearchParams({ x: x.toString(), y: y.toString() });
-    if (x2 !== undefined && y2 !== undefined) {
-      params.append('x2', x2.toString());
-      params.append('y2', y2.toString());
-    }
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/curves/${curveId}/process?${params}`,
-      {
-        headers: {
-          'Accept-Encoding': 'gzip, deflate'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to process coordinates: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    return data.results || [];
+    y: number
+  ): Promise<ProcessCoordinateResponse> {
+    return this.request(`/api/curves/${curveId}/process?x=${x}&y=${y}`);
   }
-};
+
+  async processGrid(
+    curveId: string, 
+    x1: number, 
+    y1: number, 
+    x2: number, 
+    y2: number
+  ): Promise<GridProcessResponse> {
+    return this.request(`/api/curves/${curveId}/process?x=${x1}&y=${y1}&x2=${x2}&y2=${y2}`);
+  }
+
+  // Cache Management
+  async getCacheStats(curveId: string): Promise<{ success: boolean; cache: CacheStats }> {
+    return this.request(`/api/curves/${curveId}/cache`);
+  }
+
+  async clearCurveCache(curveId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/curves/${curveId}/cache`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Utility methods
+  async searchCurves(searchTerm: string): Promise<{ success: boolean; data: { curves: Curve[] } }> {
+    return this.request(`/api/curves/search/${encodeURIComponent(searchTerm)}`);
+  }
+
+  // Generate sample curve data for testing
+  generateSampleCurve(name: string = 'Sample Curve'): Partial<Curve> {
+    return {
+      'curve-name': name,
+      'curve-description': 'A sample curve for testing',
+      'curve-tags': ['sample', 'test'],
+      'curve-width': 11,
+      'curve-height': 255,
+      'curve-type': 'Radial',
+      'curve-index-scaling': 1.0,
+      'curve-data': [127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127],
+      'generator-noise-type': 'perlin',
+      'generator-noise-setting': {
+        seed: Math.floor(Math.random() * 10000),
+        frequency: 0.5,
+        octaves: 3
+      },
+      'generator-top-shelf': 255,
+      'generator-bottom-shelf': 0,
+      'generator-value-fill': 0.8,
+      'generator-value-offset': 0,
+      'index-distortion-distortion_level': 0.2,
+      'index-distortion-frequency': 0.8,
+      'index-distortion-angular': 0.1
+    };
+  }
+}
+
+// Export singleton instance
+export const apiService = new ApiService();
+export default apiService;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import Header from './components/Header'
 
 interface Curve {
   id: string
@@ -8,6 +9,10 @@ interface Curve {
   "curve-type": string
   "curve-width": number
   "curve-data": number[]
+  "curve-index-scaling"?: number
+  "coordinate-noise-strength"?: number
+  "coordinate-noise-scale"?: number
+  "coordinate-noise-seed"?: number
 }
 
 interface ProcessCoordinateResponse {
@@ -27,6 +32,9 @@ function App() {
   const [isProcessingCoordinates, setIsProcessingCoordinates] = useState(false)
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 })
   const [error, setError] = useState<string | null>(null)
+  const [editingCurve, setEditingCurve] = useState<Curve | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -218,10 +226,72 @@ function App() {
   // Handle curve selection
   const handleCurveSelect = (curve: Curve) => {
     setSelectedCurve(curve)
+    setEditingCurve({ ...curve }) // Create a copy for editing
+    setHasUnsavedChanges(false)
     setError(null)
     // Clear existing colors before processing new curve
     setCellColors(new Map())
     processCurveCoordinates(curve)
+  }
+
+  // Handle field changes
+  const handleFieldChange = (field: string, value: any) => {
+    if (!editingCurve) return
+    
+    setEditingCurve(prev => ({
+      ...prev!,
+      [field]: value
+    }))
+    setHasUnsavedChanges(true)
+  }
+
+  // Save curve changes
+  const saveCurveChanges = async () => {
+    if (!editingCurve || !selectedCurve) return
+    
+    setIsSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(
+        `https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves/${selectedCurve.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(editingCurve)
+        }
+      )
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Update the selected curve with new data
+          setSelectedCurve(editingCurve)
+          setHasUnsavedChanges(false)
+          
+          // Clear namespace cache and redraw grid
+          setCellColors(new Map())
+          if (editingCurve) {
+            processCurveCoordinates(editingCurve)
+          }
+          
+          console.log('Curve updated successfully')
+        } else {
+          setError('Failed to update curve: API returned error')
+        }
+      } else {
+        const errorText = await response.text()
+        console.error('API request failed:', response.status, response.statusText, errorText)
+        setError(`Failed to update curve: ${response.status} ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('Failed to update curve:', error)
+      setError('Failed to update curve: Network error')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Handle new visible cells (when scrolling/resizing) with debounced delay
@@ -245,27 +315,25 @@ function App() {
     }
   }, [cellSize, gridDimensions, selectedCurve])
 
-  // Generate random colors for initial grid
-  const generateRandomGridColors = () => {
+  // Set dark gray colors for initial grid
+  const setDefaultGridColors = () => {
     const newCellColors = new Map<string, string>()
     const { width, height } = gridDimensions
     
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        const hue = Math.floor(Math.random() * 360)
-        const color = `hsl(${hue}, 70%, 50%)`
-        newCellColors.set(coordKey, color)
+        newCellColors.set(coordKey, '#333333') // Dark gray
       }
     }
     
     setCellColors(newCellColors)
   }
 
-  // Generate random colors when grid dimensions change
+  // Set default colors when grid dimensions change
   useEffect(() => {
     if (gridDimensions.width > 0 && gridDimensions.height > 0) {
-      generateRandomGridColors()
+      setDefaultGridColors()
     }
   }, [gridDimensions])
 
@@ -277,7 +345,7 @@ function App() {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        const color = cellColors.get(coordKey) || '#333'
+        const color = cellColors.get(coordKey) || '#333333'
         
         cells.push(
           <div
@@ -301,10 +369,7 @@ function App() {
 
   return (
     <div className="app">
-      {/* Header */}
-      <header className="header">
-        <h1>Admin Curve Tool</h1>
-      </header>
+      <Header title="Cnidaria Admin Curves" subtitle="Mathematical Terrain Management" />
       
       <div className="main-content">
         {/* Left Pane */}
@@ -332,31 +397,114 @@ function App() {
             )}
           </div>
           
-          {selectedCurve && (
+          {selectedCurve && editingCurve && (
             <div className="curve-info">
               <h3>Curve Info</h3>
-              <div className="info-item">
-                <strong>Type:</strong> {selectedCurve["curve-type"]}
+              
+              {/* Basic Info (Read-only) */}
+              <div className="info-section">
+                <h4>Basic Properties</h4>
+                <div className="info-item">
+                  <strong>Width:</strong> {selectedCurve["curve-width"]}
+                </div>
+                <div className="info-item">
+                  <strong>Status:</strong> 
+                  {isProcessingCoordinates ? (
+                    <span className="processing-indicator">
+                      <span className="spinner"></span>
+                      Processing...
+                      {processingProgress.total > 0 && (
+                        <span className="progress-text">
+                          {processingProgress.current}/{processingProgress.total}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    'Ready'
+                  )}
+                </div>
               </div>
-              <div className="info-item">
-                <strong>Width:</strong> {selectedCurve["curve-width"]}
+
+              {/* Editable Settings */}
+              <div className="info-section">
+                <h4>Settings</h4>
+                <div className="form-group">
+                  <label>Curve Type:</label>
+                  <select
+                    value={editingCurve["curve-type"] || "Radial"}
+                    onChange={(e) => handleFieldChange("curve-type", e.target.value)}
+                  >
+                    <option value="Radial">Radial</option>
+                    <option value="Cartesian X">Cartesian X</option>
+                    <option value="Cartesian Y">Cartesian Y</option>
+                  </select>
+                </div>
+                
+                {/* Universal Index Scaling */}
+                <div className="form-group">
+                  <label>Index Scaling:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    max="5.0"
+                    value={editingCurve["curve-index-scaling"] || 1.0}
+                    onChange={(e) => handleFieldChange("curve-index-scaling", parseFloat(e.target.value) || 1.0)}
+                  />
+                  <small className="form-help">Controls how many cells of distance are needed to move to the next index position</small>
+                </div>
+
+                {/* Coordinate Noise - Universal for all curve types */}
+                <div className="form-group">
+                  <label>Coordinate Noise Strength:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="3"
+                    value={editingCurve["coordinate-noise-strength"] || 0}
+                    onChange={(e) => handleFieldChange("coordinate-noise-strength", parseFloat(e.target.value) || 0)}
+                  />
+                  <small className="form-help">How much to distort the input coordinates before curve processing</small>
+                </div>
+                <div className="form-group">
+                  <label>Coordinate Noise Scale:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max="1.0"
+                    value={editingCurve["coordinate-noise-scale"] || 0.1}
+                    onChange={(e) => handleFieldChange("coordinate-noise-scale", parseFloat(e.target.value) || 0.1)}
+                  />
+                  <small className="form-help">Scale of the noise pattern (lower = larger patterns)</small>
+                </div>
+                <div className="form-group">
+                  <label>Coordinate Noise Seed:</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="9999"
+                    value={editingCurve["coordinate-noise-seed"] || 0}
+                    onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
+                  />
+                  <small className="form-help">Random seed for consistent noise patterns</small>
+                </div>
               </div>
-              <div className="info-item">
-                <strong>Status:</strong> 
-                {isProcessingCoordinates ? (
-                  <span className="processing-indicator">
-                    <span className="spinner"></span>
-                    Processing...
-                    {processingProgress.total > 0 && (
-                      <span className="progress-text">
-                        {processingProgress.current}/{processingProgress.total}
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  'Ready'
-                )}
-              </div>
+
+              {/* Save Button */}
+              {hasUnsavedChanges && (
+                <div className="save-section">
+                  <button 
+                    className="save-btn" 
+                    onClick={saveCurveChanges}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           

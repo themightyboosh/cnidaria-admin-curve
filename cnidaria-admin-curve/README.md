@@ -1,6 +1,6 @@
-# Cnidaria Admin Curve Tool
+# Cnidaria Admin Curves
 
-A React-based admin tool for managing and visualizing "Cnidaria" curves, built with TypeScript and Vite. This tool connects to the cnidaria-api backend to display dynamic grids and visualize curve data with real-time mathematical processing.
+A React-based admin tool for managing and visualizing "Cnidaria" curves, built with TypeScript and Vite. This tool connects to the cnidaria-api backend to display dynamic grids and visualize curve data with real-time mathematical processing. This is part of the Cnidaria Admin suite of tools.
 
 ## Features
 
@@ -50,6 +50,9 @@ cnidaria-admin-curve/
 │   ├── App.tsx              # Main application component
 │   ├── App.css              # Application styles
 │   ├── main.tsx             # Application entry point
+│   ├── components/          # Reusable components
+│   │   ├── Header.tsx       # Header component with logo
+│   │   └── Header.css       # Header styles
 │   └── services/
 │       └── apiService.ts    # API communication service
 ├── public/                  # Static assets
@@ -59,7 +62,8 @@ cnidaria-admin-curve/
 ├── vite.config.ts           # Vite configuration
 ├── Dockerfile               # Docker configuration for deployment
 ├── nginx.conf               # Nginx configuration
-└── deploy-google.sh         # Google Cloud deployment script
+├── deploy-google.sh         # Google Cloud deployment script
+└── deploy-google-admin-curves.sh # Updated deployment script for cnidaria-admin-curves
 ```
 
 ## UI Layout
@@ -87,9 +91,14 @@ cnidaria-admin-curve/
 
 ### Google Cloud Run
 ```bash
-# Deploy to Google Cloud
+# Deploy to Google Cloud (legacy)
 ./deploy-google.sh
+
+# Deploy to Google Cloud (recommended for cnidaria-admin-curves structure)
+./deploy-google-admin-curves.sh
 ```
+
+**Note**: When deploying to production, this application should be placed in a folder called `cnidaria-admin-curves` to integrate with the broader admin tool suite.
 
 ### Docker
 ```bash
