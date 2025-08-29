@@ -483,7 +483,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header title="Cnidaria Admin Curves" subtitle="Mathematical Terrain Management" />
+      <Header title="Cnidaria" subtitle="Mathematical Terrain Management" />
       
       <div className="main-content">
         {/* Left Pane */}

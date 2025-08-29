@@ -26,22 +26,22 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
     switch (currentPage) {
       case 'Dashboard':
         return {
-          title: 'Cnidaria Admin',
+          title: 'Cnidaria',
           subtitle: 'Mathematical Terrain Management'
         }
       case 'Curve Admin':
         return {
-          title: 'Curve Administration',
+          title: 'CNidaria',
           subtitle: 'Manage mathematical curves and patterns'
         }
       case 'Wave Editor':
         return {
-          title: 'Wave Editor',
+          title: 'Cnidaria',
           subtitle: 'Create and edit wave patterns for curves'
         }
       default:
         return {
-          title: 'Cnidaria Admin',
+          title: 'Cnidaria',
           subtitle: 'Mathematical Terrain Management'
         }
     }

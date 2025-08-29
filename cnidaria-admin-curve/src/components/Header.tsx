@@ -8,7 +8,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ 
-  title = "Cnidaria Admin",
+  title = "CNidaria",
   subtitle = "Mathematical Terrain Management",
   currentPage = "Dashboard"
 }) => {
