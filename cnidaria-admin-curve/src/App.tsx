@@ -77,17 +77,21 @@ function App() {
         if (data.success) {
           // Fix: API returns data.curves, not just curves
           const curvesData = data.data?.curves || data.curves || []
-          console.log('Setting curves:', curvesData)
-          setCurves(curvesData)
+          console.log('Raw curves from API:', curvesData)
           
-          // Extract all unique tags from curves
-          const allTags = new Set<string>()
-          curvesData.forEach((curve: Curve) => {
+          // Process curve data to ensure curve-tags contains only IDs
+          const processedCurves = curvesData.map((curve: Curve) => {
             if (curve["curve-tags"]) {
-              curve["curve-tags"].forEach(tag => allTags.add(tag))
+              // Ensure curve-tags is an array of strings (IDs), not objects
+              curve["curve-tags"] = curve["curve-tags"].map(tag => 
+                typeof tag === 'string' ? tag : tag.id || tag
+              )
             }
+            return curve
           })
-          setAvailableTags(Array.from(allTags).sort())
+          
+          console.log('Setting processed curves:', processedCurves)
+          setCurves(processedCurves)
         } else {
           console.error('API returned success: false:', data)
           setError('Failed to load curves: API returned error')
@@ -119,8 +123,12 @@ function App() {
         
         if (data.success) {
           const tags = data.data?.tags || []
-          console.log('🔄 Setting available tags:', tags)
-          setAvailableTags(tags)
+          // Remove any duplicate tags by ID
+          const uniqueTags = tags.filter((tag, index, self) => 
+            index === self.findIndex(t => t.id === tag.id)
+          )
+          console.log('🔄 Setting available tags:', uniqueTags)
+          setAvailableTags(uniqueTags)
         } else {
           console.error('❌ Tags API returned success: false:', data)
         }
@@ -658,9 +666,9 @@ function App() {
                   <div className="section-content">
                     <div className="tags-container">
                       {/* Current tags as pills */}
-                      {(editingCurve["curve-tags"] || []).map(tagId => (
+                      {[...new Set(editingCurve["curve-tags"] || [])].map((tagId, index) => (
                         <span 
-                          key={tagId} 
+                          key={`current-tag-${tagId}-${index}`}
                           className="tag-pill" 
                           style={{ backgroundColor: getTagColor(tagId) }}
                         >
@@ -680,9 +688,9 @@ function App() {
                       <div className="available-tags">
                         {availableTags
                           .filter(tag => !editingCurve["curve-tags"]?.includes(tag.id))
-                          .map(tag => (
+                          .map((tag, index) => (
                             <button
-                              key={tag.id}
+                              key={`available-tag-${tag.id}-${index}`}
                               type="button"
                               className="add-tag-btn"
                               onClick={() => addTagToCurve(tag.id)}
