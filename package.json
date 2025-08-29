@@ -1,0 +1,21 @@
+{
+  "name": "cnidaria-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:admin": "cd cnidaria-admin-curve && npm run dev",
+    "dev:api": "cd cnidaria-api && npm start",
+    "build:admin": "cd cnidaria-admin-curve && npm run build",
+    "install:all": "cd cnidaria-admin-curve && npm install && cd ../cnidaria-api && npm install",
+    "start": "concurrently \"npm run dev:admin\" \"npm run dev:api\"",
+    "admin": "cd cnidaria-admin-curve && npm run dev",
+    "api": "cd cnidaria-api && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "cnidaria-admin-curve",
+    "cnidaria-api"
+  ]
+}
