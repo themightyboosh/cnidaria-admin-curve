@@ -34,6 +34,15 @@ steps:
       '--allow-unauthenticated',
       '--set-env-vars', 'VITE_ENVIRONMENT=staging,VITE_API_URL=https://us-central1-cnidaria-stage.cloudfunctions.net/cnidaria-api-stage'
     ]
+  
+  # Ensure public access
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'services', 'add-iam-policy-binding', 'cnidaria-admin-curves-stage',
+      '--region', 'us-central1',
+      '--member', 'allUsers',
+      '--role', 'roles/run.invoker'
+    ]
 
 images:
   - 'gcr.io/$PROJECT_ID/cnidaria-admin-curves-stage:latest'

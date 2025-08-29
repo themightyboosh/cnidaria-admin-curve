@@ -35,15 +35,20 @@ const getEnvironment = (): string => {
     return 'development';
   }
   
-  if (hostname.includes('stage') || hostname.includes('staging')) {
+  // Check for Cloud Run service names
+  if (hostname.includes('cnidaria-admin-curves-dev')) {
+    return 'development';
+  }
+  
+  if (hostname.includes('cnidaria-admin-curves-stage') || hostname.includes('stage') || hostname.includes('staging')) {
     return 'staging';
   }
   
-  if (hostname.includes('prod') || hostname.includes('production')) {
+  if (hostname.includes('cnidaria-admin-curves-prod') || hostname.includes('prod') || hostname.includes('production')) {
     return 'production';
   }
   
-  // Default to development for local development
+  // Default to development
   return 'development';
 };
 

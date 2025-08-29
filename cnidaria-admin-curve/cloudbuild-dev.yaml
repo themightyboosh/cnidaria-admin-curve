@@ -30,6 +30,15 @@ steps:
       '--allow-unauthenticated',
       '--set-env-vars', 'VITE_ENVIRONMENT=development,VITE_API_URL=https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev'
     ]
+  
+  # Ensure public access
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'services', 'add-iam-policy-binding', 'cnidaria-admin-curves-dev',
+      '--region', 'us-central1',
+      '--member', 'allUsers',
+      '--role', 'roles/run.invoker'
+    ]
 
 images:
   - 'gcr.io/$PROJECT_ID/cnidaria-admin-curves-dev:latest'
