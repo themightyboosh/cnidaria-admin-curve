@@ -3,11 +3,21 @@ import './App.css'
 import Header from './components/Header'
 import { apiUrl } from './config/environments'
 
+interface Tag {
+  id: string
+  'tag-name': string
+  'tag-description': string
+  'tag-color': string
+  'created-at': string
+  'updated-at': string
+  'usage-count-curves': number
+}
+
 interface Curve {
   id: string
   "curve-name": string
   "curve-description": string
-  "curve-tags"?: string[]
+  "curve-tags"?: string[]  // Store document IDs
   "curve-type": string
   "curve-width": number
   "curve-data": number[]
@@ -44,8 +54,9 @@ function App() {
     tags: true,
     settings: true
   })
-  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<Tag[]>([])
   const [newTagInput, setNewTagInput] = useState('')
+  const [isLoadingTags, setIsLoadingTags] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -94,10 +105,52 @@ function App() {
     }
   }
 
-  // Load curves on component mount
+  // Load all available tags from the API
+  const loadTags = async () => {
+    console.log('🔄 Loading tags from API...')
+    setIsLoadingTags(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/tags`)
+      console.log('🔄 Tags API Response status:', response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('🔄 Tags API Response data:', data)
+        
+        if (data.success) {
+          const tags = data.data?.tags || []
+          console.log('🔄 Setting available tags:', tags)
+          setAvailableTags(tags)
+        } else {
+          console.error('❌ Tags API returned success: false:', data)
+        }
+      } else {
+        console.error('❌ Tags API request failed:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Failed to load tags:', error)
+    } finally {
+      setIsLoadingTags(false)
+    }
+  }
+
+  // Load curves and tags on component mount
   useEffect(() => {
     loadCurves()
+    loadTags()
   }, [])
+
+  // Helper function to get tag name from tag ID
+  const getTagName = (tagId: string): string => {
+    const tag = availableTags.find(t => t.id === tagId)
+    return tag ? tag['tag-name'] : tagId // Fallback to ID if not found
+  }
+
+  // Helper function to get tag color from tag ID
+  const getTagColor = (tagId: string): string => {
+    const tag = availableTags.find(t => t.id === tagId)
+    return tag ? tag['tag-color'] : '#666666' // Fallback color
+  }
 
   // Handle keyboard events for Option key
   useEffect(() => {
@@ -289,7 +342,7 @@ function App() {
       const updatedTags = [...currentTags, tag]
       
       try {
-        const response = await fetch(`/api/curves/${editingCurve.id}`, {
+        const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ "curve-tags": updatedTags })
@@ -321,7 +374,7 @@ function App() {
     const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
     
     try {
-      const response = await fetch(`/api/curves/${editingCurve.id}`, {
+      const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ "curve-tags": updatedTags })
@@ -346,16 +399,40 @@ function App() {
 
   // Add new tag to system and curve
   const addNewTag = async () => {
-    if (newTagInput.trim() && !availableTags.includes(newTagInput.trim())) {
-      const newTag = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+    if (newTagInput.trim()) {
+      const tagName = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
       
-      // Add to available tags
-      setAvailableTags(prev => [...prev, newTag])
+      // Check if tag name already exists
+      const existingTag = availableTags.find(t => t['tag-name'] === tagName)
+      if (existingTag) {
+        // If tag exists, just add it to the curve
+        await addTagToCurve(existingTag.id)
+        setNewTagInput('')
+        return
+      }
       
-      // Add to current curve via API
-      await addTagToCurve(newTag)
-      
-      setNewTagInput('')
+      try {
+        // Create new tag via API
+        const response = await fetch(`${apiUrl}/api/tags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 'tag-name': tagName })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            const newTag = data.data
+            // Add to available tags
+            setAvailableTags(prev => [...prev, newTag])
+            // Add to current curve
+            await addTagToCurve(newTag.id)
+            setNewTagInput('')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to create new tag:', error)
+      }
     }
   }
 
@@ -581,14 +658,18 @@ function App() {
                   <div className="section-content">
                     <div className="tags-container">
                       {/* Current tags as pills */}
-                      {(editingCurve["curve-tags"] || []).map(tag => (
-                        <span key={tag} className="tag-pill">
-                          {tag}
+                      {(editingCurve["curve-tags"] || []).map(tagId => (
+                        <span 
+                          key={tagId} 
+                          className="tag-pill" 
+                          style={{ backgroundColor: getTagColor(tagId) }}
+                        >
+                          {getTagName(tagId)}
                           <button
                             type="button"
                             className="remove-tag"
-                            onClick={() => removeTagFromCurve(tag)}
-                            title={`Remove tag: ${tag}`}
+                            onClick={() => removeTagFromCurve(tagId)}
+                            title={`Remove tag: ${getTagName(tagId)}`}
                           >
                             ×
                           </button>
@@ -598,16 +679,20 @@ function App() {
                       {/* Available tags to add */}
                       <div className="available-tags">
                         {availableTags
-                          .filter(tag => !editingCurve["curve-tags"]?.includes(tag))
+                          .filter(tag => !editingCurve["curve-tags"]?.includes(tag.id))
                           .map(tag => (
                             <button
-                              key={tag}
+                              key={tag.id}
                               type="button"
                               className="add-tag-btn"
-                              onClick={() => addTagToCurve(tag)}
-                              title={`Add tag: ${tag}`}
+                              onClick={() => addTagToCurve(tag.id)}
+                              title={`Add tag: ${tag['tag-name']}`}
+                              style={{ 
+                                backgroundColor: tag['tag-color'],
+                                border: `1px solid ${tag['tag-color']}`
+                              }}
                             >
-                              + {tag}
+                              + {tag['tag-name']}
                             </button>
                           ))}
                       </div>
