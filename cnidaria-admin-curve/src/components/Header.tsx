@@ -4,11 +4,13 @@ import './Header.css'
 interface HeaderProps {
   title?: string
   subtitle?: string
+  currentPage?: string
 }
 
 const Header: React.FC<HeaderProps> = ({ 
-  title = "Cnidaria Admin Curves",
-  subtitle = "Mathematical Terrain Management"
+  title = "Cnidaria Admin",
+  subtitle = "Mathematical Terrain Management",
+  currentPage = "Dashboard"
 }) => {
   return (
     <header className="cnidaria-header">
@@ -36,10 +38,8 @@ const Header: React.FC<HeaderProps> = ({
         </div>
         
         <div className="header-actions">
-          <div className="admin-nav">
-            <span className="nav-item">Curves</span>
-            <span className="nav-item">Bands</span>
-            <span className="nav-item">Configs</span>
+          <div className="current-page-indicator">
+            <span className="page-badge">{currentPage}</span>
           </div>
         </div>
       </div>
