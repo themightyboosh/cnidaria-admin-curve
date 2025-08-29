@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { apiUrl } from '../config/environments';
 
 // API Configuration
-const API_BASE_URL = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
+const API_BASE_URL = apiUrl;
 
 // Types
 export interface CurveData {
@@ -59,6 +60,14 @@ export interface ApiResponse<T> {
   };
   message?: string;
   timestamp: string;
+}
+
+export interface CacheStats {
+  items: number;
+  hits: number;
+  misses: number;
+  sizeBytes?: number;
+  updatedAt?: string;
 }
 
 // Curve Manager Class
@@ -212,9 +221,9 @@ export class CurveManager {
   }
 
   // Get cache statistics
-  async getCacheStats(curveId: string): Promise<any> {
+  async getCacheStats(curveId: string): Promise<CacheStats> {
     try {
-      const response = await this.apiClient.get<ApiResponse<any>>(`/api/curves/${curveId}/cache`);
+      const response = await this.apiClient.get<ApiResponse<CacheStats>>(`/api/curves/${curveId}/cache`);
       
       if (!response.data.success || !response.data.data) {
         throw new Error(response.data.error?.message || 'Failed to get cache stats');
