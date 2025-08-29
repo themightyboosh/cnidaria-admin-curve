@@ -1,8 +1,6 @@
 import React from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from './Header'
-import Navigation from './Navigation'
-import './Layout.css'
 
 interface LayoutProps {
   className?: string
@@ -26,28 +24,29 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
     switch (currentPage) {
       case 'Dashboard':
         return {
-          title: 'Cnidaria',
-          subtitle: 'Mathematical Terrain Management'
+          title: 'Cnidaria'
         }
       case 'Curve Admin':
         return {
-          title: 'CNidaria',
-          subtitle: 'Manage mathematical curves and patterns'
+          title: 'Cnidaria'
         }
       case 'Wave Editor':
         return {
-          title: 'Cnidaria',
-          subtitle: 'Create and edit wave patterns for curves'
+          title: 'Cnidaria'
         }
       default:
         return {
-          title: 'Cnidaria',
-          subtitle: 'Mathematical Terrain Management'
+          title: 'Cnidaria'
         }
     }
   }
 
   const pageInfo = getPageInfo()
+
+  // For CurveBuilder, render without layout wrapper to allow full control
+  if (location.pathname.startsWith('/curves')) {
+    return <Outlet />
+  }
 
   return (
     <div className={`admin-layout ${className}`}>
@@ -57,15 +56,9 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
         currentPage={getCurrentPage()}
       />
       
-      <div className="layout-content">
-        <aside className="sidebar">
-          <Navigation />
-        </aside>
-        
-        <main className="main-content">
-          <Outlet />
-        </main>
-      </div>
+      <main className="main-content">
+        <Outlet />
+      </main>
     </div>
   )
 }

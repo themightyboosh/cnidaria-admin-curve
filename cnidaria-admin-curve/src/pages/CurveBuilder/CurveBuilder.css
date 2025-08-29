@@ -1,14 +1,24 @@
-/* CurveAdmin Page Styles */
-.curve-admin {
+/* CurveBuilder Page Styles */
+.app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   background-color: #1a1a1a;
   color: #ffffff;
 }
 
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
 /* Left Pane */
 .left-pane {
   width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+  flex-shrink: 0;
   background-color: #2a2a2a;
   border-right: 1px solid #444;
   overflow-y: auto;
@@ -285,6 +295,7 @@
   flex: 1;
   position: relative;
   overflow: hidden;
+  background-color: #000;
 }
 
 .grid-canvas {

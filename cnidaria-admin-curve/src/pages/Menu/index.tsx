@@ -1,17 +1,17 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import './Dashboard.css'
+import './Menu.css'
 
-const Dashboard: React.FC = () => {
+const Menu: React.FC = () => {
   const navigate = useNavigate()
 
   const adminModules = [
     {
-      title: 'Curve Administration',
-      description: 'Manage mathematical curves, patterns, and coordinate processing',
-      icon: '📈',
+      title: 'Curve Builder',
+      description: 'Create and manage mathematical curves with advanced tagging and processing',
+      icon: '🔧',
       path: '/curves',
-      features: ['Create curves', 'Edit properties', 'Process coordinates', 'Manage tags']
+      features: ['Build custom curves', 'Apply tags and metadata', 'Process coordinates', 'Real-time visualization']
     },
     {
       title: 'Wave Editor',
@@ -24,9 +24,9 @@ const Dashboard: React.FC = () => {
 
   const quickActions = [
     {
-      label: 'Create New Curve',
+      label: 'Build New Curve',
       action: () => navigate('/curves'),
-      icon: '➕'
+      icon: '🔧'
     },
     {
       label: 'Open Wave Editor',
@@ -38,8 +38,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>Welcome to Cnidaria Admin</h1>
-        <p>Manage your mathematical terrain system and curve processing</p>
+        <h1>Cnidaria Control Center</h1>
+        <p>Build, manage, and visualize your mathematical terrain systems</p>
       </div>
 
       <div className="dashboard-content">
@@ -101,4 +101,4 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default Dashboard
+export default Menu

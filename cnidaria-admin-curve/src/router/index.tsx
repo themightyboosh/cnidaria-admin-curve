@@ -1,7 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import Layout from '../components/Layout'
-import Dashboard from '../pages/Dashboard'
-import CurveAdmin from '../pages/CurveAdmin'
+import Menu from '../pages/Menu'
+import CurveBuilder from '../pages/CurveBuilder'
 import WaveEditor from '../pages/WaveEditor'
 
 export const router = createBrowserRouter([
@@ -11,15 +11,15 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Dashboard />
+        element: <Menu />
       },
       {
         path: 'curves',
-        element: <CurveAdmin />
+        element: <CurveBuilder />
       },
       {
         path: 'curves/:curveId',
-        element: <CurveAdmin />
+        element: <CurveBuilder />
       },
       {
         path: 'wave-editor',

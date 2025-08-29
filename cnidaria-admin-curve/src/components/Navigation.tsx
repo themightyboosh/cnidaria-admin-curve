@@ -11,8 +11,8 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const location = useLocation()
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
-    { path: '/curves', label: 'Curve Admin', icon: '📈' },
+    { path: '/', label: 'Menu', icon: '🏠' },
+    { path: '/curves', label: 'Curve Builder', icon: '🔧' },
     { path: '/wave-editor', label: 'Wave Editor', icon: '🌊' }
   ]
 
