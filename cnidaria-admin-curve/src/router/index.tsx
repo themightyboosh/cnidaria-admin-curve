@@ -3,6 +3,7 @@ import Layout from '../components/Layout'
 import Menu from '../pages/Menu'
 import CurveBuilder from '../pages/CurveBuilder'
 import WaveEditor from '../pages/WaveEditor'
+import TagManager from '../pages/TagManager'
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
       {
         path: 'curves/:curveId',
         element: <CurveBuilder />
+      },
+      {
+        path: 'tags',
+        element: <TagManager />
       },
       {
         path: 'wave-editor',

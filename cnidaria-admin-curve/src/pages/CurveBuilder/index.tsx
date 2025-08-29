@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { apiUrl } from '../../config/environments'
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
+import TagManager from '../TagManager'
 import './CurveBuilder.css'
 
 interface Tag {
@@ -57,8 +58,8 @@ function CurveBuilder() {
     settings: true
   })
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
-  const [newTagInput, setNewTagInput] = useState('')
   const [isLoadingTags, setIsLoadingTags] = useState(false)
+  const [showTagManager, setShowTagManager] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -365,8 +366,8 @@ function CurveBuilder() {
         })
         
         if (response.ok) {
-          // Update local state
-          handleFieldChange("curve-tags", updatedTags)
+          // Update local state directly (don't trigger save button)
+          setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
           // Update the main curves array
           setCurves(prev => prev.map(curve => 
             curve.id === editingCurve.id 
@@ -397,8 +398,8 @@ function CurveBuilder() {
       })
       
       if (response.ok) {
-        // Update local state
-        handleFieldChange("curve-tags", updatedTags)
+        // Update local state directly (don't trigger save button)
+        setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
         // Update the main curves array
         setCurves(prev => prev.map(curve => 
           curve.id === editingCurve.id 
@@ -413,43 +414,11 @@ function CurveBuilder() {
     }
   }
 
-  // Add new tag to system and curve
-  const addNewTag = async () => {
-    if (newTagInput.trim()) {
-      const tagName = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
-      
-      // Check if tag name already exists
-      const existingTag = availableTags.find(t => t['tag-name'] === tagName)
-      if (existingTag) {
-        // If tag exists, just add it to the curve
-        await addTagToCurve(existingTag.id)
-        setNewTagInput('')
-        return
-      }
-      
-      try {
-        // Create new tag via API
-        const response = await fetch(`${apiUrl}/api/tags`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 'tag-name': tagName })
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            const newTag = data.data
-            // Add to available tags
-            setAvailableTags(prev => [...prev, newTag])
-            // Add to current curve
-            await addTagToCurve(newTag.id)
-            setNewTagInput('')
-          }
-        }
-      } catch (error) {
-        console.error('Failed to create new tag:', error)
-      }
-    }
+  // Handle tag manager modal close and refresh tags
+  const handleTagManagerClose = () => {
+    setShowTagManager(false)
+    // Refresh tags when modal closes
+    loadTags()
   }
 
   // Save curve changes
@@ -701,63 +670,46 @@ function CurveBuilder() {
                         ))}
                       </div>
                       
-                      {/* Add tag dropdown - shows only unapplied tags */}
-                      <div className="add-tag-dropdown">
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              addTagToCurve(e.target.value)
-                              e.target.value = "" // Reset dropdown
-                            }
-                          }}
-                          style={{
-                            backgroundColor: '#2a2a2a',
-                            color: '#ffffff',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            padding: '8px 12px',
-                            minWidth: '200px'
-                          }}
-                        >
-                          <option value="">Add a tag...</option>
-                          {availableTags
-                            .filter(tag => !editingCurve["curve-tags"]?.includes(tag.id))
-                            .map(tag => (
-                              <option key={tag.id} value={tag.id}>
-                                {tag['tag-name']}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      
-                      {/* Add new tag input */}
-                      <div className="new-tag-input">
-                        <input
-                          type="text"
-                          placeholder="New tag..."
-                          value={newTagInput}
-                          onChange={(e) => setNewTagInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && addNewTag()}
-                          className="new-tag-field"
-                          style={{
-                            backgroundColor: '#2a2a2a',
-                            color: '#ffffff',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            padding: '8px 12px'
-                          }}
-                        />
+                      {/* Add tag dropdown with Edit Tags button */}
+                      <div className="tag-controls">
+                        <div className="add-tag-dropdown">
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                addTagToCurve(e.target.value)
+                                e.target.value = "" // Reset dropdown
+                              }
+                            }}
+                            style={{
+                              backgroundColor: '#2a2a2a',
+                              color: '#ffffff',
+                              border: '1px solid #444',
+                              borderRadius: '4px',
+                              padding: '8px 12px',
+                              minWidth: '200px'
+                            }}
+                          >
+                            <option value="">Add a tag...</option>
+                            {availableTags
+                              .filter(tag => !editingCurve["curve-tags"]?.includes(tag.id))
+                              .map(tag => (
+                                <option key={tag.id} value={tag.id}>
+                                  {tag['tag-name']}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
                         <button
                           type="button"
-                          onClick={addNewTag}
-                          disabled={!newTagInput.trim()}
-                          className="add-new-tag-btn"
-                          title="Add new tag"
+                          className="edit-tags-btn"
+                          onClick={() => setShowTagManager(true)}
+                          title="Edit Tags"
                         >
-                          Add
+                          Edit Tags
                         </button>
                       </div>
+
                     </div>
                   </div>
                 )}
@@ -938,6 +890,27 @@ function CurveBuilder() {
           </div>
         </div>
       </div>
+
+      {/* Tag Manager Modal */}
+      {showTagManager && (
+        <div className="modal-overlay" onClick={handleTagManagerClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Tag Manager</h2>
+              <button 
+                className="modal-close-btn"
+                onClick={handleTagManagerClose}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <TagManager />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
