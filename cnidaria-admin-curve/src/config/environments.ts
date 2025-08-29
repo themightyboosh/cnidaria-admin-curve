@@ -1,6 +1,14 @@
 // Smart Environment Configuration
 // Automatically detects environment and configures API endpoints
 
+export interface DeploymentConfig {
+  platform: 'cloud-run' | 'docker' | 'firebase';
+  projectId: string;
+  serviceName: string;
+  region: string;
+  imageRegistry: string;
+}
+
 export interface EnvironmentConfig {
   environment: string;
   apiUrl: string;
@@ -10,6 +18,7 @@ export interface EnvironmentConfig {
   isProduction: boolean;
   isStaging: boolean;
   isDevelopment: boolean;
+  deployment: DeploymentConfig;
 }
 
 // Environment detection
@@ -43,37 +52,57 @@ export const getEnvironmentConfig = (): EnvironmentConfig => {
   const env = getEnvironment();
   const isLocal = env === 'development' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   
+  // Standard Cloud Run deployment configuration
+  const cloudRunDeployment = {
+    platform: 'cloud-run' as const,
+    projectId: 'zone-eaters',
+    region: 'us-central1',
+    imageRegistry: 'gcr.io'
+  };
+
   // Environment-specific configurations
   const configs = {
     development: {
       environment: 'development',
       apiUrl: 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev',
-      webUrl: 'http://localhost:5173',
+      webUrl: 'https://cnidaria-admin-curves-dev-824079132046.us-central1.run.app',
       appTitle: 'Cnidaria Admin Curves (Development)',
-      isLocal: true,
+      isLocal: isLocal,
       isProduction: false,
       isStaging: false,
-      isDevelopment: true
+      isDevelopment: true,
+      deployment: {
+        ...cloudRunDeployment,
+        serviceName: 'cnidaria-admin-curves-dev'
+      }
     },
     staging: {
-      environment: 'development',
+      environment: 'staging',
       apiUrl: 'https://us-central1-cnidaria-stage.cloudfunctions.net/cnidaria-api-stage',
-      webUrl: import.meta.env.VITE_WEB_URL || 'https://cnidaria-admin-curves-stage-xxxxx-uc.a.run.app',
+      webUrl: import.meta.env.VITE_WEB_URL || 'https://cnidaria-admin-curves-stage-824079132046.us-central1.run.app',
       appTitle: 'Cnidaria Admin Curves (Staging)',
       isLocal: false,
       isProduction: false,
       isStaging: true,
-      isDevelopment: false
+      isDevelopment: false,
+      deployment: {
+        ...cloudRunDeployment,
+        serviceName: 'cnidaria-admin-curves-stage'
+      }
     },
     production: {
       environment: 'production',
       apiUrl: 'https://us-central1-cnidaria-prod.cloudfunctions.net/cnidaria-api-prod',
-      webUrl: import.meta.env.VITE_WEB_URL || 'https://cnidaria-admin-curves-prod-xxxxx-uc.a.run.app',
-      appTitle: 'Cnidave Admin Curves (Production)',
+      webUrl: import.meta.env.VITE_WEB_URL || 'https://cnidaria-admin-curves-prod-824079132046.us-central1.run.app',
+      appTitle: 'Cnidaria Admin Curves (Production)',
       isLocal: false,
       isProduction: true,
       isStaging: false,
-      isDevelopment: false
+      isDevelopment: false,
+      deployment: {
+        ...cloudRunDeployment,
+        serviceName: 'cnidaria-admin-curves-prod'
+      }
     }
   };
   
@@ -107,16 +136,37 @@ export const {
   isLocal,
   isProduction,
   isStaging,
-  isDevelopment
+  isDevelopment,
+  deployment
 } = env;
 
+// Deployment utility functions
+export const getCloudRunServiceUrl = (serviceName?: string): string => {
+  const service = serviceName || deployment.serviceName;
+  return `https://${service}-824079132046.${deployment.region}.run.app`;
+};
+
+export const getDeploymentCommand = (targetEnv?: string): string => {
+  const targetEnvironment = targetEnv || environment;
+  return `./deploy-cloudrun-${targetEnvironment}.sh`;
+};
+
+export const isCloudRunDeployment = (): boolean => {
+  return deployment.platform === 'cloud-run';
+};
+
 // Log environment info in development
-if (isDevelopment) {
+if (isDevelopment && isLocal) {
   console.log('🌍 Environment Configuration:', {
     environment,
     apiUrl,
     webUrl,
     appTitle,
-    isLocal
+    isLocal,
+    deployment: {
+      platform: deployment.platform,
+      serviceName: deployment.serviceName,
+      region: deployment.region
+    }
   });
 }
