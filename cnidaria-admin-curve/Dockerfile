@@ -1,6 +1,6 @@
 # Multi-stage build for Cnidaria Admin Curve Tool
 # Stage 1: Build the React application
-FROM node:18-alpine as build
+FROM node:20-alpine as build
 
 WORKDIR /app
 
