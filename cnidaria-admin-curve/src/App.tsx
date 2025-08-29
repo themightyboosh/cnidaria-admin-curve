@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { apiUrl } from './config/environments'
 import './App.css'
 
 interface Curve {
@@ -29,7 +30,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLDivElement>(null)
-  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load curves from API
   const loadCurves = async () => {
@@ -37,7 +38,7 @@ function App() {
     setError(null)
     console.log('Loading curves from API...')
     try {
-      const response = await fetch('https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves')
+      const response = await fetch(`${apiUrl}/api/curves`)
       console.log('API Response status:', response.status)
       
       if (response.ok) {
@@ -162,7 +163,7 @@ function App() {
       
       // Call GetCurveIndexValue API with visible coordinates
       const response = await fetch(
-        `https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
+        `${apiUrl}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
         {
           method: 'GET',
           headers: {

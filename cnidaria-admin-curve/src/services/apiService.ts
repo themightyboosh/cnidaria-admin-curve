@@ -1,7 +1,8 @@
 // API Service for Cnidaria Admin Curve Tool
 // Handles communication with the cnidaria-api backend
+import { apiUrl } from '../config/environments';
 
-const API_BASE_URL = 'https://us-central1-cnidaria-api.cloudfunctions.net';
+const API_BASE_URL = apiUrl;
 
 export interface Curve {
   id: string;
