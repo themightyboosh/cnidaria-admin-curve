@@ -12,7 +12,6 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '-t', 'gcr.io/$PROJECT_ID/cnidaria-admin-curves-dev:$COMMIT_SHA',
       '-t', 'gcr.io/$PROJECT_ID/cnidaria-admin-curves-dev:latest',
       '.'
     ]
