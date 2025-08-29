@@ -1,14 +1,14 @@
 # Multi-stage build for Cnidaria Admin Curve Tool
 # Stage 1: Build the React application
-FROM node:20-alpine as build
+FROM node:20 as build
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --only=production
+# Install dependencies (including dev dependencies for build)
+RUN npm install
 
 # Copy source code
 COPY . .
