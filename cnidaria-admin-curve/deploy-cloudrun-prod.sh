@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Deploy Cnidaria Admin Curves to Google Cloud Run (Dev Environment)
+# Deploy Cnidaria Admin Curves to Google Cloud Run (Production Environment)
 # Uses Google Cloud Build to avoid local Docker issues
 
 set -e
 
-echo "🚀 Deploying Cnidaria Admin Curves to Google Cloud Run (Dev)..."
+echo "🚀 Deploying Cnidaria Admin Curves to Google Cloud Run (Production)..."
 
 # Configuration
 PROJECT_ID="zone-eaters"
-SERVICE_NAME="cnidaria-admin-curves-dev"
+SERVICE_NAME="cnidaria-admin-curves-prod"
 REGION="us-central1"
 
 echo "📋 Configuration:"
@@ -35,16 +35,21 @@ gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
 gcloud services enable containerregistry.googleapis.com
 
+# Switch to main branch for production
+echo "🔄 Switching to main branch for production deployment..."
+git checkout main
+git pull origin main
+
 # Commit and push changes if needed
 echo "📤 Ensuring latest code is pushed..."
 git add .
-git commit -m "Deploy to Cloud Run dev" || echo "No changes to commit"
-git push origin dev
+git commit -m "Deploy to Cloud Run prod" || echo "No changes to commit"
+git push origin main
 
 # Trigger Cloud Build
 echo "🏗️ Starting Google Cloud Build..."
 gcloud builds submit \
-    --config=cloudbuild-dev.yaml \
+    --config=cloudbuild-prod.yaml \
     .
 
 echo "✅ Deployment initiated!"

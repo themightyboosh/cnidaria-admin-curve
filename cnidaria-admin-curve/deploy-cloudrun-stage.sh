@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Deploy Cnidaria Admin Curves to Google Cloud Run (Dev Environment)
+# Deploy Cnidaria Admin Curves to Google Cloud Run (Stage Environment)
 # Uses Google Cloud Build to avoid local Docker issues
 
 set -e
 
-echo "🚀 Deploying Cnidaria Admin Curves to Google Cloud Run (Dev)..."
+echo "🚀 Deploying Cnidaria Admin Curves to Google Cloud Run (Stage)..."
 
 # Configuration
 PROJECT_ID="zone-eaters"
-SERVICE_NAME="cnidaria-admin-curves-dev"
+SERVICE_NAME="cnidaria-admin-curves-stage"
 REGION="us-central1"
 
 echo "📋 Configuration:"
@@ -38,13 +38,13 @@ gcloud services enable containerregistry.googleapis.com
 # Commit and push changes if needed
 echo "📤 Ensuring latest code is pushed..."
 git add .
-git commit -m "Deploy to Cloud Run dev" || echo "No changes to commit"
+git commit -m "Deploy to Cloud Run stage" || echo "No changes to commit"
 git push origin dev
 
 # Trigger Cloud Build
 echo "🏗️ Starting Google Cloud Build..."
 gcloud builds submit \
-    --config=cloudbuild-dev.yaml \
+    --config=cloudbuild-stage.yaml \
     .
 
 echo "✅ Deployment initiated!"

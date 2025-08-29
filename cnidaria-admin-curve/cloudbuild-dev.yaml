@@ -35,5 +35,5 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/cnidaria-admin-curves-dev:latest'
 
-substitutions:
-  _SERVICE_NAME: cnidaria-admin-curves-dev
+options:
+  machineType: 'E2_HIGHCPU_8'
