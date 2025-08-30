@@ -144,7 +144,7 @@ const TagManager: React.FC = () => {
     const newTagId = `temp-${Date.now()}` // Temporary ID for new tag
     const newTag: EditingTag = {
       id: newTagId,
-      name: 'New Tag',
+      name: 'new-tag',
       description: '',
       color: '#007acc'
     }
