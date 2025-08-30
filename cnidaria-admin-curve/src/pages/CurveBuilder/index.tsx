@@ -905,6 +905,7 @@ function CurveBuilder() {
           ) : (
             <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
               <ThreeJSGrid 
+                key={`3d-grid-${selectedCurve?.id || 'no-curve'}`}
                 cellColors={cellColors}
                 gridDimensions={gridDimensions}
                 cellSize={cellSize}

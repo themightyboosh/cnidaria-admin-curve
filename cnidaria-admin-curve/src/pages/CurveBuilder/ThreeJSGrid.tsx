@@ -27,9 +27,9 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     scene.background = new THREE.Color(0x000000)
     sceneRef.current = scene
 
-    // Camera
+    // Camera - Start with angled top-down view
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-    camera.position.set(50, 50, 50)
+    camera.position.set(0, 80, 40) // Angled top-down view
     camera.lookAt(0, 0, 0)
     cameraRef.current = camera
 
@@ -101,6 +101,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
   // Create/update the grid mesh
   useEffect(() => {
     if (!sceneRef.current || !gridDimensions.width || !gridDimensions.height) return
+    
+    console.log('Creating 3D grid with dimensions:', gridDimensions)
+    console.log('CellColors size:', cellColors.size)
+    console.log('Sample cellColors entries:', Array.from(cellColors.entries()).slice(0, 5))
 
     // Remove existing mesh
     if (meshRef.current) {
@@ -117,15 +121,17 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
 
     // Create grid geometry (256x256 vertices for smooth mesh)
     const segments = 255 // 256x256 vertices
-    const size = Math.max(gridDimensions.width, gridDimensions.height) * cellSize / 10 // Scale appropriately
+    const size = Math.max(gridDimensions.width, gridDimensions.height) * (cellSize / 2) // Scale appropriately
     const geometry = new THREE.PlaneGeometry(size, size, segments, segments)
 
     // Create vertex colors array
     const colors = new Float32Array(geometry.attributes.position.count * 3)
     const positions = geometry.attributes.position.array as Float32Array
 
-    // Maximum height is the width of a grid square
-    const maxHeight = cellSize
+    // Maximum height should equal the width of a grid cell
+    // Since we have a plane of 'size' units divided into segments, each cell width is size/segments
+    const cellWidth = size / segments
+    const maxHeight = cellWidth
 
     // Update vertices with height and color data
     for (let i = 0; i < geometry.attributes.position.count; i++) {
@@ -143,19 +149,35 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       const colorStr = cellColors.get(coordKey) || '#333333'
       const color = new THREE.Color(colorStr)
       
-      // Extract height from color (assuming HSL where hue = index value)
+      // Extract the index value from the HSL hue 
+      // The 2D grid uses: hsl(indexValue, 70%, 50%) where indexValue is 0-255
+      // Three.js getHSL returns h as 0-1, so we need to convert back
       const hsl = { h: 0, s: 0, l: 0 }
       color.getHSL(hsl)
-      const indexValue = hsl.h * 360 // Convert hue back to 0-360 range
-      const height = (indexValue / 255) * maxHeight // Map to height
+      const indexValue = Math.round(hsl.h * 255) // Convert hue (0-1) back to original index value (0-255)
+      const heightPercentage = indexValue / 255 // Convert to percentage (0-1)
+      const height = heightPercentage * maxHeight // Height as percentage of cell width
       
       // Set vertex height (Y coordinate)
       positions[i * 3 + 1] = height
       
-      // Set vertex color
+      // Set vertex color (use the same color as 2D grid)
       colors[i * 3] = color.r
       colors[i * 3 + 1] = color.g
       colors[i * 3 + 2] = color.b
+    }
+    
+    // Debug: If no colors found, make vertices white for visibility
+    const hasColors = Array.from(cellColors.values()).length > 0
+    if (!hasColors) {
+      console.log('No curve data found, showing white vertices for debugging')
+      for (let i = 0; i < colors.length; i += 3) {
+        colors[i] = 1     // R
+        colors[i + 1] = 1 // G  
+        colors[i + 2] = 1 // B
+        // Set a small default height for visibility (10% of max height)
+        positions[(i / 3) * 3 + 1] = maxHeight * 0.1
+      }
     }
 
     // Add colors to geometry
