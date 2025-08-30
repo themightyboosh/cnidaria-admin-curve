@@ -43,7 +43,7 @@ interface ProcessCoordinateResponse {
 function CurveBuilder() {
   const defaultCellSize = 30
   const [cellSize, setCellSize] = useState(defaultCellSize)
-  const [viewMode, setViewMode] = useState<'2D' | '3D' | 'ThreeJS'>('2D')
+  const [viewMode, setViewMode] = useState<'2D'>('2D')
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
   const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
   const [isOptionPressed, setIsOptionPressed] = useState(false)
@@ -657,33 +657,7 @@ function CurveBuilder() {
                 </h3>
                 {expandedSections.view && (
                   <div className="section-content">
-                    <div className="form-group">
-                      <label>View Mode:</label>
-                      <select
-                        value={viewMode}
-                        onChange={(e) => {
-                          const newViewMode = e.target.value as '2D' | '3D' | 'ThreeJS'
-                          setViewMode(newViewMode)
-                          
-                          // Reset grid to default position when switching to 2D
-                          if (newViewMode === '2D') {
-                            console.log('Switching to 2D view - resetting grid to default position')
-                            setCellSize(defaultCellSize)
-                            // Re-process coordinates to update the grid with default sizing
-                            if (selectedCurve) {
-                              setTimeout(() => {
-                                processCurveCoordinates(selectedCurve)
-                              }, 100)
-                            }
-                          }
-                        }}
-                        title="Choose between 2D grid or 3D height map visualization"
-                      >
-                        <option value="2D">2D Grid</option>
-                        <option value="3D">3D Grid</option>
-                        <option value="ThreeJS">ThreeJS 3D</option>
-                      </select>
-                    </div>
+
                     
                     <div className="form-group">
                       <label>Color Spectrum:</label>
@@ -776,9 +750,9 @@ function CurveBuilder() {
                       </div>
                     )}
                     
-                    <div className="info-item">
-                      <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : viewMode === '3D' ? '3D Height Map' : 'ThreeJS 3D View'}
-                    </div>
+                                          <div className="info-item">
+                        <strong>Current View:</strong> 2D Grid View
+                      </div>
                   </div>
                 )}
               </div>
@@ -1020,41 +994,30 @@ function CurveBuilder() {
         
         {/* Canvas Area */}
         <div className="canvas-area">
-          {viewMode === '2D' ? (
-            <div 
-              ref={canvasRef}
-              className="grid-canvas"
+          <div 
+            ref={canvasRef}
+            className="grid-canvas"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              backgroundColor: '#000',
+              overflow: 'hidden'
+            }}
+          >
+            <div
               style={{
-                width: '100%',
-                height: '100%',
-                position: 'relative',
-                backgroundColor: '#000',
-                overflow: 'hidden'
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: `${gridDimensions.width * cellSize}px`,
+                height: `${gridDimensions.height * cellSize}px`
               }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: `${gridDimensions.width * cellSize}px`,
-                  height: `${gridDimensions.height * cellSize}px`
-                }}
-              >
-                {renderGridCells()}
-              </div>
+              {renderGridCells()}
             </div>
-          ) : (
-            <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
-              <ThreeJSGrid 
-                key={`threejs-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
-                selectedCurve={selectedCurve}
-                cellSize={cellSize}
-                colorMode={colorMode}
-              />
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
