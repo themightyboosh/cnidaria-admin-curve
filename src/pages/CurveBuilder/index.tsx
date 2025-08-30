@@ -750,9 +750,6 @@ function CurveBuilder() {
                       </div>
                     )}
                     
-                                          <div className="info-item">
-                        <strong>Current View:</strong> 2D Grid View
-                      </div>
                   </div>
                 )}
               </div>
