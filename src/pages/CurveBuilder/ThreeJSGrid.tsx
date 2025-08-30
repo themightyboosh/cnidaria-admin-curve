@@ -29,10 +29,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
   
-  // Dense mesh approach: 128x128 data mapped to 1280x1280 render grid
+  // Dense mesh approach: 128x128 data mapped to 640x640 render grid
   const dataGridSize = 128 // Our actual data grid
-  const renderGridSize = 1280 // Dense rendering mesh (10x resolution)
-  const interpolationRatio = 10 // 10x10 render vertices per data cell
+  const renderGridSize = 640 // Dense rendering mesh (5x resolution)
+  const interpolationRatio = 5 // 5x5 render vertices per data cell
 
   // Get coordinates for data grid with offset (still 128x128 for API calls)
   const getGridCoordinates = () => {
@@ -129,7 +129,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     
     console.log('Creating DENSE geometry:', renderGridSize, 'x', renderGridSize, 'vertices for', dataGridSize, 'x', dataGridSize, 'data')
     
-    // Create dense 1280x1280 plane geometry for ultra-smooth surface
+    // Create dense 640x640 plane geometry for smooth surface
     const geometry = new THREE.PlaneGeometry(
       dataGridSize * cellSize,  // Physical size stays the same
       dataGridSize * cellSize, 
@@ -246,7 +246,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       const z = positions[i + 2]
       
       // Convert dense mesh coordinates to data grid space 
-      // Since we have 10x more vertices, we need to scale down the coordinates
+      // Since we have 5x more vertices, we need to scale down the coordinates
       const dataX = (x / cellSize) + bounds.minX + (dataGridSize / 2)
       const dataY = (z / cellSize) + bounds.minY + (dataGridSize / 2)
       
