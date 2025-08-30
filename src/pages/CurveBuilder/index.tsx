@@ -1132,7 +1132,7 @@ function CurveBuilder() {
               </button>
             </div>
             <div className="modal-body">
-              <TagManager onTagsChanged={handleTagManagerClose} />
+              <TagManager onTagsChanged={handleTagManagerClose} hasUnsavedChanges={hasUnsavedChanges} />
             </div>
           </div>
         </div>

@@ -21,9 +21,10 @@ interface EditingTag {
 
 interface TagManagerProps {
   onTagsChanged?: () => void // Callback when tags are modified
+  hasUnsavedChanges?: boolean // Whether the parent component has unsaved changes
 }
 
-const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
+const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChanges }) => {
   const [tags, setTags] = useState<Tag[]>([])
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set())
   const [editingTags, setEditingTags] = useState<Map<string, EditingTag>>(new Map())
@@ -214,8 +215,11 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
         // Try to parse error response for better error message
         try {
           const errorData = JSON.parse(errorText)
-          setError(`Failed to update tag: ${errorData.message || errorData.error || `${response.status} ${response.statusText}`}`)
+          console.log('Parsed error data:', errorData) // Debug log
+          const errorMessage = errorData.message || errorData.error || errorData.details || JSON.stringify(errorData)
+          setError(`Failed to update tag: ${errorMessage}`)
         } catch {
+          console.log('Raw error text:', errorText) // Debug log
           setError(`Failed to update tag: ${response.status} ${response.statusText} - ${errorText}`)
         }
       }
@@ -332,6 +336,12 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
   return (
     <div className="tag-manager-container">
       <div className="tag-list-container">
+        {hasUnsavedChanges && (
+          <div className="warning-state">
+            <p>⚠️ Note: The curve has unsaved changes. Tag assignments may not be reflected until you save the curve.</p>
+          </div>
+        )}
+        
         {isLoading && (
           <div className="loading-state">Loading tags...</div>
         )}
