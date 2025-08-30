@@ -16,7 +16,8 @@ interface Tag {
   'tag-color': string
   'created-at': string
   'updated-at': string
-  'usage-count-curves': number
+  'usage-count-curves'?: number // Legacy field - optional for backward compatibility
+  'tag-usage'?: Record<string, string[]> // New field - map of object-type to array of document IDs
 }
 
 interface Curve {
@@ -65,6 +66,7 @@ function CurveBuilder() {
     settings: true
   })
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
+  const [assignedTags, setAssignedTags] = useState<Tag[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
   const [show3DPreview, setShow3DPreview] = useState(false)
@@ -122,9 +124,37 @@ function CurveBuilder() {
     }
   }
 
-  // Load all available tags from the API
-  const loadTags = async () => {
-    console.log('🔄 Loading tags from API...')
+  // Load tags for the current curve using new tag-usage system
+  const loadTagsForCurve = async (curveId: string) => {
+    console.log('🔄 Loading tags for curve:', curveId)
+    setIsLoadingTags(true)
+    try {
+      // Load assigned tags (tags currently on this curve)
+      const assignedResponse = await fetch(`${apiUrl}/api/tags/by-usage/curve/${curveId}`)
+      const assignedData = await assignedResponse.json()
+      
+      // Load available tags (tags NOT on this curve)
+      const availableResponse = await fetch(`${apiUrl}/api/tags/not-used/curve/${curveId}`)
+      const availableData = await availableResponse.json()
+      
+      if (assignedData.success && availableData.success) {
+        console.log('🔄 Setting assigned tags:', assignedData.data.tags)
+        console.log('🔄 Setting available tags:', availableData.data.tags)
+        setAssignedTags(assignedData.data.tags)
+        setAvailableTags(availableData.data.tags)
+      } else {
+        console.error('❌ Tags API returned success: false:', assignedData, availableData)
+      }
+    } catch (error) {
+      console.error('❌ Tags API request failed:', error)
+    } finally {
+      setIsLoadingTags(false)
+    }
+  }
+
+  // Load all available tags from the API (fallback for when no curve is selected)
+  const loadAllTags = async () => {
+    console.log('🔄 Loading all tags from API...')
     setIsLoadingTags(true)
     try {
       const response = await fetch(`${apiUrl}/tags`)
@@ -142,6 +172,7 @@ function CurveBuilder() {
           )
           console.log('🔄 Setting available tags:', uniqueTags)
           setAvailableTags(uniqueTags)
+          setAssignedTags([])
         } else {
           console.error('❌ Tags API returned success: false:', data)
         }
@@ -158,24 +189,34 @@ function CurveBuilder() {
   // Load curves and tags on component mount
   useEffect(() => {
     loadCurves()
-    loadTags()
+    loadAllTags()
   }, [])
+
+  // Load tags for selected curve
+  useEffect(() => {
+    if (selectedCurve?.id) {
+      loadTagsForCurve(selectedCurve.id)
+    } else {
+      // If no curve is selected, load all tags
+      loadAllTags()
+    }
+  }, [selectedCurve?.id])
 
   // Helper function to get tag name from tag ID
   const getTagName = (tagId: string): string => {
-    const tag = availableTags.find(t => t.id === tagId)
+    const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
     return tag ? tag['tag-name'] : tagId // Fallback to ID if not found
   }
 
   // Helper function to get tag color from tag ID
   const getTagColor = (tagId: string): string => {
-    const tag = availableTags.find(t => t.id === tagId)
+    const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
     return tag ? tag['tag-color'] : '#666666' // Fallback color
   }
 
   // Helper function to get tag description from tag ID
   const getTagDescription = (tagId: string): string => {
-    const tag = availableTags.find(t => t.id === tagId)
+    const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
     return tag ? tag['tag-description'] || 'No description available' : 'No description available'
   }
 
@@ -375,24 +416,32 @@ function CurveBuilder() {
     }))
   }
 
-  // Add tag to curve and update API immediately
-  const addTagToCurve = async (tag: string) => {
+  // Add tag to curve using new tag-usage system
+  const addTagToCurve = async (tagId: string) => {
     if (!editingCurve) return
     
-    const currentTags = editingCurve["curve-tags"] || []
-    if (!currentTags.includes(tag)) {
-      const updatedTags = [...currentTags, tag]
-      
-      try {
-        const response = await fetch(`${apiUrl}/curves/${editingCurve.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ "curve-tags": updatedTags })
+    try {
+      const response = await fetch(`${apiUrl}/api/tags/add-to-object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tagId: tagId,
+          objectType: 'curve',
+          documentId: editingCurve.id
         })
-        
-        if (response.ok) {
-          // Update local state directly (don't trigger save button)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Refresh tags for this curve
+          await loadTagsForCurve(editingCurve.id)
+          
+          // Update local curve state to reflect the change
+          const currentTags = editingCurve["curve-tags"] || []
+          const updatedTags = [...currentTags, tagId]
           setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
+          
           // Update the main curves array
           setCurves(prev => prev.map(curve => 
             curve.id === editingCurve.id 
@@ -400,42 +449,56 @@ function CurveBuilder() {
               : curve
           ))
         } else {
-          console.error('Failed to update tags:', response.statusText)
+          console.error('Failed to add tag:', data.error)
         }
-      } catch (error) {
-        console.error('Error updating tags:', error)
+      } else {
+        console.error('Failed to add tag:', response.statusText)
       }
+    } catch (error) {
+      console.error('Error adding tag:', error)
     }
   }
 
-  // Remove tag from curve and update API immediately
-  const removeTagFromCurve = async (tagToRemove: string) => {
+  // Remove tag from curve using new tag-usage system
+  const removeTagFromCurve = async (tagId: string) => {
     if (!editingCurve) return
     
-    const currentTags = editingCurve["curve-tags"] || []
-    const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
-    
     try {
-      const response = await fetch(`${apiUrl}/curves/${editingCurve.id}`, {
-        method: 'PUT',
+      const response = await fetch(`${apiUrl}/api/tags/remove-from-object`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "curve-tags": updatedTags })
+        body: JSON.stringify({
+          tagId: tagId,
+          objectType: 'curve',
+          documentId: editingCurve.id
+        })
       })
       
       if (response.ok) {
-        // Update local state directly (don't trigger save button)
-        setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
-        // Update the main curves array
-        setCurves(prev => prev.map(curve => 
-          curve.id === editingCurve.id 
-            ? { ...curve, "curve-tags": updatedTags }
-            : curve
-        ))
+        const data = await response.json()
+        if (data.success) {
+          // Refresh tags for this curve
+          await loadTagsForCurve(editingCurve.id)
+          
+          // Update local curve state to reflect the change
+          const currentTags = editingCurve["curve-tags"] || []
+          const updatedTags = currentTags.filter(tag => tag !== tagId)
+          setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
+          
+          // Update the main curves array
+          setCurves(prev => prev.map(curve => 
+            curve.id === editingCurve.id 
+              ? { ...curve, "curve-tags": updatedTags }
+              : curve
+          ))
+        } else {
+          console.error('Failed to remove tag:', data.error)
+        }
       } else {
-        console.error('Failed to update tags:', response.statusText)
+        console.error('Failed to remove tag:', response.statusText)
       }
     } catch (error) {
-      console.error('Error updating tags:', error)
+      console.error('Error removing tag:', error)
     }
   }
 
@@ -443,7 +506,11 @@ function CurveBuilder() {
   const handleTagManagerClose = () => {
     setShowTagManager(false)
     // Refresh tags when modal closes
-    loadTags()
+    if (selectedCurve?.id) {
+      loadTagsForCurve(selectedCurve.id)
+    } else {
+      loadAllTags()
+    }
   }
 
   // Save curve changes
@@ -762,19 +829,19 @@ function CurveBuilder() {
                     <div className="tags-container">
                       {/* Applied tags as compact pills */}
                       <div className="applied-tags">
-                        {[...new Set(editingCurve["curve-tags"] || [])].map((tagId, index) => (
+                        {assignedTags.map((tag, index) => (
                           <span 
-                            key={`current-tag-${tagId}-${index}`}
+                            key={`current-tag-${tag.id}-${index}`}
                             className="tag-pill" 
-                            style={{ backgroundColor: getTagColor(tagId) }}
-                            title={getTagDescription(tagId)}
+                            style={{ backgroundColor: tag['tag-color'] }}
+                            title={tag['tag-description'] || 'No description'}
                           >
-                            {getTagName(tagId)}
+                            {tag['tag-name']}
                             <button
                               type="button"
                               className="remove-tag"
-                              onClick={() => removeTagFromCurve(tagId)}
-                              title={`Remove tag: ${getTagName(tagId)}`}
+                              onClick={() => removeTagFromCurve(tag.id)}
+                              title={`Remove tag: ${tag['tag-name']}`}
                             >
                               ×
                             </button>
@@ -803,13 +870,11 @@ function CurveBuilder() {
                             }}
                           >
                             <option value="">Add a tag...</option>
-                            {availableTags
-                              .filter(tag => !editingCurve["curve-tags"]?.includes(tag.id))
-                              .map(tag => (
-                                <option key={tag.id} value={tag.id}>
-                                  {tag['tag-name']}
-                                </option>
-                              ))}
+                            {availableTags.map(tag => (
+                              <option key={tag.id} value={tag.id}>
+                                {tag['tag-name']}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <button

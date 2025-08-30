@@ -9,7 +9,7 @@ interface Tag {
   'tag-color': string
   'created-at': string
   'updated-at': string
-  'usage-count-curves': number
+  'tag-usage': Record<string, string[]> // Map of object-type to array of document IDs
 }
 
 interface EditingTag {
@@ -27,7 +27,7 @@ const TagManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   // Load all tags from API
-  // Note: usage-count-curves is automatically calculated and updated by the API
+  // Note: tag-usage tracks which objects use each tag
   // Future: Can be extended for counting across other collections beyond curves
   const loadTags = async () => {
     setIsLoading(true)
@@ -298,7 +298,9 @@ const TagManager: React.FC = () => {
                         style={{ backgroundColor: tag['tag-color'] }}
                       ></div>
                     </span>
-                    <span className="tag-col-usage">{tag['usage-count-curves'] || 0}</span>
+                    <span className="tag-col-usage">
+                      {Object.values(tag['tag-usage'] || {}).reduce((total, docIds) => total + docIds.length, 0)}
+                    </span>
                   </div>
 
                   {/* Expanded Edit Form */}
