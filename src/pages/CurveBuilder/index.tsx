@@ -5,7 +5,7 @@ import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '.
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
-import WebGLGrid from './WebGLGrid'
+import ThreeJSGrid from './ThreeJSGrid'
 
 import './CurveBuilder.css'
 
@@ -43,7 +43,7 @@ interface ProcessCoordinateResponse {
 function CurveBuilder() {
   const defaultCellSize = 30
   const [cellSize, setCellSize] = useState(defaultCellSize)
-  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
+  const [viewMode, setViewMode] = useState<'2D' | '3D' | 'ThreeJS'>('2D')
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
   const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
   const [isOptionPressed, setIsOptionPressed] = useState(false)
@@ -662,7 +662,7 @@ function CurveBuilder() {
                       <select
                         value={viewMode}
                         onChange={(e) => {
-                          const newViewMode = e.target.value as '2D' | '3D'
+                          const newViewMode = e.target.value as '2D' | '3D' | 'ThreeJS'
                           setViewMode(newViewMode)
                           
                           // Reset grid to default position when switching to 2D
@@ -681,6 +681,7 @@ function CurveBuilder() {
                       >
                         <option value="2D">2D Grid</option>
                         <option value="3D">3D Grid</option>
+                        <option value="ThreeJS">ThreeJS 3D</option>
                       </select>
                     </div>
                     
@@ -776,7 +777,7 @@ function CurveBuilder() {
                     )}
                     
                     <div className="info-item">
-                      <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : '3D Height Map'}
+                      <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : viewMode === '3D' ? '3D Height Map' : 'ThreeJS 3D View'}
                     </div>
                   </div>
                 )}
@@ -1045,9 +1046,9 @@ function CurveBuilder() {
               </div>
             </div>
           ) : (
-            <div className="webgl-canvas" style={{ width: '100%', height: '100%' }}>
-              <WebGLGrid 
-                key={`webgl-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
+            <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
+              <ThreeJSGrid 
+                key={`threejs-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
                 selectedCurve={selectedCurve}
                 cellSize={cellSize}
                 colorMode={colorMode}
@@ -1083,15 +1084,11 @@ function CurveBuilder() {
               </div>
             </div>
             <div className="modal-body" style={{ height: 'calc(100% - 60px)', padding: '0' }}>
-              <WebGLGrid 
+              <ThreeJSGrid 
                 key={`3d-preview-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
                 selectedCurve={selectedCurve}
                 cellSize={cellSize}
                 colorMode={colorMode}
-                isPreview={true}
-                gridDimensions={gridDimensions}
-                smoothing={0.5}
-                onCameraPositionChange={setCameraPosition}
               />
             </div>
           </div>
