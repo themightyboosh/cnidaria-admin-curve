@@ -337,128 +337,16 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     }
   }, [])
 
-  // Create the dynamic grid mesh
-  const createGridMesh = (bounds: { centerX: number; centerY: number; visibleWidth: number; visibleHeight: number }) => {
-    if (!sceneRef.current) return
-    
-    console.log('=== Creating Dynamic Grid ===')
-    console.log('Bounds:', bounds)
-    console.log('CellColors size:', cellColors.size)
-    console.log('Sample cellColors entries:', Array.from(cellColors.entries()).slice(0, 5))
 
-    // Remove existing mesh
-    if (meshRef.current) {
-      sceneRef.current.remove(meshRef.current)
-      if (meshRef.current.geometry) meshRef.current.geometry.dispose()
-      if (meshRef.current.material) {
-        if (Array.isArray(meshRef.current.material)) {
-          meshRef.current.material.forEach(mat => mat.dispose())
-        } else {
-          meshRef.current.material.dispose()
-        }
-      }
-    }
-
-    // Create dynamic grid geometry based on visible bounds
-    const segmentsX = Math.min(bounds.visibleWidth, 128) // Limit segments for performance
-    const segmentsY = Math.min(bounds.visibleHeight, 128)
-    const sizeX = bounds.visibleWidth * cellSize
-    const sizeY = bounds.visibleHeight * cellSize
-    const geometry = new THREE.PlaneGeometry(sizeX, sizeY, segmentsX, segmentsY)
-
-    // Create vertex colors array
-    const colors = new Float32Array(geometry.attributes.position.count * 3)
-    const positions = geometry.attributes.position.array as Float32Array
-
-    // Maximum height should equal the width of a grid cell
-    const maxHeight = cellSize * 2 // Make max height more visible
-
-    // Position mesh to center on the bounds center
-    const offsetX = bounds.centerX * cellSize
-    const offsetZ = bounds.centerY * cellSize
-
-    // Generate vertices for the visible grid area
-    for (let i = 0; i < geometry.attributes.position.count; i++) {
-      const x = positions[i * 3]
-      const z = positions[i * 3 + 2]
-      
-      // Convert local mesh coordinates to world grid coordinates
-      const worldX = x + offsetX
-      const worldZ = z + offsetZ
-      const gridX = Math.round(worldX / cellSize)
-      const gridY = Math.round(worldZ / cellSize)
-      
-      // Generate coordinate key for data lookup (origin at 0,0)
-      const coordKey = `${gridX}_${gridY}`
-      
-      // Get curve data or use default
-      const colorStr = cellColors.get(coordKey) || '#333333'
-      const color = new THREE.Color(colorStr)
-      
-      let height = 0
-      if (cellColors.has(coordKey)) {
-        // Extract height from curve data
-        const hsl = { h: 0, s: 0, l: 0 }
-        color.getHSL(hsl)
-        const indexValue = Math.round(hsl.h * 255)
-        const heightPercentage = indexValue / 255
-        height = heightPercentage * maxHeight
-      } else {
-        // Default height for debugging (show grid structure)
-        height = Math.sin(worldX * 0.02) * Math.cos(worldZ * 0.02) * maxHeight * 0.1 + maxHeight * 0.05
-      }
-      
-      // Set vertex height
-      positions[i * 3 + 1] = height
-      
-      // Set vertex color (white for debugging)
-      colors[i * 3] = 1     // R
-      colors[i * 3 + 1] = 1 // G  
-      colors[i * 3 + 2] = 1 // B
-    }
-    
-    console.log('Grid bounds:', bounds)
-    console.log('Max height:', maxHeight)
-    console.log('Mesh size:', sizeX, 'x', sizeY)
-    console.log('Segments:', segmentsX, 'x', segmentsY)
-    console.log('Offset:', offsetX, offsetZ)
-
-    // Add colors to geometry
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    
-    // Recompute normals for proper lighting
-    geometry.computeVertexNormals()
-
-    // Create material - use BasicMaterial for debugging (no lighting required)
-    const material = new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      side: THREE.DoubleSide,
-      wireframe: true, // Enable wireframe to see mesh structure
-      color: 0xffffff  // White color as fallback
-    })
-
-    // Create mesh
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.rotation.x = -Math.PI / 2 // Rotate to be horizontal
-    mesh.position.set(offsetX, 0, offsetZ) // Position based on grid center
-    mesh.receiveShadow = true
-    mesh.castShadow = true
-    
-    sceneRef.current.add(mesh)
-    meshRef.current = mesh
-    
-    console.log('Dynamic 3D mesh created')
-    console.log('Mesh position:', mesh.position)
-    console.log('Geometry vertices:', geometry.attributes.position.count)
-    console.log('Scene children count:', sceneRef.current.children.length)
-  }
 
   // Initial grid creation and updates
   useEffect(() => {
-    if (cameraRef.current) {
-      updateGrid()
+    if (cameraRef.current && selectedCurve) {
+      const bounds = getVisibleCoordinates()
+      setVisibleBounds(bounds)
+      processCellCoordinates(bounds)
     }
-  }, [cellColors, gridDimensions, cellSize])
+  }, [selectedCurve, cellSize])
 
   return (
     <div 
