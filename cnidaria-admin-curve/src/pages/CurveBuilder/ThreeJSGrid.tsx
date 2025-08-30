@@ -29,12 +29,14 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
   
-  // Fixed 128x128 grid for better performance
-  const gridSize = 128
+  // Dense mesh approach: 128x128 data mapped to 1280x1280 render grid
+  const dataGridSize = 128 // Our actual data grid
+  const renderGridSize = 1280 // Dense rendering mesh (10x resolution)
+  const interpolationRatio = 10 // 10x10 render vertices per data cell
 
-  // Get coordinates for 128x128 grid with offset
+  // Get coordinates for data grid with offset (still 128x128 for API calls)
   const getGridCoordinates = () => {
-    const halfGrid = Math.floor(gridSize / 2)
+    const halfGrid = Math.floor(dataGridSize / 2)
     return {
       minX: -halfGrid + offsetX,
       maxX: halfGrid - 1 + offsetX,
@@ -125,24 +127,23 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       ;(meshRef.current.material as THREE.Material).dispose()
     }
     
-    console.log('Creating geometry:', gridSize, 'x', gridSize, 'segments')
+    console.log('Creating DENSE geometry:', renderGridSize, 'x', renderGridSize, 'vertices for', dataGridSize, 'x', dataGridSize, 'data')
     
-    // Create 128x128 plane geometry with higher resolution for smooth blending
-    const segments = gridSize * 2 // Double resolution for smoother interpolation
+    // Create dense 1280x1280 plane geometry for ultra-smooth surface
     const geometry = new THREE.PlaneGeometry(
-      gridSize * cellSize, 
-      gridSize * cellSize, 
-      segments - 1, 
-      segments - 1
+      dataGridSize * cellSize,  // Physical size stays the same
+      dataGridSize * cellSize, 
+      renderGridSize - 1,       // But 1280x1280 vertices for smoothness
+      renderGridSize - 1
     )
     
-    console.log('Geometry created, vertices:', geometry.attributes.position.count, 'segments:', segments)
+    console.log('Geometry created, vertices:', geometry.attributes.position.count, 'grid:', renderGridSize)
     
-    // Create material with vertex colors
-    const material = new THREE.MeshLambertMaterial({
+    // Create material with vertex colors - wireframe for debugging
+    const material = new THREE.MeshBasicMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: false // Solid surface for realistic terrain
+      wireframe: true // Enable wireframe for debugging visibility
     })
     
     // Create mesh
@@ -151,22 +152,30 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     mesh.receiveShadow = true
     mesh.castShadow = true
     
+    console.log('Mesh created:', mesh)
+    console.log('Mesh position:', mesh.position)
+    console.log('Mesh scale:', mesh.scale)
+    
     // Initialize with default heights and colors
     const positions = geometry.attributes.position.array as Float32Array
     const colors = new Float32Array(positions.length)
+    
+    console.log('Setting up terrain vertices:', positions.length / 3)
     
     // Set default heights and bright colors for maximum visibility
     for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i]
       const z = positions[i + 2]
-      const height = 100 + Math.sin(x * 0.005) * Math.cos(z * 0.005) * 50 // Larger wave pattern
+      const height = 1000 + Math.sin(x * 0.002) * Math.cos(z * 0.002) * 800 // Much taller mountains
       positions[i + 1] = height
       
-      // Make it bright green for visibility
-      colors[i] = 0     // R
-      colors[i + 1] = 1 // G  
-      colors[i + 2] = 0 // B
+      // Make it bright white for maximum visibility
+      colors[i] = 1.0   // R
+      colors[i + 1] = 1.0 // G  
+      colors[i + 2] = 1.0 // B
     }
+    
+    console.log('Terrain heights set to 200-1800 range, all vertices white')
     
     console.log('Set', positions.length / 3, 'vertices with heights 50-150 and bright green color')
     console.log('Sample vertex positions:', [
@@ -236,12 +245,13 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       const x = positions[i]
       const z = positions[i + 2]
       
-      // Convert mesh coordinates to grid space (floating point for interpolation)
-      const gridX = (x / cellSize) + bounds.minX + (gridSize / 2)
-      const gridY = (z / cellSize) + bounds.minY + (gridSize / 2)
+      // Convert dense mesh coordinates to data grid space 
+      // Since we have 10x more vertices, we need to scale down the coordinates
+      const dataX = (x / cellSize) + bounds.minX + (dataGridSize / 2)
+      const dataY = (z / cellSize) + bounds.minY + (dataGridSize / 2)
       
-      // Get interpolated height
-      const indexValue = getInterpolatedHeight(gridX, gridY, heightMap)
+      // Get interpolated height using data grid coordinates
+      const indexValue = getInterpolatedHeight(dataX, dataY, heightMap)
       const heightPercentage = indexValue / 255
       const height = heightPercentage * maxHeight
       
@@ -291,11 +301,18 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     scene.background = new THREE.Color(0x000000)
     sceneRef.current = scene
 
-    // Camera - Start with angled top-down view, positioned based on viewport
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 2000)
-    const cameraDistance = Math.max(width, height) * 0.8
-    camera.position.set(0, cameraDistance * 0.8, cameraDistance * 0.4) // Angled top-down view
-    camera.lookAt(0, 0, 0)
+    // Camera - Position high above to look DOWN at the horizontal terrain
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 15000)
+    const terrainSize = dataGridSize * cellSize // 128 * 30 = 3840 units
+    
+    // Position camera HIGH ABOVE the terrain, looking down at an angle
+    camera.position.set(
+      terrainSize * 0.5,  // X: to the side
+      terrainSize * 1.5,  // Y: HIGH ABOVE (this is key!)
+      terrainSize * 0.5   // Z: to the side
+    )
+    camera.lookAt(0, 0, 0) // Look down at the center of the terrain
+    console.log('Camera positioned for terrain size:', terrainSize, 'at position:', camera.position)
     cameraRef.current = camera
 
     // Renderer
@@ -319,9 +336,9 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       controls.dampingFactor = 0.05
       controls.screenSpacePanning = true // Enable panning
       
-      // Zoom limits
-      controls.minDistance = 50   // Minimum zoom in
-      controls.maxDistance = 500  // Reduced max zoom to prevent deep horizon
+      // Zoom limits - scaled for terrain size
+      controls.minDistance = terrainSize * 0.1   // Minimum zoom in
+      controls.maxDistance = terrainSize * 2     // Maximum zoom out
       
       // Orbit limits - keep good 3D feel without horizon overload
       controls.maxPolarAngle = Math.PI * 0.65 // 65% (about 117°) - prevents low horizon views
@@ -385,11 +402,18 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     window.addEventListener('keyup', handleKeyUp)
     renderer.domElement.addEventListener('mousemove', handleMouseMove)
 
+    // Add a test cube to ensure scene is working
+    console.log('Adding test cube for visibility check...')
+    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
+    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
+    const testCube = new THREE.Mesh(testGeometry, testMaterial)
+    testCube.position.set(0, 100, 0)
+    scene.add(testCube)
+    console.log('Added test cube at (0, 100, 0)')
+
     // Create initial terrain mesh
     console.log('Creating initial terrain mesh...')
     createTerrainMesh()
-
-    // Test cube removed - terrain mesh should be visible now
 
     // Animation loop
     const animate = () => {

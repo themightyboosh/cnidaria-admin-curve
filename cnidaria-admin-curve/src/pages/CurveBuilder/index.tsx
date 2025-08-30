@@ -5,7 +5,8 @@ import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '.
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
-import ThreeJSGrid from './ThreeJSGrid'
+import WebGLGrid from './WebGLGrid'
+
 import './CurveBuilder.css'
 
 interface Tag {
@@ -1004,9 +1005,9 @@ function CurveBuilder() {
               {renderGridCells()}
             </div>
           ) : (
-            <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
-              <ThreeJSGrid 
-                key={`3d-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
+            <div className="webgl-canvas" style={{ width: '100%', height: '100%' }}>
+              <WebGLGrid 
+                key={`webgl-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
                 selectedCurve={selectedCurve}
                 cellSize={cellSize}
                 colorMode={colorMode}
