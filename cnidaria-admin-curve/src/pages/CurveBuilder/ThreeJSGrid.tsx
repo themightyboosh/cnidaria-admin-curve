@@ -42,6 +42,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
 
     // Add renderer to DOM
     mountRef.current.appendChild(renderer.domElement)
+    
+    console.log('Three.js scene initialized')
+    console.log('Canvas size:', width, 'x', height)
+    console.log('Camera position:', camera.position)
 
     // Import OrbitControls dynamically
     import('three/examples/jsm/controls/OrbitControls.js').then(({ OrbitControls }) => {
@@ -102,9 +106,15 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
   useEffect(() => {
     if (!sceneRef.current || !gridDimensions.width || !gridDimensions.height) return
     
-    console.log('Creating 3D grid with dimensions:', gridDimensions)
+    console.log('=== 3D Grid Debug ===')
+    console.log('Grid dimensions:', gridDimensions)
     console.log('CellColors size:', cellColors.size)
+    console.log('CellSize:', cellSize)
     console.log('Sample cellColors entries:', Array.from(cellColors.entries()).slice(0, 5))
+    
+    if (cellColors.size === 0) {
+      console.warn('No cellColors data - 3D grid will show default white vertices')
+    }
 
     // Remove existing mesh
     if (meshRef.current) {
@@ -175,10 +185,16 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
         colors[i] = 1     // R
         colors[i + 1] = 1 // G  
         colors[i + 2] = 1 // B
-        // Set a small default height for visibility (10% of max height)
-        positions[(i / 3) * 3 + 1] = maxHeight * 0.1
+        // Set a more visible default height for debugging
+        positions[(i / 3) * 3 + 1] = maxHeight * 0.5
       }
     }
+    
+    console.log('Max height:', maxHeight)
+    console.log('Cell width:', cellWidth)
+    console.log('Plane size:', size)
+    console.log('First few vertex heights:', 
+      Array.from({length: 5}, (_, i) => positions[i * 3 + 1]))
 
     // Add colors to geometry
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
@@ -201,6 +217,12 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     
     sceneRef.current.add(mesh)
     meshRef.current = mesh
+    
+    console.log('3D mesh created and added to scene')
+    console.log('Mesh position:', mesh.position)
+    console.log('Mesh scale:', mesh.scale)
+    console.log('Geometry vertices:', geometry.attributes.position.count)
+    console.log('Scene children count:', sceneRef.current.children.length)
 
   }, [cellColors, gridDimensions, cellSize])
 

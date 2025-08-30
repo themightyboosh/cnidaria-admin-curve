@@ -323,6 +323,14 @@ function CurveBuilder() {
     setError(null)
     // Clear existing colors before processing new curve
     setCellColors(new Map())
+    // Close all sections except selection when loading a curve
+    setExpandedSections({
+      selection: true,
+      properties: false,
+      view: false,
+      tags: false,
+      settings: false
+    })
     processCurveCoordinates(curve)
   }
 
