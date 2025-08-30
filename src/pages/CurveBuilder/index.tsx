@@ -720,10 +720,7 @@ function CurveBuilder() {
                           Index
                         </label>
                       </div>
-                      <small style={{ color: '#888', fontSize: '12px', marginTop: '5px', display: 'block' }}>
-                        Value: Color based on data value as % of 256-color spectrum<br/>
-                        Index: Color based on index position as % of curve width
-                      </small>
+
                     </div>
                     
                     {/* 3D Preview Button - Only show in 2D mode */}
