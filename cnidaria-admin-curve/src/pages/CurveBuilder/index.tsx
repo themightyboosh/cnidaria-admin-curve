@@ -67,6 +67,9 @@ function CurveBuilder() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
+  const [show3DPreview, setShow3DPreview] = useState(false)
+  const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -295,12 +298,13 @@ function CurveBuilder() {
           results.forEach((result: ProcessCoordinateResponse, index: number) => {
             const coordKey = `${result["cell-coordinates"][0]}_${result["cell-coordinates"][1]}`
             const indexPosition = result["index-position"] // Use the actual curve index position, not array index
-            const color = indexToColorString(result["index-value"], currentColorMode, indexPosition, selectedCurve["curve-width"])
+            const curveWidth = selectedCurve?.["curve-width"] || 1 // Add null check with default
+            const color = indexToColorString(result["index-value"], currentColorMode, indexPosition, curveWidth)
             newCellColors.set(coordKey, color)
             
             // Debug logging for first few results
             if (index < 3) {
-              console.log(`2D Debug [${index}]: colorMode=${currentColorMode}, indexValue=${result["index-value"]}, indexPosition=${indexPosition}, curveWidth=${selectedCurve["curve-width"]}, color=${color}`)
+              console.log(`2D Debug [${index}]: colorMode=${currentColorMode}, indexValue=${result["index-value"]}, indexPosition=${indexPosition}, curveWidth=${curveWidth}, color=${color}`)
             }
             
             // Update progress
@@ -747,6 +751,30 @@ function CurveBuilder() {
                       </small>
                     </div>
                     
+                    {/* 3D Preview Button - Only show in 2D mode */}
+                    {viewMode === '2D' && (
+                      <div className="form-group">
+                        <button
+                          type="button"
+                          onClick={() => setShow3DPreview(true)}
+                          style={{
+                            backgroundColor: '#4a90e2',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '10px 16px',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            fontWeight: '500',
+                            marginTop: '10px'
+                          }}
+                          title="Show 3D preview of current 2D grid"
+                        >
+                          3D Preview
+                        </button>
+                      </div>
+                    )}
+                    
                     <div className="info-item">
                       <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : '3D Height Map'}
                     </div>
@@ -1028,6 +1056,47 @@ function CurveBuilder() {
           )}
         </div>
       </div>
+
+      {/* 3D Preview Modal */}
+      {show3DPreview && (
+        <div className="modal-overlay" onClick={() => setShow3DPreview(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ 
+            width: 'min(95vw, 95vh)', 
+            height: 'min(95vw, 95vh)',
+            maxWidth: '1200px',
+            maxHeight: '1200px'
+          }}>
+            <div className="modal-header">
+              <h2>3D Preview</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#ccc' }}>
+                  <span>Camera: ({cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)}, {cameraPosition.z.toFixed(1)})</span>
+                </div>
+                <button 
+                  className="modal-close-btn"
+                  onClick={() => setShow3DPreview(false)}
+                  title="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="modal-body" style={{ height: 'calc(100% - 60px)', padding: '0' }}>
+              <WebGLGrid 
+                key={`3d-preview-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
+                selectedCurve={selectedCurve}
+                cellSize={cellSize}
+                colorMode={colorMode}
+                isPreview={true}
+                gridDimensions={gridDimensions}
+                smoothing={0.5}
+                onCameraPositionChange={setCameraPosition}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tag Manager Modal */}
       {showTagManager && (
