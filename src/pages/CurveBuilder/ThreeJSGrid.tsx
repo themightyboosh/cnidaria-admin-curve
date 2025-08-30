@@ -58,7 +58,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     try {
       // Call API for entire 256x256 grid
       const response = await fetch(
-        `${apiUrl}/api/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
+        `${apiUrl}/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
         {
           method: 'GET',
           headers: {
@@ -139,11 +139,11 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     
     console.log('Geometry created, vertices:', geometry.attributes.position.count, 'grid:', renderGridSize)
     
-    // Create material with vertex colors - wireframe for debugging
-    const material = new THREE.MeshBasicMaterial({
+    // Create material with vertex colors - solid terrain
+    const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: true // Enable wireframe for debugging visibility
+      wireframe: false // Solid terrain surface
     })
     
     // Create mesh
@@ -402,14 +402,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     window.addEventListener('keyup', handleKeyUp)
     renderer.domElement.addEventListener('mousemove', handleMouseMove)
 
-    // Add a test cube to ensure scene is working
-    console.log('Adding test cube for visibility check...')
-    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
-    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
-    const testCube = new THREE.Mesh(testGeometry, testMaterial)
-    testCube.position.set(0, 100, 0)
-    scene.add(testCube)
-    console.log('Added test cube at (0, 100, 0)')
+
 
     // Create initial terrain mesh
     console.log('Creating initial terrain mesh...')
