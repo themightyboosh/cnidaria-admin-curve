@@ -132,9 +132,11 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
 
     // Create grid geometry (64x64 vertices for better performance while debugging)
     const segments = 63 // 64x64 vertices  
-    // Size mesh to fit 80% of viewport width
-    const viewportSize = Math.min(mountRef.current?.clientWidth || 400, mountRef.current?.clientHeight || 400)
-    const size = viewportSize * 0.8
+    // Size mesh to fit 80% of viewport width with fallback
+    const containerWidth = mountRef.current?.clientWidth || 400
+    const containerHeight = mountRef.current?.clientHeight || 400
+    const viewportSize = Math.min(containerWidth, containerHeight)
+    const size = Math.max(100, viewportSize * 0.6) // Ensure minimum size of 100
     const geometry = new THREE.PlaneGeometry(size, size, segments, segments)
 
     // Create vertex colors array
@@ -176,11 +178,12 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     // Recompute normals for proper lighting
     geometry.computeVertexNormals()
 
-    // Create material with vertex colors
-    const material = new THREE.MeshLambertMaterial({
+    // Create material - use BasicMaterial for debugging (no lighting required)
+    const material = new THREE.MeshBasicMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: false
+      wireframe: true, // Enable wireframe to see mesh structure
+      color: 0xffffff  // White color as fallback
     })
 
     // Create mesh
@@ -192,11 +195,22 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     sceneRef.current.add(mesh)
     meshRef.current = mesh
     
+    // Add a test cube for debugging
+    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
+    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
+    const testCube = new THREE.Mesh(testGeometry, testMaterial)
+    testCube.position.set(0, 100, 0) // Position above the plane
+    sceneRef.current.add(testCube)
+    
     console.log('3D mesh created and added to scene')
     console.log('Mesh position:', mesh.position)
     console.log('Mesh scale:', mesh.scale)
+    console.log('Mesh rotation:', mesh.rotation)
     console.log('Geometry vertices:', geometry.attributes.position.count)
     console.log('Scene children count:', sceneRef.current.children.length)
+    console.log('Viewport size:', viewportSize)
+    console.log('Plane size:', size)
+    console.log('Camera distance:', cameraDistance)
 
   }, [cellColors, gridDimensions, cellSize])
 
