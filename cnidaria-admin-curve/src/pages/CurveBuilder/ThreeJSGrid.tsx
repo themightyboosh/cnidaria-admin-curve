@@ -102,14 +102,21 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
 
   // Create the terrain mesh
   const createTerrainMesh = () => {
-    if (!sceneRef.current) return
+    console.log('createTerrainMesh called')
+    if (!sceneRef.current) {
+      console.error('sceneRef.current is null in createTerrainMesh')
+      return
+    }
     
     // Remove existing mesh
     if (meshRef.current) {
+      console.log('Removing existing mesh')
       sceneRef.current.remove(meshRef.current)
       meshRef.current.geometry.dispose()
       ;(meshRef.current.material as THREE.Material).dispose()
     }
+    
+    console.log('Creating geometry:', gridSize, 'x', gridSize, 'segments')
     
     // Create 256x256 plane geometry
     const geometry = new THREE.PlaneGeometry(
@@ -119,11 +126,13 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       gridSize - 1
     )
     
+    console.log('Geometry created, vertices:', geometry.attributes.position.count)
+    
     // Create material with vertex colors
     const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: false
+      wireframe: true // Enable wireframe to see mesh structure
     })
     
     // Create mesh
@@ -132,10 +141,27 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     mesh.receiveShadow = true
     mesh.castShadow = true
     
+    // Initialize with default heights and colors
+    const positions = geometry.attributes.position.array as Float32Array
+    const colors = new Float32Array(positions.length)
+    
+    // Set default heights and white color
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i + 1] = 10 // Small default height
+      colors[i] = 1     // R
+      colors[i + 1] = 1 // G
+      colors[i + 2] = 1 // B
+    }
+    
+    geometry.attributes.position.needsUpdate = true
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    geometry.computeVertexNormals()
+    
     sceneRef.current.add(mesh)
     meshRef.current = mesh
     
-    console.log('Created 256x256 terrain mesh')
+    console.log('Created 256x256 terrain mesh, added to scene')
+    console.log('Scene children count:', sceneRef.current.children.length)
   }
   
   // Update mesh heights and colors from API data
@@ -184,10 +210,15 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
 
   // Initialize Three.js scene
   useEffect(() => {
-    if (!mountRef.current) return
+    console.log('=== Initializing 3D Scene ===')
+    if (!mountRef.current) {
+      console.error('mountRef.current is null')
+      return
+    }
 
     const width = mountRef.current.clientWidth
     const height = mountRef.current.clientHeight
+    console.log('Canvas size:', width, 'x', height)
 
     // Scene
     const scene = new THREE.Scene()
@@ -289,7 +320,16 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     renderer.domElement.addEventListener('mousemove', handleMouseMove)
 
     // Create initial terrain mesh
+    console.log('Creating initial terrain mesh...')
     createTerrainMesh()
+
+    // Add a test cube to ensure scene is working
+    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
+    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
+    const testCube = new THREE.Mesh(testGeometry, testMaterial)
+    testCube.position.set(0, 100, 0)
+    scene.add(testCube)
+    console.log('Added test cube at (0, 100, 0)')
 
     // Animation loop
     const animate = () => {
@@ -299,6 +339,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       }
       renderer.render(scene, camera)
     }
+    console.log('Starting animation loop...')
     animate()
 
     // Handle resize
@@ -331,7 +372,11 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
   // Process grid when curve or offset changes
   useEffect(() => {
     if (selectedCurve && meshRef.current) {
-      processGridCoordinates()
+      console.log('Processing grid coordinates due to curve/offset change')
+      // Small delay to ensure mesh is fully initialized
+      setTimeout(() => {
+        processGridCoordinates()
+      }, 100)
     }
   }, [selectedCurve, offsetX, offsetY])
 
