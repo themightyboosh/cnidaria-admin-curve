@@ -189,7 +189,6 @@ const TagManager: React.FC = () => {
             <div className="tag-table-header">
               <div className="tag-header-row">
                 <span className="tag-col-expand"></span>
-                <span className="tag-col-color">Color</span>
                 <span className="tag-col-name">Name</span>
                 <span className="tag-col-usage">Curve Count</span>
               </div>
@@ -205,13 +204,13 @@ const TagManager: React.FC = () => {
                         {expandedTags.has(tag.id) ? '▼' : '▶'}
                       </span>
                     </span>
-                    <span className="tag-col-color">
+                    <span className="tag-col-name">
+                      <span className="tag-name-text">{tag['tag-name']}</span>
                       <div 
                         className="color-circle" 
                         style={{ backgroundColor: tag['tag-color'] }}
                       ></div>
                     </span>
-                    <span className="tag-col-name">{tag['tag-name']}</span>
                     <span className="tag-col-usage">{tag['usage-count-curves'] || 0}</span>
                   </div>
 

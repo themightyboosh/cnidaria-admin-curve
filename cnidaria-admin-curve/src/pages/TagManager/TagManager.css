@@ -52,7 +52,7 @@
 
 .tag-header-row {
   display: grid;
-  grid-template-columns: 40px 80px 1fr 80px;
+  grid-template-columns: 40px 1fr 80px;
   gap: 12px;
   padding: 12px 16px;
   font-weight: 600;
@@ -75,7 +75,7 @@
 
 .tag-row {
   display: grid;
-  grid-template-columns: 40px 80px 1fr 80px;
+  grid-template-columns: 40px 1fr 80px;
   gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
@@ -100,22 +100,24 @@
   transition: transform 0.2s;
 }
 
-.tag-col-color {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .color-circle {
   width: 20px;
   height: 20px;
   border-radius: 50%;
   border: 2px solid #555;
+  flex-shrink: 0;
 }
 
 .tag-col-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 500;
   color: #fff;
+}
+
+.tag-name-text {
+  flex: 1;
 }
 
 .tag-col-usage {
@@ -270,7 +272,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .tag-header-row, .tag-row {
-    grid-template-columns: 30px 60px 1fr 60px;
+    grid-template-columns: 30px 1fr 60px;
     gap: 8px;
     padding: 10px 12px;
   }
@@ -299,7 +301,7 @@
   }
   
   .tag-header-row, .tag-row {
-    grid-template-columns: 25px 50px 1fr 50px;
+    grid-template-columns: 25px 1fr 50px;
     gap: 6px;
     padding: 8px 10px;
     font-size: 12px;
