@@ -134,10 +134,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     console.log('Geometry created, vertices:', geometry.attributes.position.count, 'segments:', segments)
     
     // Create material with vertex colors
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshBasicMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: false // Solid terrain for realistic appearance
+      wireframe: true // Wireframe for debugging visibility
     })
     
     // Create mesh
@@ -150,16 +150,25 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     const positions = geometry.attributes.position.array as Float32Array
     const colors = new Float32Array(positions.length)
     
-    // Set default heights and white color with some variation for visibility
+    // Set default heights and bright colors for maximum visibility
     for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i]
       const z = positions[i + 2]
-      const height = 50 + Math.sin(x * 0.01) * Math.cos(z * 0.01) * 30 // Wave pattern for visibility
+      const height = 100 + Math.sin(x * 0.005) * Math.cos(z * 0.005) * 50 // Larger wave pattern
       positions[i + 1] = height
-      colors[i] = 1     // R
-      colors[i + 1] = 1 // G
-      colors[i + 2] = 1 // B
+      
+      // Make it bright green for visibility
+      colors[i] = 0     // R
+      colors[i + 1] = 1 // G  
+      colors[i + 2] = 0 // B
     }
+    
+    console.log('Set', positions.length / 3, 'vertices with heights 50-150 and bright green color')
+    console.log('Sample vertex positions:', [
+      `(${positions[0]}, ${positions[1]}, ${positions[2]})`,
+      `(${positions[3]}, ${positions[4]}, ${positions[5]})`,
+      `(${positions[6]}, ${positions[7]}, ${positions[8]})`
+    ])
     
     geometry.attributes.position.needsUpdate = true
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
