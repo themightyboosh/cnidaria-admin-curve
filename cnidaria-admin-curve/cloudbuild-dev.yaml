@@ -28,7 +28,7 @@ steps:
       '--platform', 'managed',
       '--region', 'us-central1',
       '--allow-unauthenticated',
-      '--set-env-vars', 'VITE_ENVIRONMENT=development,VITE_API_URL=https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev'
+      '--set-env-vars', 'NEXT_PUBLIC_ENVIRONMENT=development,NEXT_PUBLIC_API_URL=https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev'
     ]
   
   # Ensure public access

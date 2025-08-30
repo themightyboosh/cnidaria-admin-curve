@@ -37,6 +37,7 @@ gcloud services enable containerregistry.googleapis.com
 
 # Commit and push changes if needed
 echo "📤 Ensuring latest code is pushed..."
+# Add only the current project files
 git add .
 git commit -m "Deploy to Cloud Run dev" || echo "No changes to commit"
 git push origin dev

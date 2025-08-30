@@ -1,5 +1,5 @@
-# Multi-stage build for Cnidaria Admin Curve Tool
-# Stage 1: Build the React application
+# Multi-stage build for Cnidaria Admin Curve Tool (Next.js)
+# Stage 1: Build the Next.js application
 FROM node:20 as build
 
 WORKDIR /app
@@ -16,17 +16,24 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Stage 2: Production runtime
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production
 
 # Copy built application
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copy Nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/next.config.js ./
 
 # Expose port 8080 for Cloud Run
 EXPOSE 8080
 
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the application
+CMD ["npm", "start"]
