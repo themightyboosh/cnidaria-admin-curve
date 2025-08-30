@@ -120,6 +120,7 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
       .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+      .substring(0, 50) // Ensure max length of 50 characters
   }
 
   // Update editing state
@@ -127,8 +128,16 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
     const newEditing = new Map(editingTags)
     const current = newEditing.get(tagId)
     if (current) {
-      // Convert name field to kebab-case
-      const processedValue = field === 'name' ? toKebabCase(value) : value
+      let processedValue = value
+      
+      if (field === 'name') {
+        processedValue = toKebabCase(value)
+        // Ensure minimum length of 3 characters
+        if (processedValue.length < 3) {
+          processedValue = processedValue.padEnd(3, '0')
+        }
+      }
+      
       newEditing.set(tagId, { ...current, [field]: processedValue })
       setEditingTags(newEditing)
     }
@@ -151,6 +160,22 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
   const updateTag = async (tagId: string) => {
     const editing = editingTags.get(tagId)
     if (!editing) return
+
+    // Validate tag name before sending
+    if (editing.name.length < 3) {
+      setError('Tag name must be at least 3 characters long')
+      return
+    }
+    
+    if (editing.name.length > 50) {
+      setError('Tag name must be 50 characters or less')
+      return
+    }
+    
+    if (!/^[a-z0-9-]+$/.test(editing.name)) {
+      setError('Tag name must contain only lowercase letters, numbers, and hyphens')
+      return
+    }
 
     const updateData = {
       'tag-name': editing.name,
@@ -185,7 +210,14 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
       } else {
         const errorText = await response.text()
         console.error('Update tag failed:', response.status, response.statusText, errorText)
-        setError(`Failed to update tag: ${response.status} ${response.statusText}`)
+        
+        // Try to parse error response for better error message
+        try {
+          const errorData = JSON.parse(errorText)
+          setError(`Failed to update tag: ${errorData.message || errorData.error || `${response.status} ${response.statusText}`}`)
+        } catch {
+          setError(`Failed to update tag: ${response.status} ${response.statusText} - ${errorText}`)
+        }
       }
     } catch (err) {
       setError('Error updating tag')
