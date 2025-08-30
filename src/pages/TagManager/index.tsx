@@ -302,7 +302,15 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
 
   // Delete tag
   const deleteTag = async (tagId: string) => {
-    if (!confirm('Are you sure you want to delete this tag? This will remove it from all curves.')) {
+    const tag = tags.find(t => t.id === tagId)
+    const tagName = tag ? tag['tag-name'] : 'this tag'
+    
+    // Count how many curves use this tag
+    const usageCount = tag ? Object.values(tag['tag-usage'] || {}).reduce((total, docIds) => total + docIds.length, 0) : 0
+    
+    const confirmMessage = `Are you sure you want to delete "${tagName}"? This will remove it from ${usageCount} curve${usageCount !== 1 ? 's' : ''}.`
+    
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -312,6 +320,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
       })
 
       if (response.ok) {
+        const data = await response.json()
+        console.log('Delete tag response:', data) // Debug log
+        
         // Refresh tags list
         await loadTags()
         // Clear editing state
@@ -325,7 +336,16 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
         // Notify parent component of changes
         onTagsChanged?.()
       } else {
-        setError('Failed to delete tag')
+        const errorText = await response.text()
+        console.error('Delete tag failed:', response.status, response.statusText, errorText)
+        
+        // Try to parse error response for better error message
+        try {
+          const errorData = JSON.parse(errorText)
+          setError(`Failed to delete tag: ${errorData.message || errorData.error || `${response.status} ${response.statusText}`}`)
+        } catch {
+          setError(`Failed to delete tag: ${response.status} ${response.statusText} - ${errorText}`)
+        }
       }
     } catch (err) {
       setError('Error deleting tag')
