@@ -54,8 +54,8 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       controls.enableDamping = true
       controls.dampingFactor = 0.05
       controls.screenSpacePanning = false
-      controls.minDistance = cameraDistance * 0.2
-      controls.maxDistance = cameraDistance * 2
+      controls.minDistance = 50
+      controls.maxDistance = 1000
       controls.maxPolarAngle = Math.PI
       controlsRef.current = controls
     })
