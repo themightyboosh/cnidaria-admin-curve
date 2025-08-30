@@ -40,7 +40,8 @@ interface ProcessCoordinateResponse {
 }
 
 function CurveBuilder() {
-  const [cellSize, setCellSize] = useState(30)
+  const defaultCellSize = 30
+  const [cellSize, setCellSize] = useState(defaultCellSize)
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
   const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
@@ -655,7 +656,22 @@ function CurveBuilder() {
                       <label>View Mode:</label>
                       <select
                         value={viewMode}
-                        onChange={(e) => setViewMode(e.target.value as '2D' | '3D')}
+                        onChange={(e) => {
+                          const newViewMode = e.target.value as '2D' | '3D'
+                          setViewMode(newViewMode)
+                          
+                          // Reset grid to default position when switching to 2D
+                          if (newViewMode === '2D') {
+                            console.log('Switching to 2D view - resetting grid to default position')
+                            setCellSize(defaultCellSize)
+                            // Re-process coordinates to update the grid with default sizing
+                            if (selectedCurve) {
+                              setTimeout(() => {
+                                processCurveCoordinates(selectedCurve)
+                              }, 100)
+                            }
+                          }
+                        }}
                         title="Choose between 2D grid or 3D height map visualization"
                       >
                         <option value="2D">2D Grid</option>
