@@ -139,6 +139,57 @@ const TagManager: React.FC = () => {
     }
   }
 
+  // Create new tag
+  const createNewTag = async () => {
+    const newTagId = `temp-${Date.now()}` // Temporary ID for new tag
+    const newTag: EditingTag = {
+      id: newTagId,
+      name: 'New Tag',
+      description: '',
+      color: '#007acc'
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          'tag-name': newTag.name,
+          'tag-description': newTag.description,
+          'tag-color': newTag.color
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Refresh tags list
+          await loadTags()
+          // Expand the newly created tag
+          const newExpanded = new Set(expandedTags)
+          newExpanded.add(data.data.id)
+          setExpandedTags(newExpanded)
+          // Set editing state for the new tag
+          const newEditing = new Map(editingTags)
+          newEditing.set(data.data.id, {
+            id: data.data.id,
+            name: newTag.name,
+            description: newTag.description,
+            color: newTag.color
+          })
+          setEditingTags(newEditing)
+        } else {
+          setError('Failed to create tag')
+        }
+      } else {
+        setError('Failed to create tag')
+      }
+    } catch (err) {
+      setError('Error creating tag')
+      console.error('Error creating tag:', err)
+    }
+  }
+
   // Delete tag
   const deleteTag = async (tagId: string) => {
     if (!confirm('Are you sure you want to delete this tag? This will remove it from all curves.')) {
@@ -279,6 +330,28 @@ const TagManager: React.FC = () => {
                   <p>No tags found</p>
                 </div>
               )}
+            </div>
+
+            {/* Create New Tag Button */}
+            <div className="create-tag-section">
+              <button 
+                className="create-tag-btn"
+                onClick={createNewTag}
+                style={{
+                  backgroundColor: '#4a90e2',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  width: '100%',
+                  marginTop: '20px'
+                }}
+              >
+                + Create New Tag
+              </button>
             </div>
           </div>
         )}
