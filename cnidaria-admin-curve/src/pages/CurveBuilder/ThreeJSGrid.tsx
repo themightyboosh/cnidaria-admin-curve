@@ -108,22 +108,35 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
         {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate'
           }
         }
       )
       
       if (response.ok) {
         const data = await response.json()
+        console.log('3D API Response:', data)
         
-        if (data.success && Array.isArray(data.results)) {
-          console.log(`Received ${data.results.length} coordinates for 3D grid`)
+        // The API returns data in format: {"curve-name": [results]} (same as 2D)
+        const curveName = Object.keys(data)[0]
+        const results = data[curveName]
+        
+        console.log('Curve name:', curveName)
+        console.log('Results type:', typeof results)
+        console.log('Results isArray:', Array.isArray(results))
+        if (results) {
+          console.log('First few results:', results.slice(0, 3))
+        }
+        
+        if (results && Array.isArray(results)) {
+          console.log(`Received ${results.length} coordinates for 3D grid`)
           
           // Clear existing cells outside bounds
           clearCellsOutsideBounds(bounds)
           
           // Create/update cells with API data
-          data.results.forEach((result: ProcessedCoordinate) => {
+          results.forEach((result: ProcessedCoordinate) => {
             const [x, y] = result["cell-coordinates"]
             const indexValue = result["index-value"]
             createOrUpdateCell(x, y, indexValue)
@@ -131,9 +144,12 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
           
         } else {
           console.error('Invalid 3D API response format')
+          console.error('Expected: {curveName: [results]}')
+          console.error('Got:', data)
         }
       } else {
-        console.error('3D API request failed:', response.status)
+        const errorText = await response.text()
+        console.error('3D API request failed:', response.status, response.statusText, errorText)
       }
     } catch (error) {
       console.error('Failed to process 3D coordinates:', error)
