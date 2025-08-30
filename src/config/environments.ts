@@ -69,7 +69,7 @@ export const getEnvironmentConfig = (): EnvironmentConfig => {
   const configs = {
     development: {
       environment: 'development',
-      apiUrl: 'http://localhost:3000',
+      apiUrl: 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev',
       webUrl: isLocal ? window.location.origin : 'https://cnidaria-admin-curves-dev-824079132046.us-central1.run.app',
       appTitle: 'Cnidaria Admin Curves (Development)',
       isLocal: isLocal,

@@ -49,7 +49,7 @@ export interface TagResolutionResult {
  */
 export async function resolveTagIds(tagIds: string[], apiUrl: string): Promise<TagResolutionResult> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags/resolve`, {
+    const response = await fetch(`${apiUrl}/tags/resolve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export async function resolveTagIds(tagIds: string[], apiUrl: string): Promise<T
  */
 export async function getAllTags(apiUrl: string): Promise<Tag[]> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags`);
+    const response = await fetch(`${apiUrl}/tags`);
     if (response.ok) {
       const data = await response.json();
       if (data.success) {
@@ -101,7 +101,7 @@ export async function getAllTags(apiUrl: string): Promise<Tag[]> {
  */
 export async function createTag(tagData: Partial<Tag>, apiUrl: string): Promise<Tag | null> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags`, {
+    const response = await fetch(`${apiUrl}/tags`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -128,7 +128,7 @@ export async function createTag(tagData: Partial<Tag>, apiUrl: string): Promise<
  */
 export async function updateTag(tagId: string, tagData: Partial<Tag>, apiUrl: string): Promise<Tag | null> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+    const response = await fetch(`${apiUrl}/tags/${tagId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ export async function updateTag(tagId: string, tagData: Partial<Tag>, apiUrl: st
  */
 export async function deleteTag(tagId: string, apiUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+    const response = await fetch(`${apiUrl}/tags/${tagId}`, {
       method: 'DELETE'
     });
 
@@ -176,7 +176,7 @@ export async function deleteTag(tagId: string, apiUrl: string): Promise<boolean>
  */
 export async function getTagUsage(tagId: string, apiUrl: string): Promise<any> {
   try {
-    const response = await fetch(`${apiUrl}/api/tags/${tagId}/usage`);
+    const response = await fetch(`${apiUrl}/tags/${tagId}/usage`);
     if (response.ok) {
       const data = await response.json();
       if (data.success) {

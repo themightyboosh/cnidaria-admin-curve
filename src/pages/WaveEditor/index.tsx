@@ -38,7 +38,7 @@ function WaveEditor() {
     setError(null)
     
     try {
-      const response = await fetch(`${apiUrl}/api/curves/${id}`)
+      const response = await fetch(`${apiUrl}/curves/${id}`)
       
       if (response.ok) {
         const data = await response.json()

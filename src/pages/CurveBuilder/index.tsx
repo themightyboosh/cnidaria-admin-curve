@@ -80,7 +80,7 @@ function CurveBuilder() {
     setError(null)
     console.log('Loading curves from API...')
     try {
-      const response = await fetch(`${apiUrl}/api/curves`)
+      const response = await fetch(`${apiUrl}/curves`)
       console.log('API Response status:', response.status)
       
       if (response.ok) {
@@ -127,7 +127,7 @@ function CurveBuilder() {
     console.log('🔄 Loading tags from API...')
     setIsLoadingTags(true)
     try {
-      const response = await fetch(`${apiUrl}/api/tags`)
+      const response = await fetch(`${apiUrl}/tags`)
       console.log('🔄 Tags API Response status:', response.status)
       
       if (response.ok) {
@@ -384,7 +384,7 @@ function CurveBuilder() {
       const updatedTags = [...currentTags, tag]
       
       try {
-        const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
+        const response = await fetch(`${apiUrl}/curves/${editingCurve.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ "curve-tags": updatedTags })
@@ -416,7 +416,7 @@ function CurveBuilder() {
     const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
     
     try {
-      const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
+      const response = await fetch(`${apiUrl}/curves/${editingCurve.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ "curve-tags": updatedTags })
