@@ -27,9 +27,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     scene.background = new THREE.Color(0x000000)
     sceneRef.current = scene
 
-    // Camera - Start with angled top-down view
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-    camera.position.set(0, 80, 40) // Angled top-down view
+    // Camera - Start with angled top-down view, positioned based on viewport
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 2000)
+    const cameraDistance = Math.max(width, height) * 0.8
+    camera.position.set(0, cameraDistance * 0.8, cameraDistance * 0.4) // Angled top-down view
     camera.lookAt(0, 0, 0)
     cameraRef.current = camera
 
@@ -53,8 +54,8 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       controls.enableDamping = true
       controls.dampingFactor = 0.05
       controls.screenSpacePanning = false
-      controls.minDistance = 10
-      controls.maxDistance = 200
+      controls.minDistance = cameraDistance * 0.2
+      controls.maxDistance = cameraDistance * 2
       controls.maxPolarAngle = Math.PI
       controlsRef.current = controls
     })
@@ -129,9 +130,11 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       }
     }
 
-    // Create grid geometry (256x256 vertices for smooth mesh)
-    const segments = 255 // 256x256 vertices
-    const size = Math.max(gridDimensions.width, gridDimensions.height) * (cellSize / 2) // Scale appropriately
+    // Create grid geometry (64x64 vertices for better performance while debugging)
+    const segments = 63 // 64x64 vertices  
+    // Size mesh to fit 80% of viewport width
+    const viewportSize = Math.min(mountRef.current?.clientWidth || 400, mountRef.current?.clientHeight || 400)
+    const size = viewportSize * 0.8
     const geometry = new THREE.PlaneGeometry(size, size, segments, segments)
 
     // Create vertex colors array
@@ -141,53 +144,24 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     // Maximum height should equal the width of a grid cell
     // Since we have a plane of 'size' units divided into segments, each cell width is size/segments
     const cellWidth = size / segments
-    const maxHeight = cellWidth
+    const maxHeight = cellWidth * 2 // Make max height more visible
 
-    // Update vertices with height and color data
+    // Make ALL vertices white for debugging and add some height variation
     for (let i = 0; i < geometry.attributes.position.count; i++) {
       const x = positions[i * 3]
       const z = positions[i * 3 + 2]
       
-      // Convert mesh coordinates to grid coordinates
-      const gridX = Math.round((x / size) * gridDimensions.width + gridDimensions.width / 2)
-      const gridY = Math.round((z / size) * gridDimensions.height + gridDimensions.height / 2)
+      // Create a simple wave pattern for visibility
+      const waveHeight = Math.sin(x * 0.1) * Math.cos(z * 0.1) * maxHeight * 0.3
+      const baseHeight = maxHeight * 0.2
       
-      // Generate coordinate key (same as 2D grid)
-      const coordKey = `${gridX - Math.floor(gridDimensions.width / 2)}_${Math.floor(gridDimensions.height / 2) - gridY}`
+      // Set vertex height (Y coordinate) with wave pattern
+      positions[i * 3 + 1] = baseHeight + waveHeight
       
-      // Get color from cellColors map
-      const colorStr = cellColors.get(coordKey) || '#333333'
-      const color = new THREE.Color(colorStr)
-      
-      // Extract the index value from the HSL hue 
-      // The 2D grid uses: hsl(indexValue, 70%, 50%) where indexValue is 0-255
-      // Three.js getHSL returns h as 0-1, so we need to convert back
-      const hsl = { h: 0, s: 0, l: 0 }
-      color.getHSL(hsl)
-      const indexValue = Math.round(hsl.h * 255) // Convert hue (0-1) back to original index value (0-255)
-      const heightPercentage = indexValue / 255 // Convert to percentage (0-1)
-      const height = heightPercentage * maxHeight // Height as percentage of cell width
-      
-      // Set vertex height (Y coordinate)
-      positions[i * 3 + 1] = height
-      
-      // Set vertex color (use the same color as 2D grid)
-      colors[i * 3] = color.r
-      colors[i * 3 + 1] = color.g
-      colors[i * 3 + 2] = color.b
-    }
-    
-    // Debug: If no colors found, make vertices white for visibility
-    const hasColors = Array.from(cellColors.values()).length > 0
-    if (!hasColors) {
-      console.log('No curve data found, showing white vertices for debugging')
-      for (let i = 0; i < colors.length; i += 3) {
-        colors[i] = 1     // R
-        colors[i + 1] = 1 // G  
-        colors[i + 2] = 1 // B
-        // Set a more visible default height for debugging
-        positions[(i / 3) * 3 + 1] = maxHeight * 0.5
-      }
+      // Set ALL vertices to white for debugging
+      colors[i * 3] = 1     // R
+      colors[i * 3 + 1] = 1 // G  
+      colors[i * 3 + 2] = 1 // B
     }
     
     console.log('Max height:', maxHeight)
