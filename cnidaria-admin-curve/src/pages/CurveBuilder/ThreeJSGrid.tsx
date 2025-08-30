@@ -73,6 +73,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
         
         if (results && Array.isArray(results)) {
           console.log(`Received ${results.length} coordinates for 256x256 grid`)
+          console.log('Sample results:', results.slice(0, 5))
           
           // Create height map from results
           const heightMap = new Map<string, number>()
@@ -81,6 +82,9 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
             const indexValue = result["index-value"]
             heightMap.set(`${x}_${y}`, indexValue)
           })
+          
+          console.log('Height map size:', heightMap.size)
+          console.log('Sample height map entries:', Array.from(heightMap.entries()).slice(0, 5))
           
           // Update mesh with new height data
           updateMeshHeights(heightMap, bounds)
@@ -145,9 +149,12 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     const positions = geometry.attributes.position.array as Float32Array
     const colors = new Float32Array(positions.length)
     
-    // Set default heights and white color
+    // Set default heights and white color with some variation for visibility
     for (let i = 0; i < positions.length; i += 3) {
-      positions[i + 1] = 10 // Small default height
+      const x = positions[i]
+      const z = positions[i + 2]
+      const height = 50 + Math.sin(x * 0.01) * Math.cos(z * 0.01) * 30 // Wave pattern for visibility
+      positions[i + 1] = height
       colors[i] = 1     // R
       colors[i + 1] = 1 // G
       colors[i + 2] = 1 // B
@@ -179,12 +186,16 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       const x = positions[i]
       const z = positions[i + 2]
       
-      // Convert mesh coordinates to grid coordinates
-      const gridX = Math.round(x / cellSize) + bounds.minX + Math.floor(gridSize / 2)
-      const gridY = Math.round(z / cellSize) + bounds.minY + Math.floor(gridSize / 2)
+      // Convert mesh coordinates to world coordinates
+      const meshGridX = Math.round(x / cellSize)
+      const meshGridY = Math.round(z / cellSize)
+      
+      // Map to actual world coordinates with offset
+      const worldX = meshGridX + bounds.minX + Math.floor(gridSize / 2)
+      const worldY = meshGridY + bounds.minY + Math.floor(gridSize / 2)
       
       // Get height from API data
-      const coordKey = `${gridX}_${gridY}`
+      const coordKey = `${worldX}_${worldY}`
       const indexValue = heightMap.get(coordKey) || 0
       const heightPercentage = indexValue / 255
       const height = heightPercentage * maxHeight
