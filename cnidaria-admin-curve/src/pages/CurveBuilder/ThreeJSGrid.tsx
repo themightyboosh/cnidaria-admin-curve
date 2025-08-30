@@ -1,10 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { apiUrl } from '../../config/environments'
+import { indexToThreeColor } from '../../utils/colorSpectrum'
 
 interface ThreeJSGridProps {
   selectedCurve: any
   cellSize: number
+  colorMode: 'value' | 'index'
 }
 
 interface ProcessedCoordinate {
@@ -13,7 +15,7 @@ interface ProcessedCoordinate {
   "index-value": number
 }
 
-const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) => {
+const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colorMode }) => {
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene>()
   const rendererRef = useRef<THREE.WebGLRenderer>()
@@ -75,19 +77,22 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
           console.log(`Received ${results.length} coordinates for 128x128 grid`)
           console.log('Sample results:', results.slice(0, 5))
           
-          // Create height map from results
+          // Create height map from results, also store index position for color mapping
           const heightMap = new Map<string, number>()
-          results.forEach((result: ProcessedCoordinate) => {
+          const indexMap = new Map<string, number>()
+          results.forEach((result: ProcessedCoordinate, index: number) => {
             const [x, y] = result["cell-coordinates"]
             const indexValue = result["index-value"]
+            const indexPosition = result["index-position"] // Use actual curve index position
             heightMap.set(`${x}_${y}`, indexValue)
+            indexMap.set(`${x}_${y}`, indexPosition)
           })
           
           console.log('Height map size:', heightMap.size)
           console.log('Sample height map entries:', Array.from(heightMap.entries()).slice(0, 5))
           
           // Update mesh with new height data
-          updateMeshHeights(heightMap, bounds)
+          updateMeshHeights(heightMap, bounds, indexMap, selectedCurve["curve-width"])
           
         } else {
           console.error('Invalid 3D API response format')
@@ -134,10 +139,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     console.log('Geometry created, vertices:', geometry.attributes.position.count, 'segments:', segments)
     
     // Create material with vertex colors
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      wireframe: true // Wireframe for debugging visibility
+      wireframe: false // Solid surface for realistic terrain
     })
     
     // Create mesh
@@ -207,58 +212,21 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     return height
   }
   
-  // Procedural color based on height and slope
-  const getProceduralColor = (height: number, slope: number) => {
-    const normalizedHeight = height / 255
-    
-    // Terrain-like color mapping
-    if (normalizedHeight < 0.2) {
-      // Deep water - dark blue
-      return new THREE.Color(0x001133)
-    } else if (normalizedHeight < 0.4) {
-      // Shallow water - blue to cyan
-      const blend = (normalizedHeight - 0.2) / 0.2
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0x001133), 
-        new THREE.Color(0x0088BB), 
-        blend
-      )
-    } else if (normalizedHeight < 0.6) {
-      // Beach/lowlands - tan to green
-      const blend = (normalizedHeight - 0.4) / 0.2
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0xDDCC99), 
-        new THREE.Color(0x228B22), 
-        blend
-      )
-    } else if (normalizedHeight < 0.8) {
-      // Hills - green to brown
-      const blend = (normalizedHeight - 0.6) / 0.2
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0x228B22), 
-        new THREE.Color(0x8B4513), 
-        blend
-      )
-    } else {
-      // Mountains - brown to white
-      const blend = (normalizedHeight - 0.8) / 0.2
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0x8B4513), 
-        new THREE.Color(0xFFFFFF), 
-        blend
-      )
-    }
+  // Use shared color spectrum for consistency with 2D view
+  const getSpectrumColor = (indexValue: number) => {
+    const { r, g, b } = indexToThreeColor(indexValue)
+    return new THREE.Color(r, g, b)
   }
 
   // Update mesh heights and colors from API data with smooth interpolation
-  const updateMeshHeights = (heightMap: Map<string, number>, bounds: any) => {
+  const updateMeshHeights = (heightMap: Map<string, number>, bounds: any, indexMap?: Map<string, number>, curveWidth?: number) => {
     if (!meshRef.current) return
     
     const geometry = meshRef.current.geometry as THREE.PlaneGeometry
     const positions = geometry.attributes.position.array as Float32Array
     const colors = new Float32Array(positions.length)
     
-    const maxHeight = cellSize * 3 // Maximum height
+    const maxHeight = cellSize * 20 // Maximum height - much taller for visibility
     const cellsPerUnit = gridSize / (gridSize * cellSize) // Cells per world unit
     
     console.log('Updating terrain with', heightMap.size, 'height points')
@@ -280,13 +248,19 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       // Set vertex height (Y coordinate)
       positions[i + 1] = height
       
-      // Calculate slope for procedural coloring (sample nearby points)
-      const deltaX = getInterpolatedHeight(gridX + 0.5, gridY, heightMap) - getInterpolatedHeight(gridX - 0.5, gridY, heightMap)
-      const deltaY = getInterpolatedHeight(gridX, gridY + 0.5, heightMap) - getInterpolatedHeight(gridX, gridY - 0.5, heightMap)
-      const slope = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-      
-      // Get procedural color
-      const color = getProceduralColor(indexValue, slope)
+      // Get spectrum color based on color mode
+      let color: THREE.Color
+      if (colorMode === 'index' && indexMap && curveWidth) {
+        // Find the nearest coordinate for index mapping
+        const nearestKey = `${Math.round(gridX)}_${Math.round(gridY)}`
+        const indexPosition = indexMap.get(nearestKey) || 0
+        const { r, g, b } = indexToThreeColor(indexValue, colorMode, indexPosition, curveWidth)
+        color = new THREE.Color(r, g, b)
+      } else {
+        // Default to value-based coloring
+        const { r, g, b } = indexToThreeColor(indexValue, 'value')
+        color = new THREE.Color(r, g, b)
+      }
       colors[i] = color.r
       colors[i + 1] = color.g
       colors[i + 2] = color.b
@@ -415,13 +389,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     console.log('Creating initial terrain mesh...')
     createTerrainMesh()
 
-    // Add a test cube to ensure scene is working
-    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
-    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
-    const testCube = new THREE.Mesh(testGeometry, testMaterial)
-    testCube.position.set(0, 100, 0)
-    scene.add(testCube)
-    console.log('Added test cube at (0, 100, 0)')
+    // Test cube removed - terrain mesh should be visible now
 
     // Animation loop
     const animate = () => {
@@ -461,16 +429,16 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
 
 
 
-  // Process grid when curve or offset changes
+  // Process grid when curve, offset, or color mode changes
   useEffect(() => {
     if (selectedCurve && meshRef.current) {
-      console.log('Processing grid coordinates due to curve/offset change')
+      console.log('Processing grid coordinates due to curve/offset/colorMode change')
       // Small delay to ensure mesh is fully initialized
       setTimeout(() => {
         processGridCoordinates()
       }, 100)
     }
-  }, [selectedCurve, offsetX, offsetY])
+  }, [selectedCurve, offsetX, offsetY, colorMode])
 
   return (
     <div 

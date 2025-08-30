@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiUrl } from '../../config/environments'
+import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '../../utils/colorSpectrum'
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
@@ -41,6 +42,8 @@ interface ProcessCoordinateResponse {
 function CurveBuilder() {
   const [cellSize, setCellSize] = useState(30)
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
+  const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
+  const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
@@ -247,7 +250,8 @@ function CurveBuilder() {
   }
 
   // Process coordinates for a curve
-  const processCurveCoordinates = async (curve: Curve) => {
+  const processCurveCoordinates = async (curve: Curve, forceColorMode?: 'value' | 'index') => {
+    const currentColorMode = forceColorMode || colorMode
     if (!curve) return
     
     setIsProcessingCoordinates(true)
@@ -288,9 +292,14 @@ function CurveBuilder() {
           
           results.forEach((result: ProcessCoordinateResponse, index: number) => {
             const coordKey = `${result["cell-coordinates"][0]}_${result["cell-coordinates"][1]}`
-            const hue = Math.max(0, Math.min(255, result["index-value"]))
-            const color = `hsl(${hue}, 70%, 50%)`
+            const indexPosition = result["index-position"] // Use the actual curve index position, not array index
+            const color = indexToColorString(result["index-value"], currentColorMode, indexPosition, selectedCurve["curve-width"])
             newCellColors.set(coordKey, color)
+            
+            // Debug logging for first few results
+            if (index < 3) {
+              console.log(`2D Debug [${index}]: colorMode=${currentColorMode}, indexValue=${result["index-value"]}, indexPosition=${indexPosition}, curveWidth=${selectedCurve["curve-width"]}, color=${color}`)
+            }
             
             // Update progress
             setProcessingProgress({ current: index + 1, total: results.length })
@@ -653,6 +662,74 @@ function CurveBuilder() {
                         <option value="3D">3D Grid</option>
                       </select>
                     </div>
+                    
+                    <div className="form-group">
+                      <label>Color Spectrum:</label>
+                      <select
+                        onChange={(e) => {
+                          setActiveSpectrumPreset(e.target.value)
+                          setSpectrumKey(prev => prev + 1) // Force 3D view refresh
+                          // Refresh both views by re-processing coordinates
+                          if (selectedCurve) {
+                            processCurveCoordinates(selectedCurve)
+                          }
+                        }}
+                        title="Choose color spectrum for visualizing data values"
+                      >
+                        {Object.keys(SPECTRUM_PRESETS).map(presetName => (
+                          <option key={presetName} value={presetName}>
+                            {presetName.charAt(0).toUpperCase() + presetName.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Color Mode:</label>
+                      <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
+                          <input
+                            type="radio"
+                            name="colorMode"
+                            value="value"
+                            checked={colorMode === 'value'}
+                            onChange={(e) => {
+                              console.log('=== SWITCHING TO VALUE MODE ===')
+                              setColorMode('value')
+                              setSpectrumKey(prev => prev + 1) // Force 3D view refresh
+                              // Immediately redraw the grid with new color mode
+                              if (selectedCurve) {
+                                processCurveCoordinates(selectedCurve, 'value')
+                              }
+                            }}
+                          />
+                          Value
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
+                          <input
+                            type="radio"
+                            name="colorMode"
+                            value="index"
+                            checked={colorMode === 'index'}
+                            onChange={(e) => {
+                              console.log('=== SWITCHING TO INDEX MODE ===')
+                              setColorMode('index')
+                              setSpectrumKey(prev => prev + 1) // Force 3D view refresh
+                              // Immediately redraw the grid with new color mode
+                              if (selectedCurve) {
+                                processCurveCoordinates(selectedCurve, 'index')
+                              }
+                            }}
+                          />
+                          Index
+                        </label>
+                      </div>
+                      <small style={{ color: '#888', fontSize: '12px', marginTop: '5px', display: 'block' }}>
+                        Value: Color based on data value as % of 256-color spectrum<br/>
+                        Index: Color based on index position as % of curve width
+                      </small>
+                    </div>
+                    
                     <div className="info-item">
                       <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : '3D Height Map'}
                     </div>
@@ -913,9 +990,10 @@ function CurveBuilder() {
           ) : (
             <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
               <ThreeJSGrid 
-                key={`3d-grid-${selectedCurve?.id || 'no-curve'}`}
+                key={`3d-grid-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
                 selectedCurve={selectedCurve}
                 cellSize={cellSize}
+                colorMode={colorMode}
               />
             </div>
           )}
