@@ -7,6 +7,14 @@ interface ThreeJSGridProps {
   cellSize: number
 }
 
+interface GridState {
+  centerX: number
+  centerY: number
+  visibleWidth: number
+  visibleHeight: number
+  cellSize: number
+}
+
 const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, cellSize }) => {
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene>()
@@ -14,6 +22,68 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
   const cameraRef = useRef<THREE.PerspectiveCamera>()
   const meshRef = useRef<THREE.Mesh>()
   const controlsRef = useRef<any>()
+  const gridStateRef = useRef<GridState>({ centerX: 0, centerY: 0, visibleWidth: 0, visibleHeight: 0, cellSize: 30 })
+  const lastCameraPosition = useRef<THREE.Vector3>(new THREE.Vector3())
+  const lastCameraRotation = useRef<THREE.Euler>(new THREE.Euler())
+
+  // Calculate visible grid bounds from camera frustum
+  const calculateVisibleBounds = (camera: THREE.PerspectiveCamera) => {
+    // Get camera distance to ground plane (Y=0)
+    const cameraHeight = Math.abs(camera.position.y)
+    const fov = (camera.fov * Math.PI) / 180
+    
+    // Calculate visible area at ground level
+    const visibleHeight = 2 * Math.tan(fov / 2) * cameraHeight
+    const visibleWidth = visibleHeight * camera.aspect
+    
+    // Project camera position to ground plane for center
+    const centerX = camera.position.x
+    const centerZ = camera.position.z
+    
+    return {
+      centerX: Math.round(centerX / cellSize),
+      centerY: Math.round(centerZ / cellSize), 
+      visibleWidth: Math.ceil(visibleWidth / cellSize) + 4, // Add buffer
+      visibleHeight: Math.ceil(visibleHeight / cellSize) + 4
+    }
+  }
+
+  // Update grid if camera has moved significantly
+  const updateGridIfNeeded = () => {
+    if (!cameraRef.current) return
+    
+    const camera = cameraRef.current
+    const currentPos = camera.position
+    const currentRot = camera.rotation
+    
+    // Check if camera moved significantly
+    const positionDelta = currentPos.distanceTo(lastCameraPosition.current)
+    const rotationDelta = Math.abs(currentRot.x - lastCameraRotation.current.x) + 
+                         Math.abs(currentRot.y - lastCameraRotation.current.y)
+    
+    // Update threshold - adjust sensitivity here
+    const posThreshold = cellSize * 2
+    const rotThreshold = 0.1
+    
+    if (positionDelta > posThreshold || rotationDelta > rotThreshold) {
+      updateGrid()
+      lastCameraPosition.current.copy(currentPos)
+      lastCameraRotation.current.copy(currentRot)
+    }
+  }
+
+  // Create/update the dynamic grid
+  const updateGrid = () => {
+    if (!cameraRef.current || !sceneRef.current) return
+    
+    const bounds = calculateVisibleBounds(cameraRef.current)
+    gridStateRef.current = { ...bounds, cellSize }
+    
+    console.log('Updating grid bounds:', bounds)
+    
+    // Create new geometry for visible area
+    createGridMesh(bounds)
+  }
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -53,11 +123,26 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       const controls = new OrbitControls(camera, renderer.domElement)
       controls.enableDamping = true
       controls.dampingFactor = 0.05
-      controls.screenSpacePanning = false
-      controls.minDistance = 50
-      controls.maxDistance = 1000
-      controls.maxPolarAngle = Math.PI
+      controls.screenSpacePanning = true // Enable panning
+      
+      // Zoom limits
+      controls.minDistance = 50   // Minimum zoom in
+      controls.maxDistance = 2000 // Maximum zoom out
+      
+      // Orbit limits - prevent going too low to horizon
+      controls.maxPolarAngle = Math.PI * 0.8 // 80% of 180 degrees (prevent going below horizon)
+      controls.minPolarAngle = 0.1 // Prevent going completely overhead
+      
+      // No azimuth limits - infinite left/right rotation
+      controls.minAzimuthAngle = -Infinity
+      controls.maxAzimuthAngle = Infinity
+      
       controlsRef.current = controls
+      
+      // Update grid when camera moves
+      controls.addEventListener('change', () => {
+        updateGridIfNeeded()
+      })
     })
 
     // Add lighting
@@ -103,19 +188,14 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     }
   }, [])
 
-  // Create/update the grid mesh
-  useEffect(() => {
-    if (!sceneRef.current || !gridDimensions.width || !gridDimensions.height) return
+  // Create the dynamic grid mesh
+  const createGridMesh = (bounds: { centerX: number; centerY: number; visibleWidth: number; visibleHeight: number }) => {
+    if (!sceneRef.current) return
     
-    console.log('=== 3D Grid Debug ===')
-    console.log('Grid dimensions:', gridDimensions)
+    console.log('=== Creating Dynamic Grid ===')
+    console.log('Bounds:', bounds)
     console.log('CellColors size:', cellColors.size)
-    console.log('CellSize:', cellSize)
     console.log('Sample cellColors entries:', Array.from(cellColors.entries()).slice(0, 5))
-    
-    if (cellColors.size === 0) {
-      console.warn('No cellColors data - 3D grid will show default white vertices')
-    }
 
     // Remove existing mesh
     if (meshRef.current) {
@@ -130,47 +210,69 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
       }
     }
 
-    // Create grid geometry (64x64 vertices for better performance while debugging)
-    const segments = 63 // 64x64 vertices  
-    // Size mesh to fit 80% of viewport width with fallback
-    const containerWidth = mountRef.current?.clientWidth || 400
-    const containerHeight = mountRef.current?.clientHeight || 400
-    const viewportSize = Math.min(containerWidth, containerHeight)
-    const size = Math.max(100, viewportSize * 0.6) // Ensure minimum size of 100
-    const geometry = new THREE.PlaneGeometry(size, size, segments, segments)
+    // Create dynamic grid geometry based on visible bounds
+    const segmentsX = Math.min(bounds.visibleWidth, 128) // Limit segments for performance
+    const segmentsY = Math.min(bounds.visibleHeight, 128)
+    const sizeX = bounds.visibleWidth * cellSize
+    const sizeY = bounds.visibleHeight * cellSize
+    const geometry = new THREE.PlaneGeometry(sizeX, sizeY, segmentsX, segmentsY)
 
     // Create vertex colors array
     const colors = new Float32Array(geometry.attributes.position.count * 3)
     const positions = geometry.attributes.position.array as Float32Array
 
     // Maximum height should equal the width of a grid cell
-    // Since we have a plane of 'size' units divided into segments, each cell width is size/segments
-    const cellWidth = size / segments
-    const maxHeight = cellWidth * 2 // Make max height more visible
+    const maxHeight = cellSize * 2 // Make max height more visible
 
-    // Make ALL vertices white for debugging and add some height variation
+    // Position mesh to center on the bounds center
+    const offsetX = bounds.centerX * cellSize
+    const offsetZ = bounds.centerY * cellSize
+
+    // Generate vertices for the visible grid area
     for (let i = 0; i < geometry.attributes.position.count; i++) {
       const x = positions[i * 3]
       const z = positions[i * 3 + 2]
       
-      // Create a simple wave pattern for visibility
-      const waveHeight = Math.sin(x * 0.1) * Math.cos(z * 0.1) * maxHeight * 0.3
-      const baseHeight = maxHeight * 0.2
+      // Convert local mesh coordinates to world grid coordinates
+      const worldX = x + offsetX
+      const worldZ = z + offsetZ
+      const gridX = Math.round(worldX / cellSize)
+      const gridY = Math.round(worldZ / cellSize)
       
-      // Set vertex height (Y coordinate) with wave pattern
-      positions[i * 3 + 1] = baseHeight + waveHeight
+      // Generate coordinate key for data lookup (origin at 0,0)
+      const coordKey = `${gridX}_${gridY}`
       
-      // Set ALL vertices to white for debugging
+      // Get curve data or use default
+      const colorStr = cellColors.get(coordKey) || '#333333'
+      const color = new THREE.Color(colorStr)
+      
+      let height = 0
+      if (cellColors.has(coordKey)) {
+        // Extract height from curve data
+        const hsl = { h: 0, s: 0, l: 0 }
+        color.getHSL(hsl)
+        const indexValue = Math.round(hsl.h * 255)
+        const heightPercentage = indexValue / 255
+        height = heightPercentage * maxHeight
+      } else {
+        // Default height for debugging (show grid structure)
+        height = Math.sin(worldX * 0.02) * Math.cos(worldZ * 0.02) * maxHeight * 0.1 + maxHeight * 0.05
+      }
+      
+      // Set vertex height
+      positions[i * 3 + 1] = height
+      
+      // Set vertex color (white for debugging)
       colors[i * 3] = 1     // R
       colors[i * 3 + 1] = 1 // G  
       colors[i * 3 + 2] = 1 // B
     }
     
+    console.log('Grid bounds:', bounds)
     console.log('Max height:', maxHeight)
-    console.log('Cell width:', cellWidth)
-    console.log('Plane size:', size)
-    console.log('First few vertex heights:', 
-      Array.from({length: 5}, (_, i) => positions[i * 3 + 1]))
+    console.log('Mesh size:', sizeX, 'x', sizeY)
+    console.log('Segments:', segmentsX, 'x', segmentsY)
+    console.log('Offset:', offsetX, offsetZ)
 
     // Add colors to geometry
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
@@ -189,29 +291,24 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     // Create mesh
     const mesh = new THREE.Mesh(geometry, material)
     mesh.rotation.x = -Math.PI / 2 // Rotate to be horizontal
+    mesh.position.set(offsetX, 0, offsetZ) // Position based on grid center
     mesh.receiveShadow = true
     mesh.castShadow = true
     
     sceneRef.current.add(mesh)
     meshRef.current = mesh
     
-    // Add a test cube for debugging
-    const testGeometry = new THREE.BoxGeometry(50, 50, 50)
-    const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
-    const testCube = new THREE.Mesh(testGeometry, testMaterial)
-    testCube.position.set(0, 100, 0) // Position above the plane
-    sceneRef.current.add(testCube)
-    
-    console.log('3D mesh created and added to scene')
+    console.log('Dynamic 3D mesh created')
     console.log('Mesh position:', mesh.position)
-    console.log('Mesh scale:', mesh.scale)
-    console.log('Mesh rotation:', mesh.rotation)
     console.log('Geometry vertices:', geometry.attributes.position.count)
     console.log('Scene children count:', sceneRef.current.children.length)
-    console.log('Viewport size:', viewportSize)
-    console.log('Plane size:', size)
-    console.log('Camera position:', cameraRef.current?.position)
+  }
 
+  // Initial grid creation and updates
+  useEffect(() => {
+    if (cameraRef.current) {
+      updateGrid()
+    }
   }, [cellColors, gridDimensions, cellSize])
 
   return (
