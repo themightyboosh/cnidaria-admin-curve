@@ -4,6 +4,7 @@ import { apiUrl } from '../../config/environments'
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
+import ThreeJSGrid from './ThreeJSGrid'
 import './CurveBuilder.css'
 
 interface Tag {
@@ -39,6 +40,7 @@ interface ProcessCoordinateResponse {
 
 function CurveBuilder() {
   const [cellSize, setCellSize] = useState(30)
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
@@ -624,7 +626,7 @@ function CurveBuilder() {
                 )}
               </div>
 
-              {/* Curve View - Placeholder for future features */}
+              {/* Curve View */}
               <div className="info-section">
                 <h3 className="collapsible-header" onClick={() => toggleSection('view')}>
                   <span className="toggle-icon">{expandedSections.view ? '▼' : '▶'}</span>
@@ -632,8 +634,19 @@ function CurveBuilder() {
                 </h3>
                 {expandedSections.view && (
                   <div className="section-content">
+                    <div className="form-group">
+                      <label>View Mode:</label>
+                      <select
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value as '2D' | '3D')}
+                        title="Choose between 2D grid or 3D height map visualization"
+                      >
+                        <option value="2D">2D Grid</option>
+                        <option value="3D">3D Grid</option>
+                      </select>
+                    </div>
                     <div className="info-item">
-                      <em>Additional viewing options will be added here</em>
+                      <strong>Current View:</strong> {viewMode === '2D' ? '2D Grid View' : '3D Height Map'}
                     </div>
                   </div>
                 )}
@@ -876,18 +889,28 @@ function CurveBuilder() {
         
         {/* Canvas Area */}
         <div className="canvas-area">
-          <div 
-            ref={canvasRef}
-            className="grid-canvas"
-            style={{
-              width: '100%',
-              height: '100%',
-              position: 'relative',
-              backgroundColor: '#000'
-            }}
-          >
-            {renderGridCells()}
-          </div>
+          {viewMode === '2D' ? (
+            <div 
+              ref={canvasRef}
+              className="grid-canvas"
+              style={{
+                width: '100%',
+                height: '100%',
+                position: 'relative',
+                backgroundColor: '#000'
+              }}
+            >
+              {renderGridCells()}
+            </div>
+          ) : (
+            <div className="threejs-canvas" style={{ width: '100%', height: '100%' }}>
+              <ThreeJSGrid 
+                cellColors={cellColors}
+                gridDimensions={gridDimensions}
+                cellSize={cellSize}
+              />
+            </div>
+          )}
         </div>
       </div>
 
