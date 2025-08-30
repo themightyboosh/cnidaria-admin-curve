@@ -341,6 +341,25 @@ const TagManager: React.FC = () => {
                             </span>
                           </div>
                         </div>
+
+                        {/* Tag Usage Information */}
+                        <div className="edit-field">
+                          <label>Usage:</label>
+                          <div className="tag-usage-info">
+                            {tag['tag-usage'] && Object.keys(tag['tag-usage']).length > 0 ? (
+                              <div className="usage-breakdown">
+                                {Object.entries(tag['tag-usage']).map(([objectType, docIds]) => (
+                                  <div key={objectType} className="usage-item">
+                                    <span className="usage-type">{objectType}:</span>
+                                    <span className="usage-count">{docIds.length} items</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="no-usage">Not used by any objects</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="edit-actions">
