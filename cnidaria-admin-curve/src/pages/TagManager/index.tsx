@@ -27,8 +27,8 @@ const TagManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   // Load all tags from API
-  // Note: usage-count-curves is returned by API but may need backend fix
-  // TODO: Extend usage counting for future non-curve collections
+  // Note: usage-count-curves is automatically calculated and updated by the API
+  // Future: Can be extended for counting across other collections beyond curves
   const loadTags = async () => {
     setIsLoading(true)
     setError(null)
@@ -191,7 +191,7 @@ const TagManager: React.FC = () => {
                 <span className="tag-col-expand"></span>
                 <span className="tag-col-color">Color</span>
                 <span className="tag-col-name">Name</span>
-                <span className="tag-col-usage">Usage</span>
+                <span className="tag-col-usage">Curve Count</span>
               </div>
             </div>
 
