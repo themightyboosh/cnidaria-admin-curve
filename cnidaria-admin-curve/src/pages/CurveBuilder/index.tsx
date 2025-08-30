@@ -999,10 +999,22 @@ function CurveBuilder() {
                 width: '100%',
                 height: '100%',
                 position: 'relative',
-                backgroundColor: '#000'
+                backgroundColor: '#000',
+                overflow: 'hidden'
               }}
             >
-              {renderGridCells()}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: `${gridDimensions.width * cellSize}px`,
+                  height: `${gridDimensions.height * cellSize}px`
+                }}
+              >
+                {renderGridCells()}
+              </div>
             </div>
           ) : (
             <div className="webgl-canvas" style={{ width: '100%', height: '100%' }}>
