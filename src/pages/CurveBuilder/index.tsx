@@ -505,10 +505,14 @@ function CurveBuilder() {
   // Handle tag manager modal close and refresh tags
   const handleTagManagerClose = () => {
     setShowTagManager(false)
+    console.log('Tag Manager closed, refreshing tags...') // Debug log
+    
     // Refresh tags when modal closes
     if (selectedCurve?.id) {
+      console.log('Refreshing tags for curve:', selectedCurve.id) // Debug log
       loadTagsForCurve(selectedCurve.id)
     } else {
+      console.log('No curve selected, loading all tags') // Debug log
       loadAllTags()
     }
   }
