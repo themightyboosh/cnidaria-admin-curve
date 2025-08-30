@@ -37,7 +37,13 @@ const TagManager: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          setTags(data.data?.tags || [])
+          // Sort tags by creation date (newest first)
+          const sortedTags = (data.data?.tags || []).sort((a: Tag, b: Tag) => {
+            const dateA = new Date(a['created-at']).getTime()
+            const dateB = new Date(b['created-at']).getTime()
+            return dateB - dateA // Descending order (newest first)
+          })
+          setTags(sortedTags)
         } else {
           setError('Failed to load tags')
         }
