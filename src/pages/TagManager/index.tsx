@@ -44,6 +44,21 @@ const TagManager: React.FC = () => {
             return dateB - dateA // Descending order (newest first)
           })
           setTags(sortedTags)
+          
+          // Refresh editing state for any expanded tags
+          const newEditing = new Map(editingTags)
+          expandedTags.forEach(tagId => {
+            const tag = sortedTags.find((t: Tag) => t.id === tagId)
+            if (tag) {
+              newEditing.set(tagId, {
+                id: tagId,
+                name: tag['tag-name'],
+                description: tag['tag-description'] || '',
+                color: tag['tag-color']
+              })
+            }
+          })
+          setEditingTags(newEditing)
         } else {
           setError('Failed to load tags')
         }
@@ -74,9 +89,10 @@ const TagManager: React.FC = () => {
       setEditingTags(newEditing)
     } else {
       newExpanded.add(tagId)
-      // Initialize editing state
+      // Initialize editing state with current tag data
       const tag = tags.find(t => t.id === tagId)
       if (tag) {
+        console.log('Loading tag data for editing:', tag) // Debug log
         const newEditing = new Map(editingTags)
         newEditing.set(tagId, {
           id: tagId,
@@ -85,6 +101,8 @@ const TagManager: React.FC = () => {
           color: tag['tag-color']
         })
         setEditingTags(newEditing)
+      } else {
+        console.error('Tag not found for editing:', tagId) // Debug log
       }
     }
     setExpandedTags(newExpanded)
