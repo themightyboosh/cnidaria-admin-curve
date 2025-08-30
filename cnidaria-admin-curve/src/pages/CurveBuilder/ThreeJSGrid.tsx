@@ -210,7 +210,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ cellColors, gridDimensions, c
     console.log('Scene children count:', sceneRef.current.children.length)
     console.log('Viewport size:', viewportSize)
     console.log('Plane size:', size)
-    console.log('Camera distance:', cameraDistance)
+    console.log('Camera position:', cameraRef.current?.position)
 
   }, [cellColors, gridDimensions, cellSize])
 
