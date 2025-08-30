@@ -60,7 +60,6 @@ function CurveBuilder() {
   const [isSaving, setIsSaving] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
     selection: true,
-    properties: true,
     view: true,
     tags: true,
     settings: true
@@ -382,7 +381,6 @@ function CurveBuilder() {
     // Close all sections except selection when loading a curve
     setExpandedSections({
       selection: true,
-      properties: false,
       view: false,
       tags: false,
       settings: false
@@ -689,36 +687,6 @@ function CurveBuilder() {
           
           {selectedCurve && editingCurve && (
             <>
-              {/* Curve Properties - Read-only info */}
-              <div className="info-section">
-                <h3 className="collapsible-header" onClick={() => toggleSection('properties')}>
-                  <span className="toggle-icon">{expandedSections.properties ? '▼' : '▶'}</span>
-                  Curve Properties
-                </h3>
-                {expandedSections.properties && (
-                  <div className="section-content">
-                    <div className="info-item">
-                      <strong>Width:</strong> {selectedCurve["curve-width"]}
-                    </div>
-                    <div className="info-item">
-                      <strong>Status:</strong> 
-                      {isProcessingCoordinates ? (
-                        <span className="processing-indicator">
-                          <span className="spinner"></span>
-                          Processing...
-                          {processingProgress.total > 0 && (
-                            <span className="progress-text">
-                              {processingProgress.current}/{processingProgress.total}
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        'Ready'
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* Curve View */}
               <div className="info-section">
@@ -788,7 +756,7 @@ function CurveBuilder() {
                               }
                             }}
                           />
-                          Index
+                          Index ({selectedCurve["curve-width"]})
                         </label>
                       </div>
 
