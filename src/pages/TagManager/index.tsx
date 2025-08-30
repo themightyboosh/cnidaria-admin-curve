@@ -84,12 +84,24 @@ const TagManager: React.FC = () => {
     setExpandedTags(newExpanded)
   }
 
+  // Convert to kebab-case format
+  const toKebabCase = (str: string): string => {
+    return str
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+      .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+  }
+
   // Update editing state
   const updateEditingTag = (tagId: string, field: keyof EditingTag, value: string) => {
     const newEditing = new Map(editingTags)
     const current = newEditing.get(tagId)
     if (current) {
-      newEditing.set(tagId, { ...current, [field]: value })
+      // Convert name field to kebab-case
+      const processedValue = field === 'name' ? toKebabCase(value) : value
+      newEditing.set(tagId, { ...current, [field]: processedValue })
       setEditingTags(newEditing)
     }
   }
@@ -139,12 +151,28 @@ const TagManager: React.FC = () => {
     }
   }
 
+  // Generate unique tag name based on count
+  const generateUniqueTagName = (): string => {
+    const baseName = 'tag'
+    let counter = tags.length + 1
+    let tagName = `${baseName}-${counter}`
+    
+    // Check if name already exists and increment counter
+    while (tags.some(tag => tag['tag-name'] === tagName)) {
+      counter++
+      tagName = `${baseName}-${counter}`
+    }
+    
+    return tagName
+  }
+
   // Create new tag
   const createNewTag = async () => {
     const newTagId = `temp-${Date.now()}` // Temporary ID for new tag
+    const uniqueTagName = generateUniqueTagName()
     const newTag: EditingTag = {
       id: newTagId,
-      name: 'new-tag',
+      name: uniqueTagName,
       description: 'Tag Description',
       color: '#007acc'
     }
