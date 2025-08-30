@@ -8,9 +8,6 @@
   },
   "scripts": {
     "dev": "next dev -p 5173",
-    "dev:safe": "sudo next dev -p 5173",
-    "dev:alt": "next dev -p 3001",
-    "dev:smart": "./scripts/start-dev.sh",
     "build": "next build",
     "start": "next start -p 5173",
     "lint": "next lint",

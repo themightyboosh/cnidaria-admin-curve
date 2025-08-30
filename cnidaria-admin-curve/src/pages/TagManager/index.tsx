@@ -1,5 +1,7 @@
+'use client'
+
 import React, { useState, useEffect } from 'react'
-import { apiUrl } from '../../config/environments'
+import { getApiUrl } from '../../config/environments'
 import './TagManager.css'
 
 interface Tag {
@@ -33,7 +35,7 @@ const TagManager: React.FC = () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${apiUrl}/api/tags`)
+      const response = await fetch(`${getApiUrl()}/api/tags`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
@@ -113,7 +115,7 @@ const TagManager: React.FC = () => {
     if (!editing) return
 
     try {
-      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+      const response = await fetch(`${getApiUrl()}/api/tags/${tagId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,7 +148,7 @@ const TagManager: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+      const response = await fetch(`${getApiUrl()}/api/tags/${tagId}`, {
         method: 'DELETE'
       })
 

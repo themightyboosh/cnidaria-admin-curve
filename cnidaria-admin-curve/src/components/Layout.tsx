@@ -1,3 +1,5 @@
+'use client'
+
 import React from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from './Header'
@@ -52,7 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
     <div className={`admin-layout ${className}`}>
       <Header 
         title={pageInfo.title}
-        subtitle={pageInfo.subtitle}
         currentPage={getCurrentPage()}
       />
       

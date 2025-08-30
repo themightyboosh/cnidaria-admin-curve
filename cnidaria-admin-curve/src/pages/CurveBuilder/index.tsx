@@ -1,8 +1,8 @@
+'use client'
+
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
-import { apiUrl } from '../../config/environments'
+import { getApiUrl } from '../../config/environments'
 import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '../../utils/colorSpectrum'
-import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import WebGLGrid from './WebGLGrid'
@@ -65,10 +65,8 @@ function CurveBuilder() {
     settings: true
   })
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
-  const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
   const [show3DPreview, setShow3DPreview] = useState(false)
-  const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
 
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -80,7 +78,7 @@ function CurveBuilder() {
     setError(null)
     console.log('Loading curves from API...')
     try {
-      const response = await fetch(`${apiUrl}/api/curves`)
+      const response = await fetch(`${getApiUrl()}/api/curves`)
       console.log('API Response status:', response.status)
       
       if (response.ok) {
@@ -96,8 +94,8 @@ function CurveBuilder() {
           const processedCurves = curvesData.map((curve: Curve) => {
             if (curve["curve-tags"]) {
               // Ensure curve-tags is an array of strings (IDs), not objects
-              curve["curve-tags"] = curve["curve-tags"].map(tag => 
-                typeof tag === 'string' ? tag : tag.id || tag
+              curve["curve-tags"] = curve["curve-tags"].map((tag: unknown) => 
+                typeof tag === 'string' ? tag : (tag as { id: string })?.id || String(tag)
               )
             }
             return curve
@@ -125,9 +123,8 @@ function CurveBuilder() {
   // Load all available tags from the API
   const loadTags = async () => {
     console.log('🔄 Loading tags from API...')
-    setIsLoadingTags(true)
     try {
-      const response = await fetch(`${apiUrl}/api/tags`)
+      const response = await fetch(`${getApiUrl()}/api/tags`)
       console.log('🔄 Tags API Response status:', response.status)
       
       if (response.ok) {
@@ -137,8 +134,8 @@ function CurveBuilder() {
         if (data.success) {
           const tags = data.data?.tags || []
           // Remove any duplicate tags by ID
-          const uniqueTags = tags.filter((tag, index, self) => 
-            index === self.findIndex(t => t.id === tag.id)
+          const uniqueTags = tags.filter((tag: Tag, index: number, self: Tag[]) => 
+            index === self.findIndex((t: Tag) => t.id === tag.id)
           )
           console.log('🔄 Setting available tags:', uniqueTags)
           setAvailableTags(uniqueTags)
@@ -150,8 +147,6 @@ function CurveBuilder() {
       }
     } catch (error) {
       console.error('❌ Failed to load tags:', error)
-    } finally {
-      setIsLoadingTags(false)
     }
   }
 
@@ -271,7 +266,7 @@ function CurveBuilder() {
       
       // Call GetCurveIndexValue API with visible coordinates
       const response = await fetch(
-        `${apiUrl}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
+        `${getApiUrl()}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
         {
           method: 'GET',
           headers: {
@@ -350,7 +345,7 @@ function CurveBuilder() {
   }
 
   // Handle field changes
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: string | number) => {
     try {
       if (!editingCurve) return
       
@@ -384,7 +379,7 @@ function CurveBuilder() {
       const updatedTags = [...currentTags, tag]
       
       try {
-        const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
+        const response = await fetch(`${getApiUrl()}/api/curves/${editingCurve.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ "curve-tags": updatedTags })
@@ -416,7 +411,7 @@ function CurveBuilder() {
     const updatedTags = currentTags.filter(tag => tag !== tagToRemove)
     
     try {
-      const response = await fetch(`${apiUrl}/api/curves/${editingCurve.id}`, {
+              const response = await fetch(`${getApiUrl()}/api/curves/${editingCurve.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ "curve-tags": updatedTags })
@@ -455,7 +450,7 @@ function CurveBuilder() {
     
     try {
       const response = await fetch(
-        `${apiUrl}/api/curves/${selectedCurve.id}`,
+        `${getApiUrl()}/api/curves/${selectedCurve.id}`,
         {
           method: 'PUT',
           headers: {
@@ -521,7 +516,7 @@ function CurveBuilder() {
         clearTimeout(processingTimeoutRef.current)
       }
     }
-  }, [cellSize, gridDimensions, selectedCurve])
+  }, [cellSize, gridDimensions, selectedCurve, processCurveCoordinates])
 
   // Set dark gray colors for initial grid
   const setDefaultGridColors = () => {
@@ -543,7 +538,7 @@ function CurveBuilder() {
     if (gridDimensions.width > 0 && gridDimensions.height > 0) {
       setDefaultGridColors()
     }
-  }, [gridDimensions])
+  }, [gridDimensions, setDefaultGridColors])
 
   // Render grid cells
   const renderGridCells = () => {
@@ -714,7 +709,7 @@ function CurveBuilder() {
                             name="colorMode"
                             value="value"
                             checked={colorMode === 'value'}
-                            onChange={(e) => {
+                            onChange={() => {
                               console.log('=== SWITCHING TO VALUE MODE ===')
                               setColorMode('value')
                               setSpectrumKey(prev => prev + 1) // Force 3D view refresh
@@ -732,7 +727,7 @@ function CurveBuilder() {
                             name="colorMode"
                             value="index"
                             checked={colorMode === 'index'}
-                            onChange={(e) => {
+                            onChange={() => {
                               console.log('=== SWITCHING TO INDEX MODE ===')
                               setColorMode('index')
                               setSpectrumKey(prev => prev + 1) // Force 3D view refresh
@@ -909,11 +904,68 @@ function CurveBuilder() {
                       <select
                         value={editingCurve["curve-type"] || "Radial"}
                         onChange={(e) => handleFieldChange("curve-type", e.target.value)}
-                        title="Select the coordinate system for this curve"
+                        title="Select the coordinate processing pattern for this curve"
                       >
-                        <option value="Radial">Radial</option>
-                        <option value="Cartesian X">Cartesian X</option>
-                        <option value="Cartesian Y">Cartesian Y</option>
+                        {/* Basic Patterns */}
+                        <optgroup label="⚡ Basic Patterns">
+                          <option value="Cartesian X">Cartesian X</option>
+                          <option value="Cartesian Y">Cartesian Y</option>
+                          <option value="Diamond">Diamond</option>
+                          <option value="Cross">Cross</option>
+                        </optgroup>
+                        
+                        {/* Low-Medium CPU Load */}
+                        <optgroup label="⚡⚡ Low-Medium CPU">
+                          <option value="Radial">Radial</option>
+                          <option value="Wave">Wave</option>
+                          <option value="Pulse">Pulse</option>
+                          <option value="Black Hole">Black Hole</option>
+                        </optgroup>
+                        
+                        {/* Medium CPU Load */}
+                        <optgroup label="⚡⚡⚡ Medium CPU">
+                          <option value="Spiral">Spiral</option>
+                          <option value="Star">Star</option>
+                          <option value="Vortex">Vortex</option>
+                          <option value="Ripple">Ripple</option>
+                          <option value="Organic">Organic</option>
+                          <option value="Flame">Flame</option>
+                          <option value="Smoke">Smoke</option>
+                          <option value="Heartbeat">Heartbeat</option>
+                          <option value="Nebula">Nebula</option>
+                          <option value="Order">Order</option>
+                          <option value="Harmony">Harmony</option>
+                        </optgroup>
+                        
+                        {/* Medium-High CPU Load */}
+                        <optgroup label="⚡⚡⚡⚡ Medium-High CPU">
+                          <option value="Crystalline">Crystalline</option>
+                          <option value="Lightning">Lightning</option>
+                          <option value="Tornado">Tornado</option>
+                          <option value="Explosion">Explosion</option>
+                          <option value="Implosion">Implosion</option>
+                          <option value="DNA">DNA</option>
+                          <option value="Galaxy">Galaxy</option>
+                          <option value="Wormhole">Wormhole</option>
+                          <option value="Quantum">Quantum</option>
+                          <option value="Dissonance">Dissonance</option>
+                        </optgroup>
+                        
+                        {/* High CPU Load */}
+                        <optgroup label="⚡⚡⚡⚡⚡ High CPU">
+                          <option value="Burst">Burst</option>
+                          <option value="Spiral Burst">Spiral Burst</option>
+                          <option value="Star Burst">Star Burst</option>
+                          <option value="Fractal">Fractal</option>
+                          <option value="Labyrinth">Labyrinth</option>
+                        </optgroup>
+                        
+                        {/* Very High CPU Load */}
+                        <optgroup label="⚡⚡⚡⚡⚡⚡ Very High CPU">
+                          <option value="Maze">Maze</option>
+                          <option value="Cellular">Cellular</option>
+                          <option value="Chaos">Chaos</option>
+                        </optgroup>
                       </select>
                     </div>
                     

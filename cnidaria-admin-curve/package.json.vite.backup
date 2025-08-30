@@ -1,19 +1,16 @@
 {
   "name": "cnidaria-admin-curve",
   "version": "0.0.0",
-  "private": true,
+  "type": "module",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "next dev -p 5173",
-    "dev:safe": "sudo next dev -p 5173",
-    "dev:alt": "next dev -p 3001",
-    "dev:smart": "./scripts/start-dev.sh",
-    "build": "next build",
-    "start": "next start -p 5173",
-    "lint": "next lint",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
     "deploy:dev": "./deploy-cloudrun-dev.sh",
     "deploy:stage": "./deploy-cloudrun-stage.sh",
     "deploy:prod": "./deploy-cloudrun-prod.sh",
@@ -24,18 +21,24 @@
     "cloud-run:logs:prod": "gcloud run services logs read cnidaria-admin-curves-prod --region=us-central1"
   },
   "dependencies": {
-    "next": "^14.2.0",
+    "node-fetch": "^3.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^7.8.2",
     "three": "^0.162.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@types/three": "^0.162.0",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "@vitejs/plugin-react": "^5.0.2",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.0",
-    "typescript": "^5.2.2"
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "serve": "^14.2.4",
+    "typescript": "^5.2.2",
+    "vite": "^5.4.19"
   }
 }

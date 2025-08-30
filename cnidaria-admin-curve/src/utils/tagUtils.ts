@@ -24,7 +24,7 @@ export interface Curve {
   'curve-index-scaling': number;
   'curve-data': number[];
   'generator-noise-type'?: string;
-  'generator-noise-setting'?: Record<string, any>;
+  'generator-noise-setting'?: Record<string, unknown>;
   'generator-top-shelf'?: number;
   'generator-bottom-shelf'?: number;
   'generator-value-fill'?: number;
@@ -174,7 +174,7 @@ export async function deleteTag(tagId: string, apiUrl: string): Promise<boolean>
 /**
  * Get tag usage statistics
  */
-export async function getTagUsage(tagId: string, apiUrl: string): Promise<any> {
+export async function getTagUsage(tagId: string, apiUrl: string): Promise<unknown> {
   try {
     const response = await fetch(`${apiUrl}/api/tags/${tagId}/usage`);
     if (response.ok) {

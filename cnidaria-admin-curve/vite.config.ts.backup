@@ -1,0 +1,54 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  root: '.',
+  publicDir: 'public',
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html')
+      }
+    },
+    // Mac optimization: better chunking and tree shaking
+    chunkSizeWarningLimit: 1000,
+    minify: 'esbuild',
+    target: 'esnext'
+  },
+  server: {
+    port: 5173,
+    host: '0.0.0.0', // Silicon Mac fix: use explicit host
+    strictPort: true, // Silicon Mac fix: fail if port is in use
+    fs: {
+      strict: false // Silicon Mac fix: allow file system access
+    },
+    // Enhanced Mac compatibility
+    watch: {
+      usePolling: false, // Use native file watching on Mac
+      interval: 1000
+    },
+    hmr: {
+      overlay: false // Prevent HMR overlay issues on Mac
+    }
+  },
+  optimizeDeps: {
+    force: true, // Silicon Mac fix: force dependency optimization
+    include: ['react', 'react-dom', 'three'],
+    exclude: []
+  },
+  clearScreen: false, // Silicon Mac fix: prevent screen clearing issues
+  // Additional Mac optimizations
+  define: {
+    __DEV__: process.env.NODE_ENV === 'development'
+  },
+  esbuild: {
+    target: 'esnext',
+    supported: {
+      'top-level-await': true
+    }
+  }
+})

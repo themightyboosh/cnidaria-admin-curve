@@ -1,10 +1,19 @@
+'use client'
+
 import React, { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { apiUrl } from '../../config/environments'
+import { getApiUrl } from '../../config/environments'
 import { indexToThreeColor } from '../../utils/colorSpectrum'
 
+interface Curve {
+  id: string
+  "curve-name": string
+  "curve-width": number
+  "curve-data": number[]
+}
+
 interface ThreeJSGridProps {
-  selectedCurve: any
+  selectedCurve: Curve | null
   cellSize: number
   colorMode: 'value' | 'index'
 }
@@ -20,7 +29,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
   const sceneRef = useRef<THREE.Scene>()
   const rendererRef = useRef<THREE.WebGLRenderer>()
   const cameraRef = useRef<THREE.PerspectiveCamera>()
-  const controlsRef = useRef<any>()
+  const controlsRef = useRef<{ enabled: boolean; update: () => void } | null>(null)
   const meshRef = useRef<THREE.Mesh>()
   
   const [isProcessing, setIsProcessing] = useState(false)
@@ -32,7 +41,6 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
   // Dense mesh approach: 128x128 data mapped to 1280x1280 render grid
   const dataGridSize = 128 // Our actual data grid
   const renderGridSize = 1280 // Dense rendering mesh (10x resolution)
-  const interpolationRatio = 10 // 10x10 render vertices per data cell
 
   // Get coordinates for data grid with offset (still 128x128 for API calls)
   const getGridCoordinates = () => {
@@ -58,7 +66,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     try {
       // Call API for entire 256x256 grid
       const response = await fetch(
-        `${apiUrl}/api/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
+        `${getApiUrl()}/api/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
         {
           method: 'GET',
           headers: {
@@ -82,7 +90,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
           // Create height map from results, also store index position for color mapping
           const heightMap = new Map<string, number>()
           const indexMap = new Map<string, number>()
-          results.forEach((result: ProcessedCoordinate, index: number) => {
+          results.forEach((result: ProcessedCoordinate) => {
             const [x, y] = result["cell-coordinates"]
             const indexValue = result["index-value"]
             const indexPosition = result["index-position"] // Use actual curve index position
@@ -221,14 +229,10 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     return height
   }
   
-  // Use shared color spectrum for consistency with 2D view
-  const getSpectrumColor = (indexValue: number) => {
-    const { r, g, b } = indexToThreeColor(indexValue)
-    return new THREE.Color(r, g, b)
-  }
+
 
   // Update mesh heights and colors from API data with smooth interpolation
-  const updateMeshHeights = (heightMap: Map<string, number>, bounds: any, indexMap?: Map<string, number>, curveWidth?: number) => {
+  const updateMeshHeights = (heightMap: Map<string, number>, bounds: { minX: number; maxX: number; minY: number; maxY: number }, indexMap?: Map<string, number>, curveWidth?: number) => {
     if (!meshRef.current) return
     
     const geometry = meshRef.current.geometry as THREE.PlaneGeometry
@@ -236,7 +240,6 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     const colors = new Float32Array(positions.length)
     
     const maxHeight = cellSize * 20 // Maximum height - much taller for visibility
-    const cellsPerUnit = gridSize / (gridSize * cellSize) // Cells per world unit
     
     console.log('Updating terrain with', heightMap.size, 'height points')
     
@@ -262,7 +265,9 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       let color: THREE.Color
       if (colorMode === 'index' && indexMap && curveWidth) {
         // Find the nearest coordinate for index mapping
-        const nearestKey = `${Math.round(gridX)}_${Math.round(gridY)}`
+        const gridX = Math.round(dataX)
+        const gridY = Math.round(dataY)
+        const nearestKey = `${gridX}_${gridY}`
         const indexPosition = indexMap.get(nearestKey) || 0
         const { r, g, b } = indexToThreeColor(indexValue, colorMode, indexPosition, curveWidth)
         color = new THREE.Color(r, g, b)
@@ -449,7 +454,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
       }
       renderer.dispose()
     }
-  }, [])
+  }, [cellSize, createTerrainMesh, isShiftPressed, lastMousePos.x, lastMousePos.y, offsetX, offsetY])
 
 
 
@@ -462,7 +467,7 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
         processGridCoordinates()
       }, 100)
     }
-  }, [selectedCurve, offsetX, offsetY, colorMode])
+  }, [selectedCurve, offsetX, offsetY, colorMode, processGridCoordinates])
 
   return (
     <div 

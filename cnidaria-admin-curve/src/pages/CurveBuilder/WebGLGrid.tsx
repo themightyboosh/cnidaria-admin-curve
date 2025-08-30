@@ -1,11 +1,20 @@
+'use client'
+
 import React, { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { apiUrl } from '../../config/environments'
+import { getApiUrl } from '../../config/environments'
 import { indexToThreeColor } from '../../utils/colorSpectrum'
 
+interface Curve {
+  id: string
+  "curve-name": string
+  "curve-width": number
+  "curve-data": number[]
+}
+
 interface WebGLGridProps {
-  selectedCurve: any
+  selectedCurve: Curve | null
   cellSize: number
   colorMode: 'value' | 'index'
   isPreview?: boolean
@@ -20,7 +29,7 @@ interface ProcessedCoordinate {
   "index-value": number
 }
 
-const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, cellSize, colorMode, isPreview = false, gridDimensions, smoothing = 0.5, onCameraPositionChange }) => {
+const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, colorMode, isPreview = false, smoothing = 0.5, onCameraPositionChange }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isAutoRotating, setIsAutoRotating] = useState(true)
@@ -32,7 +41,6 @@ const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, cellSize, colorMod
   // - No smoothing or value averaging - direct mapping
   const baseGridSize = 512
   const finalGridSize = 1024
-  const maxHeight = cellSize * 100 // Much taller terrain
 
   // Process API data and render
   const processData = async () => {
@@ -44,7 +52,7 @@ const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, cellSize, colorMod
     try {
       const halfGrid = Math.floor(baseGridSize / 2)
       const response = await fetch(
-        `${apiUrl}/api/curves/${selectedCurve.id}/process?x=${-halfGrid}&y=${-halfGrid}&x2=${halfGrid - 1}&y2=${halfGrid - 1}`
+        `${getApiUrl()}/api/curves/${selectedCurve.id}/process?x=${-halfGrid}&y=${-halfGrid}&x2=${halfGrid - 1}&y2=${halfGrid - 1}`
       )
       
       if (response.ok) {
@@ -349,7 +357,7 @@ const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, cellSize, colorMod
         directHeightMap.set(coordKey, value)
         
         let color: { r: number; g: number; b: number }
-        if (colorMode === 'index') {
+        if (colorMode === 'index' && selectedCurve) {
           color = indexToThreeColor(value, 'index', position, selectedCurve["curve-width"])
         } else {
           color = indexToThreeColor(value, 'value')
@@ -481,7 +489,7 @@ const WebGLGrid: React.FC<WebGLGridProps> = ({ selectedCurve, cellSize, colorMod
     } else {
       console.log('No curve selected, not processing data')
     }
-  }, [selectedCurve, colorMode])
+  }, [selectedCurve, colorMode, processData])
 
   return (
     <div 

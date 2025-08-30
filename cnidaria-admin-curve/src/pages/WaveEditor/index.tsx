@@ -1,6 +1,8 @@
+'use client'
+
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { apiUrl } from '../../config/environments'
+import { getApiUrl } from '../../config/environments'
 
 interface Curve {
   id: string
@@ -38,7 +40,7 @@ function WaveEditor() {
     setError(null)
     
     try {
-      const response = await fetch(`${apiUrl}/api/curves/${id}`)
+      const response = await fetch(`${getApiUrl()}/api/curves/${id}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -80,7 +82,7 @@ function WaveEditor() {
       }
       
       const response = await fetch(
-        `${apiUrl}/api/curves/${curve.id}`,
+        `${getApiUrl()}/api/curves/${curve.id}`,
         {
           method: 'PUT',
           headers: {
@@ -101,7 +103,6 @@ function WaveEditor() {
           setError('Failed to update wave data: API returned error')
         }
       } else {
-        const errorText = await response.text()
         setError(`Failed to update wave data: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
