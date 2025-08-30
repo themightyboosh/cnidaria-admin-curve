@@ -162,7 +162,8 @@ const TagManager: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
+        console.log('Create tag response:', data)
+        if (data.success && data.data && data.data.id) {
           // Refresh tags list
           await loadTags()
           // Expand the newly created tag
@@ -179,10 +180,11 @@ const TagManager: React.FC = () => {
           })
           setEditingTags(newEditing)
         } else {
-          setError('Failed to create tag')
+          setError(`Failed to create tag: ${data.message || 'Invalid response format'}`)
         }
       } else {
-        setError('Failed to create tag')
+        const errorText = await response.text()
+        setError(`Failed to create tag: ${response.status} ${response.statusText} - ${errorText}`)
       }
     } catch (err) {
       setError('Error creating tag')
