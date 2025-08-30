@@ -7,13 +7,6 @@ interface ThreeJSGridProps {
   cellSize: number
 }
 
-interface Cell3D {
-  x: number
-  y: number
-  mesh: THREE.Mesh
-  indexValue: number
-}
-
 interface ProcessedCoordinate {
   "cell-coordinates": [number, number]
   "index-position": number
@@ -26,83 +19,40 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
   const rendererRef = useRef<THREE.WebGLRenderer>()
   const cameraRef = useRef<THREE.PerspectiveCamera>()
   const controlsRef = useRef<any>()
-  const cellsRef = useRef<Map<string, Cell3D>>(new Map())
-  const lastCameraPosition = useRef<THREE.Vector3>(new THREE.Vector3())
-  const lastCameraRotation = useRef<THREE.Euler>(new THREE.Euler())
+  const meshRef = useRef<THREE.Mesh>()
   
   const [isProcessing, setIsProcessing] = useState(false)
-  const [visibleBounds, setVisibleBounds] = useState({ 
-    minX: -10, maxX: 10, minY: -10, maxY: 10 
-  })
+  const [offsetX, setOffsetX] = useState(0)
+  const [offsetY, setOffsetY] = useState(0)
+  const [isShiftPressed, setIsShiftPressed] = useState(false)
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
+  
+  // Fixed 256x256 grid
+  const gridSize = 256
 
-  // Calculate visible grid coordinates accounting for pan AND zoom
-  const getVisibleCoordinates = () => {
-    if (!cameraRef.current || !controlsRef.current) return { minX: -5, maxX: 5, minY: -5, maxY: 5 }
-    
-    const camera = cameraRef.current
-    const controls = controlsRef.current
-    
-    // Get the target point (where camera is looking - this is where panning moves to)
-    const target = controls.target.clone()
-    
-    // Calculate distance from camera to target
-    const cameraHeight = camera.position.distanceTo(target)
-    const fov = (camera.fov * Math.PI) / 180
-    
-    // Calculate visible area at the target level (ground plane)
-    const visibleHeight = 2 * Math.tan(fov / 2) * cameraHeight
-    const visibleWidth = visibleHeight * camera.aspect
-    
-    // Get camera angle to adjust grid size (prevent horizon overload)
-    const cameraVector = new THREE.Vector3()
-    camera.getWorldDirection(cameraVector)
-    const angle = Math.acos(-cameraVector.y) // Angle from straight down
-    const angleRatio = angle / (Math.PI / 2) // 0 = straight down, 1 = horizontal
-    
-    // Reduce grid size when viewing at shallow angles (near horizon)
-    const angleFactor = Math.max(0.3, 1 - angleRatio * 0.7) // Reduce up to 70% when horizontal
-    
-    // Convert to grid coordinates with angle adjustment
-    const gridWidth = Math.ceil((visibleWidth / cellSize) * angleFactor)
-    const gridHeight = Math.ceil((visibleHeight / cellSize) * angleFactor)
-    
-    // Also limit maximum grid size for performance
-    const maxGridSize = 30 // Maximum cells in any direction
-    const limitedGridWidth = Math.min(gridWidth, maxGridSize)
-    const limitedGridHeight = Math.min(gridHeight, maxGridSize)
-    
-    // Center on the target position (this accounts for panning)
-    const centerX = Math.round(target.x / cellSize)
-    const centerZ = Math.round(target.z / cellSize)
-    
-    console.log('3D Camera info:', {
-      cameraPos: camera.position,
-      target: target,
-      distance: cameraHeight,
-      angle: `${(angle * 180 / Math.PI).toFixed(1)}°`,
-      angleFactor: angleFactor.toFixed(2),
-      gridSize: { width: limitedGridWidth, height: limitedGridHeight },
-      center: { x: centerX, z: centerZ }
-    })
-    
+  // Get coordinates for 256x256 grid with offset
+  const getGridCoordinates = () => {
+    const halfGrid = Math.floor(gridSize / 2)
     return {
-      minX: centerX - Math.floor(limitedGridWidth / 2) - 1, // Use limited grid size
-      maxX: centerX + Math.floor(limitedGridWidth / 2) + 1,
-      minY: centerZ - Math.floor(limitedGridHeight / 2) - 1,
-      maxY: centerZ + Math.floor(limitedGridHeight / 2) + 1
+      minX: -halfGrid + offsetX,
+      maxX: halfGrid - 1 + offsetX,
+      minY: -halfGrid + offsetY,
+      maxY: halfGrid - 1 + offsetY
     }
   }
 
-  // Process coordinates for visible cells (like 2D version)
-  const processCellCoordinates = async (bounds: any) => {
+  // Process coordinates for 256x256 grid
+  const processGridCoordinates = async () => {
     if (!selectedCurve || isProcessing) return
     
     setIsProcessing(true)
-    console.log(`Processing 3D coordinates for curve: ${selectedCurve["curve-name"]}`)
-    console.log(`3D Grid bounds: (${bounds.minX}, ${bounds.minY}) to (${bounds.maxX}, ${bounds.maxY})`)
+    const bounds = getGridCoordinates()
+    console.log(`Processing 3D grid: ${selectedCurve["curve-name"]}`)
+    console.log(`Grid bounds: (${bounds.minX}, ${bounds.minY}) to (${bounds.maxX}, ${bounds.maxY})`)
+    console.log(`Grid offset: (${offsetX}, ${offsetY})`)
     
     try {
-      // Call same API endpoint as 2D version
+      // Call API for entire 256x256 grid
       const response = await fetch(
         `${apiUrl}/api/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
         {
@@ -116,35 +66,27 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       
       if (response.ok) {
         const data = await response.json()
-        console.log('3D API Response:', data)
         
-        // The API returns data in format: {"curve-name": [results]} (same as 2D)
+        // The API returns data in format: {"curve-name": [results]}
         const curveName = Object.keys(data)[0]
         const results = data[curveName]
         
-        console.log('Curve name:', curveName)
-        console.log('Results type:', typeof results)
-        console.log('Results isArray:', Array.isArray(results))
-        if (results) {
-          console.log('First few results:', results.slice(0, 3))
-        }
-        
         if (results && Array.isArray(results)) {
-          console.log(`Received ${results.length} coordinates for 3D grid`)
+          console.log(`Received ${results.length} coordinates for 256x256 grid`)
           
-          // Clear existing cells outside bounds
-          clearCellsOutsideBounds(bounds)
-          
-          // Create/update cells with API data
+          // Create height map from results
+          const heightMap = new Map<string, number>()
           results.forEach((result: ProcessedCoordinate) => {
             const [x, y] = result["cell-coordinates"]
             const indexValue = result["index-value"]
-            createOrUpdateCell(x, y, indexValue)
+            heightMap.set(`${x}_${y}`, indexValue)
           })
+          
+          // Update mesh with new height data
+          updateMeshHeights(heightMap, bounds)
           
         } else {
           console.error('Invalid 3D API response format')
-          console.error('Expected: {curveName: [results]}')
           console.error('Got:', data)
         }
       } else {
@@ -158,96 +100,86 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     }
   }
 
-  // Create or update a cell at specific coordinates
-  const createOrUpdateCell = (x: number, y: number, indexValue: number) => {
+  // Create the terrain mesh
+  const createTerrainMesh = () => {
     if (!sceneRef.current) return
     
-    const cellKey = `${x}_${y}`
-    const existingCell = cellsRef.current.get(cellKey)
-    
-    // Calculate height and color from index value (0-255)
-    const heightPercentage = indexValue / 255
-    const height = heightPercentage * cellSize // Max height equals cell size
-    const hue = indexValue // Use index value as hue (0-255)
-    const color = new THREE.Color(`hsl(${hue}, 70%, 50%)`)
-    
-    if (existingCell) {
-      // Update existing cell
-      existingCell.indexValue = indexValue
-      existingCell.mesh.scale.y = height / cellSize // Scale from base height
-      ;(existingCell.mesh.material as THREE.MeshBasicMaterial).color = color
-    } else {
-      // Create new cell
-      const geometry = new THREE.BoxGeometry(cellSize * 0.9, height, cellSize * 0.9) // Slightly smaller for gaps
-      const material = new THREE.MeshBasicMaterial({ 
-        color: color,
-        wireframe: false 
-      })
-      const mesh = new THREE.Mesh(geometry, material)
-      
-      // Position cell at grid coordinates
-      mesh.position.set(
-        x * cellSize,
-        height / 2, // Position at half height so bottom sits on ground
-        y * cellSize
-      )
-      
-      sceneRef.current.add(mesh)
-      
-      // Store cell
-      const cell: Cell3D = { x, y, mesh, indexValue }
-      cellsRef.current.set(cellKey, cell)
+    // Remove existing mesh
+    if (meshRef.current) {
+      sceneRef.current.remove(meshRef.current)
+      meshRef.current.geometry.dispose()
+      ;(meshRef.current.material as THREE.Material).dispose()
     }
-  }
-  
-  // Clear cells outside visible bounds
-  const clearCellsOutsideBounds = (bounds: any) => {
-    const cellsToRemove: string[] = []
     
-    cellsRef.current.forEach((cell, key) => {
-      if (cell.x < bounds.minX || cell.x > bounds.maxX || 
-          cell.y < bounds.minY || cell.y > bounds.maxY) {
-        // Remove from scene
-        if (sceneRef.current) {
-          sceneRef.current.remove(cell.mesh)
-        }
-        // Dispose geometry and material
-        cell.mesh.geometry.dispose()
-        ;(cell.mesh.material as THREE.Material).dispose()
-        cellsToRemove.push(key)
-      }
+    // Create 256x256 plane geometry
+    const geometry = new THREE.PlaneGeometry(
+      gridSize * cellSize, 
+      gridSize * cellSize, 
+      gridSize - 1, 
+      gridSize - 1
+    )
+    
+    // Create material with vertex colors
+    const material = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      wireframe: false
     })
     
-    // Remove from map
-    cellsToRemove.forEach(key => cellsRef.current.delete(key))
+    // Create mesh
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.rotation.x = -Math.PI / 2 // Rotate to be horizontal
+    mesh.receiveShadow = true
+    mesh.castShadow = true
     
-    if (cellsToRemove.length > 0) {
-      console.log(`Removed ${cellsToRemove.length} cells outside bounds`)
-    }
+    sceneRef.current.add(mesh)
+    meshRef.current = mesh
+    
+    console.log('Created 256x256 terrain mesh')
   }
-
-  // Update grid if camera has moved significantly
-  const updateGridIfNeeded = () => {
-    if (!cameraRef.current || !controlsRef.current) return
+  
+  // Update mesh heights and colors from API data
+  const updateMeshHeights = (heightMap: Map<string, number>, bounds: any) => {
+    if (!meshRef.current) return
     
-    const camera = cameraRef.current
-    const controls = controlsRef.current
-    const currentPos = camera.position
-    const currentTarget = controls.target
+    const geometry = meshRef.current.geometry as THREE.PlaneGeometry
+    const positions = geometry.attributes.position.array as Float32Array
+    const colors = new Float32Array(positions.length)
     
-    // Check if camera or target moved significantly
-    const positionDelta = currentPos.distanceTo(lastCameraPosition.current)
-    const targetDelta = currentTarget.distanceTo(new THREE.Vector3(0, 0, 0)) // Compare to stored target
+    const maxHeight = cellSize * 2 // Maximum height
     
-    // Update threshold - adjust sensitivity here
-    const threshold = cellSize * 1.5
-    
-    if (positionDelta > threshold || targetDelta > threshold) {
-      const bounds = getVisibleCoordinates()
-      setVisibleBounds(bounds)
-      processCellCoordinates(bounds)
-      lastCameraPosition.current.copy(currentPos)
+    // Update each vertex
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i]
+      const z = positions[i + 2]
+      
+      // Convert mesh coordinates to grid coordinates
+      const gridX = Math.round(x / cellSize) + bounds.minX + Math.floor(gridSize / 2)
+      const gridY = Math.round(z / cellSize) + bounds.minY + Math.floor(gridSize / 2)
+      
+      // Get height from API data
+      const coordKey = `${gridX}_${gridY}`
+      const indexValue = heightMap.get(coordKey) || 0
+      const heightPercentage = indexValue / 255
+      const height = heightPercentage * maxHeight
+      
+      // Set vertex height (Y coordinate)
+      positions[i + 1] = height
+      
+      // Set vertex color
+      const hue = indexValue
+      const color = new THREE.Color(`hsl(${hue}, 70%, 50%)`)
+      colors[i] = color.r
+      colors[i + 1] = color.g
+      colors[i + 2] = color.b
     }
+    
+    // Update geometry
+    geometry.attributes.position.needsUpdate = true
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    geometry.computeVertexNormals()
+    
+    console.log('Updated mesh heights and colors')
   }
 
   // Initialize Three.js scene
@@ -303,11 +235,6 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
       controls.maxAzimuthAngle = Infinity
       
       controlsRef.current = controls
-      
-      // Update grid when camera moves
-      controls.addEventListener('change', () => {
-        updateGridIfNeeded()
-      })
     })
 
     // Add lighting
@@ -320,6 +247,49 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
     directionalLight.shadow.mapSize.width = 2048
     directionalLight.shadow.mapSize.height = 2048
     scene.add(directionalLight)
+
+    // Add keyboard event listeners
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setIsShiftPressed(true)
+        if (controlsRef.current) {
+          controlsRef.current.enabled = false // Disable orbit controls when shift is pressed
+        }
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setIsShiftPressed(false)
+        if (controlsRef.current) {
+          controlsRef.current.enabled = true // Re-enable orbit controls
+        }
+      }
+    }
+
+    // Add mouse event listeners
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isShiftPressed) {
+        const deltaX = event.clientX - lastMousePos.x
+        const deltaY = event.clientY - lastMousePos.y
+        
+        // Convert mouse movement to coordinate offset
+        const sensitivity = 0.1
+        const newOffsetX = offsetX - deltaX * sensitivity
+        const newOffsetY = offsetY + deltaY * sensitivity // Invert Y for intuitive movement
+        
+        setOffsetX(Math.round(newOffsetX))
+        setOffsetY(Math.round(newOffsetY))
+      }
+      setLastMousePos({ x: event.clientX, y: event.clientY })
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    renderer.domElement.addEventListener('mousemove', handleMouseMove)
+
+    // Create initial terrain mesh
+    createTerrainMesh()
 
     // Animation loop
     const animate = () => {
@@ -346,6 +316,9 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      renderer.domElement.removeEventListener('mousemove', handleMouseMove)
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement)
       }
@@ -355,14 +328,12 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize }) =>
 
 
 
-  // Initial grid creation and updates
+  // Process grid when curve or offset changes
   useEffect(() => {
-    if (cameraRef.current && selectedCurve) {
-      const bounds = getVisibleCoordinates()
-      setVisibleBounds(bounds)
-      processCellCoordinates(bounds)
+    if (selectedCurve && meshRef.current) {
+      processGridCoordinates()
     }
-  }, [selectedCurve, cellSize])
+  }, [selectedCurve, offsetX, offsetY])
 
   return (
     <div 
