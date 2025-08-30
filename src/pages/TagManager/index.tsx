@@ -152,28 +152,40 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
     const editing = editingTags.get(tagId)
     if (!editing) return
 
+    const updateData = {
+      'tag-name': editing.name,
+      'tag-description': editing.description,
+      'tag-color': editing.color
+    }
+    
+    console.log('Updating tag with data:', updateData) // Debug log
+
     try {
-      const response = await fetch(`${apiUrl}/tags/${tagId}`, {
+      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          'tag-name': editing.name,
-          'tag-description': editing.description,
-          'tag-color': editing.color
-        })
+        body: JSON.stringify(updateData)
       })
 
       if (response.ok) {
-        // Refresh tags list
-        await loadTags()
-        // Clear editing state
-        const newEditing = new Map(editingTags)
-        newEditing.delete(tagId)
-        setEditingTags(newEditing)
-        // Notify parent component of changes
-        onTagsChanged?.()
+        const data = await response.json()
+        console.log('Update tag response:', data) // Debug log
+        if (data.success) {
+          // Refresh tags list
+          await loadTags()
+          // Clear editing state
+          const newEditing = new Map(editingTags)
+          newEditing.delete(tagId)
+          setEditingTags(newEditing)
+          // Notify parent component of changes
+          onTagsChanged?.()
+        } else {
+          setError(`Failed to update tag: ${data.message || 'API returned error'}`)
+        }
       } else {
-        setError('Failed to update tag')
+        const errorText = await response.text()
+        console.error('Update tag failed:', response.status, response.statusText, errorText)
+        setError(`Failed to update tag: ${response.status} ${response.statusText}`)
       }
     } catch (err) {
       setError('Error updating tag')
@@ -259,7 +271,7 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/tags/${tagId}`, {
+      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
         method: 'DELETE'
       })
 
