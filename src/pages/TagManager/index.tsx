@@ -145,7 +145,7 @@ const TagManager: React.FC = () => {
     const newTag: EditingTag = {
       id: newTagId,
       name: 'new-tag',
-      description: '',
+      description: 'Tag Description',
       color: '#007acc'
     }
 
