@@ -19,7 +19,11 @@ interface EditingTag {
   color: string
 }
 
-const TagManager: React.FC = () => {
+interface TagManagerProps {
+  onTagsChanged?: () => void // Callback when tags are modified
+}
+
+const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged }) => {
   const [tags, setTags] = useState<Tag[]>([])
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set())
   const [editingTags, setEditingTags] = useState<Map<string, EditingTag>>(new Map())
@@ -166,6 +170,8 @@ const TagManager: React.FC = () => {
         const newEditing = new Map(editingTags)
         newEditing.delete(tagId)
         setEditingTags(newEditing)
+        // Notify parent component of changes
+        onTagsChanged?.()
       } else {
         setError('Failed to update tag')
       }
@@ -231,6 +237,8 @@ const TagManager: React.FC = () => {
             color: newTag.color
           })
           setEditingTags(newEditing)
+          // Notify parent component of changes
+          onTagsChanged?.()
         } else {
           setError(`Failed to create tag: ${data.message || 'Invalid response format'}`)
         }
@@ -266,6 +274,8 @@ const TagManager: React.FC = () => {
         const newExpanded = new Set(expandedTags)
         newExpanded.delete(tagId)
         setExpandedTags(newExpanded)
+        // Notify parent component of changes
+        onTagsChanged?.()
       } else {
         setError('Failed to delete tag')
       }
