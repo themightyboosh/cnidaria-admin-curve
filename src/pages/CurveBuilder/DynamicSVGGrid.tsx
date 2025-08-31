@@ -352,6 +352,11 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       <svg 
         width={TOTAL_SIZE} 
         height={TOTAL_SIZE}
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+          transformOrigin: 'center'
+        }}
       >
         <defs>
           <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
@@ -362,28 +367,22 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         {/* Background with grid pattern */}
         <rect width={TOTAL_SIZE} height={TOTAL_SIZE} fill="url(#grid)" x="0" y="0"/>
         
-        {/* Viewport group with transform */}
-        <g 
-          id="viewport"
-          transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`}
-        >
-          {/* Center square indicator */}
-          <rect
-            id="center-square"
-            data-coordinates="0,0"
-            x={64 * CELL_SIZE}
-            y={64 * CELL_SIZE}
-            width={CELL_SIZE}
-            height={CELL_SIZE}
-            fill="none"
-            stroke="#ff0000"
-            strokeWidth="2"
-            strokeDasharray="5,5"
-          />
-          
-          {/* Only render rectangles that exist in the data */}
-          {visibleSquares}
-        </g>
+        {/* Center square indicator */}
+        <rect
+          id="center-square"
+          data-coordinates="0,0"
+          x={64 * CELL_SIZE}
+          y={64 * CELL_SIZE}
+          width={CELL_SIZE}
+          height={CELL_SIZE}
+          fill="none"
+          stroke="#ff0000"
+          strokeWidth="2"
+          strokeDasharray="5,5"
+        />
+        
+        {/* Only render rectangles that exist in the data */}
+        {visibleSquares}
       </svg>
       
       {/* Debug info */}
