@@ -33,9 +33,11 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
   const padding = 20
   const maxHeight = 512
   const graphHeight = Math.min(255, maxHeight - (padding * 2))
+  const actualHeight = graphHeight + (padding * 2)
+  
+  // Use container width, but ensure minimum width for very small curves
   const displayWidth = Math.max(100, curveWidth * 3) // Show 3x curve width to see seams
   const actualWidth = displayWidth + (padding * 2)
-  const actualHeight = graphHeight + (padding * 2)
   
   // Calculate average value
   const averageValue = curveData.length > 0 
@@ -83,12 +85,14 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
     }}>
       <svg 
         width="100%"
-        height="100%"
+        height="auto"
         viewBox={`0 0 ${actualWidth} ${actualHeight}`}
+        preserveAspectRatio="xMidYMid meet"
         style={{
           border: '1px solid #00ffff',
           borderRadius: '4px',
-          maxHeight: '512px'
+          maxHeight: '512px',
+          maxWidth: '100%'
         }}
       >
         {/* Background with spectrum gradient */}
