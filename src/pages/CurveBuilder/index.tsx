@@ -6,6 +6,7 @@ import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import ThreeJSGrid from './ThreeJSGrid'
+import SimpleThreeJSGrid from './SimpleThreeJSGrid'
 import curveTypesService from '../../services/curveTypes'
 
 import './CurveBuilder.css'
@@ -75,8 +76,10 @@ function CurveBuilder() {
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
   const [curveTypesList, setCurveTypesList] = useState<Array<{id: string, name: string, cpuLoad: string, displayName: string}>>([])
   const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
+  const [gridCellColors, setGridCellColors] = useState<Array<{x: number, y: number, color: string}>>([])
+  const [gridDimensions, setGridDimensions] = useState<{x: number, y: number}>({x: 0, y: 0})
+  const [gridBounds, setGridBounds] = useState<{minX: number, maxX: number, minY: number, maxY: number}>({minX: 0, maxX: 0, minY: 0, maxY: 0})
 
-  const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Helper function to get coordinate key
@@ -288,51 +291,9 @@ function CurveBuilder() {
     }
   }, [isOptionPressed])
 
-  // Calculate grid dimensions and visible coordinates
-  const [gridDimensions, setGridDimensions] = useState({ width: 40, height: 40 })
+  // Three.js grid state
 
-  useEffect(() => {
-    const updateGridDimensions = () => {
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect()
-        const width = Math.ceil(rect.width / cellSize)
-        const height = Math.ceil(rect.height / cellSize)
-        
-        console.log('Updating grid dimensions:', { rectWidth: rect.width, rectHeight: rect.height, cellSize, width, height })
-        setGridDimensions({ width, height })
-      } else {
-        console.log('Canvas ref is null')
-      }
-    }
 
-    // Add a small delay to ensure canvas is rendered
-    const timer = setTimeout(updateGridDimensions, 100)
-    window.addEventListener('resize', updateGridDimensions)
-    
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('resize', updateGridDimensions)
-    }
-  }, [cellSize])
-
-  // Calculate visible grid coordinates (top-left to bottom-right)
-  const getVisibleCoordinates = () => {
-    if (!canvasRef.current) return { topLeft: [0, 0], bottomRight: [0, 0] }
-    
-    const rect = canvasRef.current.getBoundingClientRect()
-    const width = Math.ceil(rect.width / cellSize)
-    const height = Math.ceil(rect.height / cellSize)
-    
-    // Calculate center
-    const centerX = Math.floor(width / 2)
-    const centerY = Math.floor(height / 2)
-    
-    // Calculate visible bounds relative to center
-    const topLeft = [0 - centerX, centerY - 0]
-    const bottomRight = [width - 1 - centerX, centerY - (height - 1)]
-    
-    return { topLeft, bottomRight }
-  }
 
   // Process coordinates for a curve with caching
   const processCurveCoordinates = async (curve: Curve, forceColorMode?: 'value' | 'index') => {
@@ -343,7 +304,9 @@ function CurveBuilder() {
     setError(null)
     setProcessingProgress({ current: 0, total: 0 })
     
-    const { topLeft, bottomRight } = getVisibleCoordinates()
+    // Use fixed coordinates for now
+    const topLeft = [-50, -50]
+    const bottomRight = [50, 50]
     
     try {
       console.log(`Processing coordinates for curve: ${curve["curve-name"]}`)
@@ -454,66 +417,134 @@ function CurveBuilder() {
     console.log(`Updated colors for ${coordinateCache.size} cached coordinates`)
   }
 
-  // Preload coordinates for a larger area to improve zoom out experience
-  const preloadCoordinates = async (curve: Curve, currentColorMode: 'value' | 'index') => {
-    if (!curve) return
+  // Process coordinates and update grid colors
+  const processGridCoordinates = async () => {
+    if (!selectedCurve || gridBounds.minX === 0 && gridBounds.maxX === 0) {
+      console.log('⚠️ No curve selected or grid bounds not ready')
+      return
+    }
+
+    console.log('🔄 Processing grid coordinates for curve:', selectedCurve["curve-name"])
+    console.log('📐 Grid bounds:', gridBounds)
+
+    // Generate coordinates for each cell using grid bounds
+    const coordinates: Array<{x: number, y: number, cellX: number, cellY: number}> = []
     
-    const { topLeft, bottomRight } = getVisibleCoordinates()
-    
-    // Calculate a larger area for preloading (2x the current visible area)
-    const width = bottomRight[0] - topLeft[0]
-    const height = bottomRight[1] - topLeft[1]
-    const preloadTopLeft = [topLeft[0] - width, topLeft[1] - height]
-    const preloadBottomRight = [bottomRight[0] + width, bottomRight[1] + height]
-    
-    // Check which coordinates in the preload area are not cached
-    const uncachedCoordinates: [number, number][] = []
-    for (let x = preloadTopLeft[0]; x <= preloadBottomRight[0]; x++) {
-      for (let y = preloadTopLeft[1]; y <= preloadBottomRight[1]; y++) {
-        if (!isCoordinateCached(x, y)) {
-          uncachedCoordinates.push([x, y])
-        }
+    for (let cellY = 0; cellY < gridDimensions.y; cellY++) {
+      for (let cellX = 0; cellX < gridDimensions.x; cellX++) {
+        // Convert cell coordinates to world coordinates
+        const coordX = gridBounds.minX + cellX
+        const coordY = gridBounds.minY + cellY
+        coordinates.push({ x: coordX, y: coordY, cellX, cellY })
       }
     }
-    
-    if (uncachedCoordinates.length > 0) {
-      console.log(`Preloading ${uncachedCoordinates.length} additional coordinates`)
-      
-      try {
-        const response = await fetch(
-          `${apiUrl}/api/curves/${curve.id}/process?x=${preloadTopLeft[0]}&y=${preloadTopLeft[1]}&x2=${preloadBottomRight[0]}&y2=${preloadBottomRight[1]}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept-Encoding': 'gzip, deflate'
-            }
-          }
-        )
-        
-        if (response.ok) {
-          const data = await response.json()
-          const curveName = Object.keys(data)[0]
-          const results = data[curveName]
-          
-          if (results && Array.isArray(results)) {
-            const newCoordinateCache = new Map(coordinateCache)
-            
-            results.forEach((result: ProcessCoordinateResponse) => {
-              const [x, y] = result["cell-coordinates"]
-              const coordKey = getCoordinateKey(x, y)
-              newCoordinateCache.set(coordKey, result)
-            })
-            
-            setCoordinateCache(newCoordinateCache)
-            console.log(`Preloaded ${results.length} additional coordinates`)
+
+    console.log(`📍 Generated ${coordinates.length} coordinates (${gridDimensions.x}x${gridDimensions.y} grid)`)
+    console.log(`📍 Coordinate range: X[${gridBounds.minX},${gridBounds.maxX}] Y[${gridBounds.minY},${gridBounds.maxY}]`)
+
+    try {
+      // Call API to process coordinates using grid bounds
+      const response = await fetch(
+        `${apiUrl}/api/curves/${selectedCurve.id}/process?x=${gridBounds.minX}&y=${gridBounds.minY}&x2=${gridBounds.maxX}&y2=${gridBounds.maxY}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate'
           }
         }
-      } catch (error) {
-        console.log('Preload failed, continuing with current cache')
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📊 API Response:', data)
+
+        // The API returns data in format: {"curve-name": [results]}
+        const curveName = Object.keys(data)[0]
+        const results = data[curveName]
+
+        if (results && Array.isArray(results)) {
+          console.log(`🎨 Processing ${results.length} coordinate results`)
+
+          // Create a map for quick lookup
+          const resultMap = new Map<string, any>()
+          results.forEach((result: any) => {
+            const [x, y] = result["cell-coordinates"]
+            const key = `${x}_${y}`
+            resultMap.set(key, result)
+          })
+
+          // Generate cell colors based on results
+          const newCellColors: Array<{x: number, y: number, color: string}> = []
+
+          coordinates.forEach(({ x, y, cellX, cellY }) => {
+            const key = `${x}_${y}`
+            const result = resultMap.get(key)
+
+            if (result) {
+              let colorValue: number
+              let color: string
+
+              if (colorMode === 'value') {
+                // Use the index-value directly
+                colorValue = result["index-value"]
+                color = indexToColorString(colorValue, 'value', result["index-position"], selectedCurve["curve-width"])
+              } else {
+                // Use index-position as percentage of curve width
+                const indexPosition = result["index-position"]
+                const curveWidth = selectedCurve["curve-width"]
+                const percentage = (indexPosition / curveWidth) * 100
+                colorValue = percentage
+                color = indexToColorString(percentage, 'index', indexPosition, curveWidth)
+              }
+
+              newCellColors.push({
+                x: cellX,
+                y: cellY,
+                color: color
+              })
+
+              // Debug first few cells
+              if (newCellColors.length <= 3) {
+                console.log(`🔲 Cell (${cellX},${cellY}) [${x},${y}]:`, {
+                  indexValue: result["index-value"],
+                  indexPosition: result["index-position"],
+                  colorMode,
+                  colorValue,
+                  color
+                })
+              }
+            } else {
+              // No result for this coordinate - use default color
+              newCellColors.push({
+                x: cellX,
+                y: cellY,
+                color: '#2a2a2a' // Default dark gray
+              })
+            }
+          })
+
+          setGridCellColors(newCellColors)
+          console.log(`✅ Updated ${newCellColors.length} cell colors`)
+        } else {
+          console.error('❌ Invalid response format from API')
+        }
+      } else {
+        const errorText = await response.text()
+        console.error('❌ API request failed:', response.status, response.statusText, errorText)
       }
+    } catch (error) {
+      console.error('❌ Failed to process grid coordinates:', error)
     }
   }
+
+  // Process coordinates when curve, grid bounds, or color mode changes
+  useEffect(() => {
+    if (selectedCurve && gridBounds.minX !== 0 || gridBounds.maxX !== 0) {
+      console.log('🔄 Triggering coordinate processing...')
+      processGridCoordinates()
+    }
+  }, [selectedCurve, gridBounds, colorMode, spectrumKey])
 
   // Handle curve selection
   const handleCurveSelect = (curve: Curve) => {
@@ -737,8 +768,6 @@ function CurveBuilder() {
       // Set new timeout for processing coordinates
       processingTimeoutRef.current = setTimeout(() => {
         processCurveCoordinates(selectedCurve)
-        // Also preload coordinates for better zoom experience
-        preloadCoordinates(selectedCurve, colorMode)
       }, 500) // 500ms debounce delay
     }
     
@@ -747,90 +776,7 @@ function CurveBuilder() {
         clearTimeout(processingTimeoutRef.current)
       }
     }
-  }, [cellSize, gridDimensions, selectedCurve])
-
-  // Set default colors for initial grid, preserving existing colors
-  const setDefaultGridColors = () => {
-    const newCellColors = new Map<string, string>()
-    const { width, height } = gridDimensions
-    
-    for (let x = 0; x < width; x++) {
-      for (let y = 0; y < height; y++) {
-        const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        // Preserve existing colors from cache, only set transparent for new cells
-        const existingColor = cellColors.get(coordKey)
-        const cachedData = coordinateCache.get(coordKey)
-        
-        if (existingColor && cachedData) {
-          // Keep existing color if we have cached data
-          newCellColors.set(coordKey, existingColor)
-        } else {
-          // Set transparent only for new cells
-          newCellColors.set(coordKey, 'transparent')
-        }
-      }
-    }
-    
-    setCellColors(newCellColors)
-  }
-
-  // Set default colors when grid dimensions change
-  useEffect(() => {
-    if (gridDimensions.width > 0 && gridDimensions.height > 0) {
-      setDefaultGridColors()
-    }
-  }, [gridDimensions])
-
-  // Render grid cells
-  const renderGridCells = () => {
-    const { width, height } = gridDimensions
-    console.log('Rendering grid cells:', { width, height, cellSize })
-    
-    if (width === 0 || height === 0) {
-      console.log('Grid dimensions are 0, returning empty grid')
-      return <div>Loading grid...</div>
-    }
-    
-    const cells = []
-    
-    for (let x = 0; x < width; x++) {
-      for (let y = 0; y < height; y++) {
-        const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        
-        // Get color from cellColors, or generate from cache if available
-        let color = cellColors.get(coordKey)
-        if (!color) {
-          const cachedData = coordinateCache.get(coordKey)
-          if (cachedData) {
-            // Generate color from cached data
-            const indexPosition = cachedData["index-position"]
-            const curveWidth = selectedCurve?.["curve-width"] || 1
-            color = indexToColorString(cachedData["index-value"], colorMode, indexPosition, curveWidth)
-          } else {
-            color = 'transparent'
-          }
-        }
-        
-        cells.push(
-          <div
-            key={coordKey}
-            className="grid-cell"
-            style={{
-              width: `${cellSize - 1}px`,
-              height: `${cellSize - 1}px`,
-              backgroundColor: color,
-              position: 'absolute',
-              left: `${x * cellSize}px`,
-              top: `${y * cellSize}px`
-            }}
-          />
-        )
-      }
-    }
-    
-    console.log(`Rendered ${cells.length} cells`)
-    return cells
-  }
+  }, [selectedCurve])
 
   return (
     <div className="app">
@@ -1251,34 +1197,12 @@ function CurveBuilder() {
         
                 {/* Canvas Area */}
         <div className="canvas-area">
-          <div 
-            ref={canvasRef}
-            className="grid-canvas"
-            style={{
-              width: '100%',
-              height: '100%',
-              position: 'relative',
-              backgroundColor: '#000',
-              overflow: 'hidden'
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: `${(gridDimensions.width || 20) * cellSize}px`,
-                height: `${(gridDimensions.height || 20) * cellSize}px`,
-                border: '1px solid red' // Debug border
-              }}
-            >
-              <div style={{ color: 'white', fontSize: '12px', position: 'absolute', top: '-20px', left: '0' }}>
-                Debug: {gridDimensions.width || 20}x{gridDimensions.height || 20} cells, {cellSize}px each
-              </div>
-              {renderGridCells()}
-            </div>
-          </div>
+          <SimpleThreeJSGrid 
+            cellColors={gridCellColors}
+            onCellCountChange={setGridDimensions}
+            onGridBoundsChange={setGridBounds}
+            selectedCurveId={selectedCurve?.id}
+          />
         </div>
       </div>
 

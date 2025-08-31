@@ -4,11 +4,13 @@ import Menu from '../pages/Menu'
 import CurveBuilder from '../pages/CurveBuilder'
 import WaveEditor from '../pages/WaveEditor'
 import TagManager from '../pages/TagManager'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Layout />,
+    errorElement: <ErrorBoundary />,
     children: [
       {
         index: true,
