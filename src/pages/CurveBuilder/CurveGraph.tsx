@@ -34,6 +34,8 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
   const maxHeight = 512
   const graphHeight = Math.min(255, maxHeight - (padding * 2))
   const graphWidth = Math.max(100, curveWidth) // Minimum width of 100px
+  const actualWidth = graphWidth + (padding * 2)
+  const actualHeight = graphHeight + (padding * 2)
 
   // Create background gradient using the active spectrum
   const getSpectrumGradient = () => {
@@ -69,11 +71,13 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
       backgroundColor: '#1a1a1a'
     }}>
       <svg 
-        width={actualWidth} 
-        height={actualHeight}
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${actualWidth} ${actualHeight}`}
         style={{
           border: '1px solid #333',
-          borderRadius: '4px'
+          borderRadius: '4px',
+          maxHeight: '512px'
         }}
       >
         {/* Background with spectrum gradient */}
