@@ -8,7 +8,7 @@ interface DynamicSVGGridProps {
   colorMode: 'value' | 'index'
   spectrum: number
   curveWidth: number
-  onCurveDataLoaded?: (cells: CurveDataCell[]) => void
+  onCurveDataLoaded?: (cells: Map<string, CurveDataCell>) => void
 }
 
 const CELL_SIZE = 50
@@ -60,10 +60,12 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const viewportHeight = container.clientHeight
     
     // Convert pixel coordinates to world coordinates
-    const visibleLeft = Math.floor((-panOffset.x) / CELL_SIZE)
-    const visibleRight = Math.floor((-panOffset.x + viewportWidth) / CELL_SIZE)
-    const visibleTop = Math.floor((-panOffset.y) / CELL_SIZE)
-    const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / CELL_SIZE)
+    // Account for zoom level in the calculation
+    const scaledCellSize = CELL_SIZE * zoomLevel
+    const visibleLeft = Math.floor((-panOffset.x) / scaledCellSize)
+    const visibleRight = Math.floor((-panOffset.x + viewportWidth) / scaledCellSize)
+    const visibleTop = Math.floor((-panOffset.y) / scaledCellSize)
+    const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / scaledCellSize)
     
     const bounds = {
       minX: Math.max(-128, visibleLeft),
@@ -72,9 +74,9 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       maxY: Math.min(127, visibleBottom)
     }
 
-    console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'container:', { width: viewportWidth, height: viewportHeight })
+    console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'zoomLevel:', zoomLevel, 'container:', { width: viewportWidth, height: viewportHeight })
     return bounds
-  }, [panOffset])
+  }, [panOffset, zoomLevel])
 
   // Initialize pan offset to center the grid and visible rectangles
   useEffect(() => {
@@ -167,11 +169,11 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       // Notify parent component
       if (onCurveDataLoaded) {
         // Convert VisibleRectangle to CurveDataCell for compatibility
-        const cells: CurveDataCell[] = []
+        const curveDataMap = new Map<string, CurveDataCell>()
         const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
         
         for (const [_, rect] of visibleRects) {
-          cells.push({
+          curveDataMap.set(rect.rectangleId, {
             rectangleId: rect.rectangleId,
             worldX: rect.worldX,
             worldY: rect.worldY,
@@ -181,7 +183,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           })
         }
         
-        onCurveDataLoaded(cells)
+        onCurveDataLoaded(curveDataMap)
       }
       
       console.log('✅ Curve data loaded for SVG grid:', visibleRectanglesService.getCount(), 'cells')
@@ -263,6 +265,10 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
     
     console.log('🎨 Generating visible squares:', visibleRects.size, 'rectangles')
+    
+    // Debug: show first few rectangle IDs
+    const rectIds = Array.from(visibleRects.keys()).slice(0, 5)
+    console.log('🔍 First few rectangle IDs:', rectIds)
     
     // Only create rectangles for coordinates that exist in the data
     // No fallback - if no data exists, no rectangles are rendered

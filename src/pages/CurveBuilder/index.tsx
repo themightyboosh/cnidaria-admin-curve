@@ -1076,7 +1076,7 @@ function CurveBuilder() {
             spectrum={255}
             curveWidth={selectedCurve?.["curve-width"] || 1}
             onCurveDataLoaded={(curveData) => {
-              console.log('✅ Curve data loaded for SVG grid:', curveData.length, 'cells')
+              console.log('✅ Curve data loaded for SVG grid:', curveData.size, 'cells')
             }}
           />
         </div>
