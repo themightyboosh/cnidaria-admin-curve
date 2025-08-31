@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import curveDataService, { type CurveDataCell } from '../../services/curveDataService'
+import visibleRectanglesService, { type VisibleRectangle, type ViewportBounds } from '../../services/visibleRectanglesService'
 
 interface DynamicSVGGridProps {
   width?: number
@@ -27,7 +28,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [isZooming, setIsZooming] = useState(false)
-  const [visibleRectangles, setVisibleRectangles] = useState<Set<string>>(new Set())
+  const [isInitialized, setIsInitialized] = useState(false)
   
   const CELL_SIZE = 50
   const GRID_SIZE = 128
@@ -46,24 +47,57 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     return { x: centerX, y: centerY }
   }, [])
   
-  // Initialize pan offset to center the grid
+  // Calculate current viewport bounds
+  const calculateCurrentViewportBounds = useCallback((): ViewportBounds => {
+    const container = document.querySelector('.canvas-area') as HTMLElement
+    if (!container) {
+      return { minX: -10, maxX: 10, minY: -10, maxY: 10 } // Default bounds
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const viewportWidth = containerRect.width
+    const viewportHeight = containerRect.height
+
+    // Calculate the visible area in world coordinates
+    const visibleLeft = Math.floor(-panOffset.x / CELL_SIZE)
+    const visibleTop = Math.floor(-panOffset.y / CELL_SIZE)
+    const visibleRight = Math.ceil((-panOffset.x + viewportWidth) / CELL_SIZE)
+    const visibleBottom = Math.ceil((-panOffset.y + viewportHeight) / CELL_SIZE)
+
+    return {
+      minX: visibleLeft,
+      maxX: visibleRight,
+      minY: visibleTop,
+      maxY: visibleBottom
+    }
+  }, [panOffset])
+
+  // Initialize pan offset to center the grid and visible rectangles
   useEffect(() => {
     setPanOffset(centerOffset)
-  }, [centerOffset])
+    
+    // Initialize visible rectangles service with current viewport
+    if (!isInitialized) {
+      const viewportBounds = calculateCurrentViewportBounds()
+      visibleRectanglesService.initializeVisibleRectangles(viewportBounds)
+      setIsInitialized(true)
+      console.log('🚀 Initialized visible rectangles service')
+    }
+  }, [centerOffset, isInitialized, calculateCurrentViewportBounds])
 
   // Load initial curve data when curveId is provided
   useEffect(() => {
-    if (curveId) {
-      loadInitialCurveData()
+    if (curveId && isInitialized) {
+      loadCurveDataForVisibleRectangles()
     }
-  }, [curveId])
+  }, [curveId, isInitialized])
 
   // Update colors when color mode or spectrum changes
   useEffect(() => {
-    if (curveId && curveDataService.getAllCurveData().size > 0) {
-      updateColorsFromCurveData()
+    if (curveId && isInitialized) {
+      updateColorsFromVisibleRectangles()
     }
-  }, [colorMode, spectrum, curveWidth])
+  }, [colorMode, spectrum, curveWidth, curveId, isInitialized])
 
   // Handle keyboard events for Option key and wheel zoom
   useEffect(() => {
@@ -106,6 +140,50 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       document.removeEventListener('wheel', handleWheel)
     }
   }, [isOptionPressed])
+
+  // Load curve data for visible rectangles
+  const loadCurveDataForVisibleRectangles = async () => {
+    if (!curveId) return
+    
+    setIsLoadingCurveData(true)
+    try {
+      await visibleRectanglesService.loadCurveData(curveId)
+      updateColorsFromVisibleRectangles()
+      
+      // Notify parent component
+      if (onCurveDataLoaded) {
+        // Convert VisibleRectangle to CurveDataCell for compatibility
+        const curveDataMap = new Map<string, CurveDataCell>()
+        const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
+        
+        for (const [id, rect] of visibleRects) {
+          if (rect.curveValue !== undefined) {
+            curveDataMap.set(id, {
+              rectangleId: rect.rectangleId,
+              curveValue: rect.curveValue,
+              indexPosition: rect.indexPosition || 0,
+              worldX: rect.worldX,
+              worldY: rect.worldY,
+              isNew: rect.isNew
+            })
+          }
+        }
+        
+        onCurveDataLoaded(curveDataMap)
+      }
+      
+      console.log('✅ Curve data loaded for visible rectangles')
+    } catch (error) {
+      console.error('❌ Failed to load curve data for visible rectangles:', error)
+    } finally {
+      setIsLoadingCurveData(false)
+    }
+  }
+
+  // Update colors from visible rectangles service
+  const updateColorsFromVisibleRectangles = () => {
+    visibleRectanglesService.updateColors(colorMode, spectrum, curveWidth)
+  }
 
   // Load initial curve data for the entire grid
   const loadInitialCurveData = async () => {
@@ -195,58 +273,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     
     return data
   })
-  
-  // Calculate which rectangles are visible in the viewport
-  const calculateVisibleRectangles = useCallback(() => {
-    const container = document.querySelector('.canvas-area') as HTMLElement
-    if (!container) return
-
-    const containerRect = container.getBoundingClientRect()
-    const viewportWidth = containerRect.width
-    const viewportHeight = containerRect.height
-
-    // Calculate the visible area in SVG coordinates
-    const visibleLeft = -panOffset.x / zoomLevel
-    const visibleTop = -panOffset.y / zoomLevel
-    const visibleRight = visibleLeft + viewportWidth / zoomLevel
-    const visibleBottom = visibleTop + viewportHeight / zoomLevel
-
-    const visibleSet = new Set<string>()
-
-    // Check each rectangle for visibility
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        if (!gridData[y] || !gridData[y][x]) continue
-
-        const { worldX, worldY } = gridData[y][x]
-        const rectX = x * CELL_SIZE
-        const rectY = y * CELL_SIZE
-        const rectRight = rectX + CELL_SIZE
-        const rectBottom = rectY + CELL_SIZE
-
-        // Check if rectangle intersects with visible area
-        const isVisible = !(
-          rectRight < visibleLeft ||
-          rectX > visibleRight ||
-          rectBottom < visibleTop ||
-          rectY > visibleBottom
-        )
-
-        if (isVisible) {
-          const rectangleId = `square-${worldX}-${worldY}`
-          visibleSet.add(rectangleId)
-        }
-      }
-    }
-
-    setVisibleRectangles(visibleSet)
-    console.log(`👁️ Visible rectangles: ${visibleSet.size} out of ${GRID_SIZE * GRID_SIZE}`)
-  }, [panOffset, zoomLevel, gridData])
-
-  // Update visible rectangles when pan or zoom changes
-  useEffect(() => {
-    calculateVisibleRectangles()
-  }, [calculateVisibleRectangles])
   
   // Calculate how many rows/columns need to be added/removed after drag
   const calculateGridChanges = (startOffset: { x: number; y: number }, endOffset: { x: number; y: number }) => {
@@ -426,21 +452,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     setLastMousePos({ x: event.clientX, y: event.clientY })
   }
   
-  const handleMouseUp = () => {
+  const handleMouseUp = async () => {
     if (isDragging && !isZooming) {
-      // Calculate changes after drag ends
-      const changes = calculateGridChanges(dragStartOffset, panOffset)
+      // Update viewport bounds in visible rectangles service
+      const newViewportBounds = calculateCurrentViewportBounds()
+      await visibleRectanglesService.updateViewportBounds(newViewportBounds, curveId)
       
-      // Check horizontal and vertical movements independently
-      const minMovement = CELL_SIZE / 2 // Half a cell size
-      const hasHorizontalMovement = Math.abs(panOffset.x - dragStartOffset.x) > minMovement
-      const hasVerticalMovement = Math.abs(panOffset.y - dragStartOffset.y) > minMovement
-      
-      // Apply changes if there's significant movement in either direction
-      if ((hasHorizontalMovement && (changes.addColumns > 0 || changes.removeColumns > 0)) ||
-          (hasVerticalMovement && (changes.addRows > 0 || changes.removeRows > 0))) {
-        applyGridChanges(changes)
-      }
+      // Update colors for any new rectangles
+      updateColorsFromVisibleRectangles()
     }
     
     setIsDragging(false)
@@ -455,14 +474,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const handleCellMouseEnter = (worldX: number, worldY: number) => {
     if (!isDragging && !isZooming) {
       const rectangleId = `square-${worldX}-${worldY}`
-      const curveData = curveDataService.getCellData(rectangleId)
+      const rectData = visibleRectanglesService.getRectangleData(rectangleId)
       
       setHoveredCell({
         worldX,
         worldY,
-        curveValue: curveData?.curveValue,
-        indexPosition: curveData?.indexPosition,
-        isNew: curveData?.isNew
+        curveValue: rectData?.curveValue,
+        indexPosition: rectData?.indexPosition,
+        isNew: rectData?.isNew
       })
     }
   }
@@ -473,60 +492,46 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     }
   }
   
-  // Generate visible squares from grid data
+  // Generate visible squares from visible rectangles service
   const visibleSquares = useMemo(() => {
     const squares: JSX.Element[] = []
+    const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
     
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        // Safety check to prevent undefined errors
-        if (!gridData[y] || !gridData[y][x]) {
-          console.warn(`Missing grid data at position (${x}, ${y})`)
-          continue
-        }
-        
-        const { fillR, fillG, fillB, worldX, worldY, isNew } = gridData[y][x]
-        
-        // Additional safety check
-        if (typeof worldX === 'undefined' || typeof worldY === 'undefined') {
-          console.warn(`Invalid world coordinates at position (${x}, ${y})`)
-          continue
-        }
-        
-        const pixelX = x * CELL_SIZE
-        const pixelY = y * CELL_SIZE
-        
-        const squareId = `square-${worldX}-${worldY}`
-        const uniqueKey = `grid-${x}-${y}-world-${worldX}-${worldY}`
-        const isCenter = worldX === 0 && worldY === 0
-        
-        // Use curve data colors if available, otherwise use random colors
-        const fillColor = `rgb(${fillR},${fillG},${fillB})`
-        const strokeColor = isCenter ? '#ff0000' : '#00ffff'
-        
-        squares.push(
-          <rect
-            key={uniqueKey}
-            id={squareId}
-            data-coordinates={`${worldX},${worldY}`}
-            data-is-new={isNew ? 'true' : 'false'}
-            x={pixelX}
-            y={pixelY}
-            width={CELL_SIZE}
-            height={CELL_SIZE}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={isCenter ? 2 : 1}
-            strokeDasharray={isCenter ? '5,5' : 'none'}
-            onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
-            onMouseLeave={handleCellMouseLeave}
-          />
-        )
-      }
+    for (const [rectangleId, rect] of visibleRects) {
+      const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
+      
+      // Calculate pixel position based on world coordinates
+      const pixelX = (worldX + 64) * CELL_SIZE // Convert from world coords to pixel coords
+      const pixelY = (worldY + 64) * CELL_SIZE
+      
+      const uniqueKey = `visible-${worldX}-${worldY}`
+      const isCenter = worldX === 0 && worldY === 0
+      
+      const fillColor = `rgb(${fillR},${fillG},${fillB})`
+      const strokeColor = isCenter ? '#ff0000' : '#00ffff'
+      
+      squares.push(
+        <rect
+          key={uniqueKey}
+          id={rectangleId}
+          data-coordinates={`${worldX},${worldY}`}
+          data-is-new={isNew ? 'true' : 'false'}
+          x={pixelX}
+          y={pixelY}
+          width={CELL_SIZE}
+          height={CELL_SIZE}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={isCenter ? 2 : 1}
+          strokeDasharray={isCenter ? '5,5' : 'none'}
+          onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
+          onMouseLeave={handleCellMouseLeave}
+        />
+      )
     }
     
     return squares
-  }, [gridData, isDragging])
+  }, [isDragging, isInitialized])
   
   return (
     <div 
@@ -592,8 +597,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         Pan: ({panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)})<br/>
         Zoom: {(zoomLevel * 100).toFixed(0)}%<br/>
         Grid Center: ({Math.floor(-panOffset.x / CELL_SIZE)}, {Math.floor(-panOffset.y / CELL_SIZE)})<br/>
-        Squares: {visibleSquares.length}<br/>
-        Visible: {visibleRectangles.size}<br/>
+        Visible Rectangles: {visibleRectanglesService.getCount()}<br/>
+        Rendered: {visibleSquares.length}<br/>
         Status: {isDragging ? 'Dragging' : isZooming ? 'Zooming' : 'Ready'}<br/>
         {curveId && `Curve: ${curveId}`}<br/>
         {isLoadingCurveData && 'Loading curve data...'}<br/>
