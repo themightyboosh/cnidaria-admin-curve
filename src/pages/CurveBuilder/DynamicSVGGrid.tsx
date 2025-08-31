@@ -29,8 +29,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [isZooming, setIsZooming] = useState(false)
   
   const CELL_SIZE = 50
-  const GRID_SIZE = 512
-  const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 25600
+  const GRID_SIZE = 128
+  const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 6400
   
   // Calculate center offset to keep SVG centered in canvas
   const centerOffset = useMemo(() => {
@@ -115,10 +115,10 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       console.log('🔄 Loading initial curve data for grid')
       
       // Calculate grid bounds based on current grid data
-      const minX = -256
-      const maxX = 255
-      const minY = -256
-      const maxY = 255
+      const minX = -64
+      const maxX = 63
+      const minY = -64
+      const maxY = 63
 
       const data = await curveDataService.fetchCurveData(curveId, minX, minY, maxX, maxY)
       const curveName = Object.keys(data)[0]
@@ -175,12 +175,12 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [gridData, setGridData] = useState<Array<Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }>>>(() => {
     const data: Array<Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }>> = []
     
-    // Initialize with center area (-256 to +255)
+    // Initialize with center area (-64 to +63)
     for (let y = 0; y < GRID_SIZE; y++) {
       const row: Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }> = []
       for (let x = 0; x < GRID_SIZE; x++) {
-        const worldX = x - 256 // Convert to -256 to +255 range
-        const worldY = y - 256 // Convert to -256 to +255 range
+        const worldX = x - 64 // Convert to -64 to +63 range
+        const worldY = y - 64 // Convert to -64 to +63 range
         
         // Random RGB values for initial grid
         const fillR = Math.floor(Math.random() * 256)
@@ -514,8 +514,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         <rect
           id="center-square"
           data-coordinates="0,0"
-          x={256 * CELL_SIZE}
-          y={256 * CELL_SIZE}
+          x={64 * CELL_SIZE}
+          y={64 * CELL_SIZE}
           width={CELL_SIZE}
           height={CELL_SIZE}
           fill="none"
