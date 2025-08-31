@@ -21,6 +21,7 @@ class VisibleRectanglesService {
   private visibleRectangles: Map<string, VisibleRectangle> = new Map()
   private bufferSize: number = 5
   private cellSize: number = 50
+  private apiUrl = 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev'
 
   // Initialize visible rectangles at app launch
   initializeVisibleRectangles(viewportBounds: ViewportBounds): void {
@@ -69,7 +70,7 @@ class VisibleRectanglesService {
     
     try {
       // Call API to get curve data for the entire visible area
-      const response = await fetch(`/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
+      const response = await fetch(`${this.apiUrl}/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
       const data = await response.json()
       
       // Update visible rectangles with curve data
@@ -243,7 +244,7 @@ class VisibleRectanglesService {
   // Fetch curve data for specific bounds
   private async fetchCurveDataForBounds(bounds: ViewportBounds, curveId: string, targetRectangles: VisibleRectangle[]): Promise<void> {
     try {
-      const response = await fetch(`/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
+      const response = await fetch(`${this.apiUrl}/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
       const data = await response.json()
       
       const curveName = Object.keys(data)[0]

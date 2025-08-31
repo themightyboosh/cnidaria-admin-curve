@@ -433,7 +433,7 @@ function CurveBuilder() {
       tags: false,
       settings: false
     })
-    processCurveCoordinates(curve)
+    // processCurveCoordinates(curve) // Disabled - using new visible rectangles service
   }
 
   // Handle field changes
@@ -607,9 +607,9 @@ function CurveBuilder() {
           // Clear cache and redraw grid since settings changed
           setCoordinateCache(new Map())
           setCellColors(new Map())
-          if (editingCurve) {
-            processCurveCoordinates(editingCurve)
-          }
+          // if (editingCurve) {
+          //   processCurveCoordinates(editingCurve)
+          // } // Disabled - using new visible rectangles service
           
           console.log('Curve updated successfully - dropdown refreshed')
         } else {
@@ -637,9 +637,9 @@ function CurveBuilder() {
       }
       
       // Set new timeout for processing coordinates
-      processingTimeoutRef.current = setTimeout(() => {
-        processCurveCoordinates(selectedCurve)
-      }, 500) // 500ms debounce delay
+      // processingTimeoutRef.current = setTimeout(() => {
+      //   processCurveCoordinates(selectedCurve)
+      // }, 500) // 500ms debounce delay - Disabled - using new visible rectangles service
     }
     
     return () => {
@@ -742,9 +742,10 @@ function CurveBuilder() {
                               // Update colors from cache if available, otherwise process new coordinates
                               if (coordinateCache.size > 0) {
                                 updateColorsFromCache('value')
-                              } else if (selectedCurve) {
-                                processCurveCoordinates(selectedCurve, 'value')
                               }
+                              // else if (selectedCurve) {
+                              //   processCurveCoordinates(selectedCurve, 'value')
+                              // } // Disabled - using new visible rectangles service
                             }}
                           />
                           Value
@@ -762,9 +763,10 @@ function CurveBuilder() {
                               // Update colors from cache if available, otherwise process new coordinates
                               if (coordinateCache.size > 0) {
                                 updateColorsFromCache('index')
-                              } else if (selectedCurve) {
-                                processCurveCoordinates(selectedCurve, 'index')
                               }
+                              // else if (selectedCurve) {
+                              //   processCurveCoordinates(selectedCurve, 'index')
+                              // } // Disabled - using new visible rectangles service
                             }}
                           />
                           <span style={{ whiteSpace: 'nowrap' }}>

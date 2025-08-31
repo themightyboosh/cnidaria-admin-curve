@@ -79,6 +79,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     // Initialize visible rectangles service with current viewport
     if (!isInitialized) {
       const viewportBounds = calculateCurrentViewportBounds()
+      console.log('🔧 Initializing with viewport bounds:', viewportBounds)
       visibleRectanglesService.initializeVisibleRectangles(viewportBounds)
       setIsInitialized(true)
       console.log('🚀 Initialized visible rectangles service')
