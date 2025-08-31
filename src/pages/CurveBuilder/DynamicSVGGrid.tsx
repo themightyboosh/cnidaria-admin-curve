@@ -13,7 +13,7 @@ interface DynamicSVGGridProps {
 
 const CELL_SIZE = 50
 const GRID_SIZE = 128
-const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 6400
+const TOTAL_SIZE = 1280 // Fixed size for better performance
 
 const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({ 
   curveId, 
@@ -67,10 +67,10 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / scaledCellSize)
     
     const bounds = {
-      minX: Math.max(-128, visibleLeft),
-      maxX: Math.min(127, visibleRight),
-      minY: Math.max(-128, visibleTop),
-      maxY: Math.min(127, visibleBottom)
+      minX: Math.max(-12, visibleLeft),
+      maxX: Math.min(11, visibleRight),
+      minY: Math.max(-12, visibleTop),
+      maxY: Math.min(11, visibleBottom)
     }
 
     console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'zoomLevel:', zoomLevel, 'container:', { width: viewportWidth, height: viewportHeight })
@@ -268,10 +268,10 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
       // Calculate pixel position based on world coordinates
-      // The SVG is fixed at 6400x6400, rectangles are positioned absolutely
-      // Center is at (128, 128) in pixel coordinates
-      const pixelX = (worldX + 128) * CELL_SIZE
-      const pixelY = (worldY + 128) * CELL_SIZE
+      // The SVG is fixed at 1280x1280, rectangles are positioned absolutely
+      // Center is at (640, 640) in pixel coordinates (1280/2)
+      const pixelX = (worldX + 12.8) * CELL_SIZE // 640/50 = 12.8
+      const pixelY = (worldY + 12.8) * CELL_SIZE
       
       // Debug coordinate conversion
       if (squares.length < 3) {
@@ -281,7 +281,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           pixelX,
           pixelY,
           cellSize: CELL_SIZE,
-          offset: 128
+          offset: 12.8
         })
       }
       
@@ -360,8 +360,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         
         {/* Test rectangle to verify SVG is working */}
         <rect 
-          x="6400" 
-          y="6400" 
+          x="640" 
+          y="640" 
           width="200" 
           height="200" 
           fill="red" 
@@ -373,8 +373,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         <rect
           id="center-square"
           data-coordinates="0,0"
-          x={128 * CELL_SIZE}
-          y={128 * CELL_SIZE}
+          x={12.8 * CELL_SIZE}
+          y={12.8 * CELL_SIZE}
           width={CELL_SIZE}
           height={CELL_SIZE}
           fill="none"
