@@ -5,9 +5,7 @@ import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '.
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
-import ThreeJSGrid from './ThreeJSGrid'
-import SimpleThreeJSGrid from './SimpleThreeJSGrid'
-import DynamicSVGGrid from './DynamicSVGGrid'
+import CurveGraph from './CurveGraph'
 import curveTypesService from '../../services/curveTypes'
 
 import './CurveBuilder.css'
@@ -72,9 +70,6 @@ function CurveBuilder() {
   const [assignedTags, setAssignedTags] = useState<Tag[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
-  const [show3DPreview, setShow3DPreview] = useState(false)
-  const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
-  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
   const [curveTypesList, setCurveTypesList] = useState<Array<{id: string, name: string, cpuLoad: string, displayName: string}>>([])
   const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
 
@@ -417,6 +412,32 @@ function CurveBuilder() {
 
 
 
+  // Create a new curve from scratch
+  const createNewCurve = () => {
+    const newCurve: Curve = {
+      id: `curve-${Date.now()}`,
+      "curve-name": "New Curve",
+      "curve-description": "A new curve created from scratch",
+      "curve-tags": [],
+      "curve-type": "linear",
+      "curve-width": 256,
+      "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256))
+    }
+    
+    setSelectedCurve(newCurve)
+    setEditingCurve({ ...newCurve })
+    setHasUnsavedChanges(true)
+    setError(null)
+    
+    // Close all sections except selection when creating a new curve
+    setExpandedSections({
+      selection: true,
+      view: false,
+      tags: false,
+      settings: false
+    })
+  }
+
   // Handle curve selection
   const handleCurveSelect = (curve: Curve) => {
     setSelectedCurve(curve)
@@ -686,6 +707,28 @@ function CurveBuilder() {
                     </select>
                   </div>
                 )}
+                
+                {/* Create New Curve Button */}
+                <div className="form-group">
+                  <button
+                    type="button"
+                    onClick={createNewCurve}
+                    style={{
+                      backgroundColor: '#28a745',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      marginTop: '10px'
+                    }}
+                    title="Create a new curve from scratch"
+                  >
+                    Create New Curve
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -793,29 +836,7 @@ function CurveBuilder() {
                       )}
                     </div>
                     
-                    {/* 3D Preview Button - Only show in 2D mode */}
-                    {viewMode === '2D' && (
-                      <div className="form-group">
-                        <button
-                          type="button"
-                          onClick={() => setShow3DPreview(true)}
-                          style={{
-                            backgroundColor: '#4a90e2',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '10px 16px',
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            fontWeight: '500',
-                            marginTop: '10px'
-                          }}
-                          title="Show 3D preview of current 2D grid"
-                        >
-                          3D Preview
-                        </button>
-                      </div>
-                    )}
+
                     
                   </div>
                 )}
@@ -1048,9 +1069,19 @@ function CurveBuilder() {
               {hasUnsavedChanges && (
                 <div className="save-section">
                   <button 
-                    className="save-btn" 
                     onClick={saveCurveChanges}
                     disabled={isSaving}
+                    style={{
+                      backgroundColor: '#007bff',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      width: '100%'
+                    }}
                   >
                     {isSaving ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -1070,54 +1101,16 @@ function CurveBuilder() {
         
                 {/* Canvas Area */}
         <div className="canvas-area">
-          <DynamicSVGGrid 
-            curveId={selectedCurve?.id}
-            colorMode={colorMode}
+          <CurveGraph 
+            curveData={selectedCurve?.["curve-data"] || []}
+            curveWidth={selectedCurve?.["curve-width"] || 256}
             spectrum={255}
-            curveWidth={selectedCurve?.["curve-width"] || 1}
-            onCurveDataLoaded={(curveData) => {
-              console.log('✅ Curve data loaded for SVG grid:', curveData.size, 'cells')
-            }}
+            colorMode={colorMode}
           />
         </div>
       </div>
 
-      {/* 3D Preview Modal */}
-      {show3DPreview && (
-        <div className="modal-overlay" onClick={() => setShow3DPreview(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ 
-            width: 'min(95vw, 95vh)', 
-            height: 'min(95vw, 95vh)',
-            maxWidth: '1200px',
-            maxHeight: '1200px'
-          }}>
-            <div className="modal-header">
-              <h2>3D Preview</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#ccc' }}>
-                  <span>Camera: ({cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)}, {cameraPosition.z.toFixed(1)})</span>
-                </div>
-                <button 
-                  className="modal-close-btn"
-                  onClick={() => setShow3DPreview(false)}
-                  title="Close"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="modal-body" style={{ height: 'calc(100% - 60px)', padding: '0' }}>
-              <ThreeJSGrid 
-                key={`3d-preview-${selectedCurve?.id || 'no-curve'}-spectrum-${spectrumKey}`}
-                selectedCurve={selectedCurve}
-                cellSize={cellSize}
-                colorMode={colorMode}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tag Manager Modal */}
       {showTagManager && (
