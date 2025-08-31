@@ -236,6 +236,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       // Update viewport bounds in visible rectangles service
       const newViewportBounds = calculateCurrentViewportBounds()
       console.log('🔄 Updating viewport bounds after drag:', newViewportBounds)
+      console.log('🔄 Current panOffset:', panOffset)
+      
       await visibleRectanglesService.updateViewportBounds(newViewportBounds, curveId)
       
       // Update colors for any new rectangles
@@ -338,7 +340,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         transition: isDragging ? 'none' : 'transform 0.1s ease-out',
         transformOrigin: 'center',
         cursor: isDragging ? 'grabbing' : 'grab',
-        userSelect: 'none'
+        userSelect: 'none',
+        backgroundColor: isDragging ? 'rgba(255,0,0,0.1)' : 'transparent'
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
