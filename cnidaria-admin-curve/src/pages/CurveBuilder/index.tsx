@@ -21,13 +21,11 @@ interface Curve {
   "curve-name": string
   "curve-description": string
   "curve-tags"?: string[]  // Store document IDs
-  "curve-type": string
+  "coordinate-noise": string
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
-  "coordinate-noise-strength"?: number
-  "coordinate-noise-scale"?: number
-  "coordinate-noise-seed"?: number
+  "random-seed"?: number
 }
 
 interface ProcessCoordinateResponse {
@@ -762,15 +760,54 @@ function CurveBuilder() {
                     </div>
 
                     <div className="form-group">
-                      <label>Curve Type:</label>
+                      <label>Noise Types:</label>
                       <select
-                        value={editingCurve["curve-type"] || "Radial"}
-                        onChange={(e) => handleFieldChange("curve-type", e.target.value)}
-                        title="Select the coordinate system for this curve"
+                        value={editingCurve["coordinate-noise"] || "radial-lm"}
+                        onChange={(e) => handleFieldChange("coordinate-noise", e.target.value)}
+                        title="Type of coordinate noise pattern to use"
                       >
-                        <option value="Radial">Radial</option>
-                        <option value="Cartesian X">Cartesian X</option>
-                        <option value="Cartesian Y">Cartesian Y</option>
+                        <option value="radial-lm">Radial (Low-Medium)</option>
+                        <option value="radial-hm">Radial (High-Medium)</option>
+                        <option value="radial-hh">Radial (High-High)</option>
+                        <option value="linear-lm">Linear (Low-Medium)</option>
+                        <option value="linear-hm">Linear (High-Medium)</option>
+                        <option value="linear-hh">Linear (High-High)</option>
+                        <option value="spiral-lm">Spiral (Low-Medium)</option>
+                        <option value="spiral-hm">Spiral (High-Medium)</option>
+                        <option value="spiral-hh">Spiral (High-High)</option>
+                        <option value="wave-lm">Wave (Low-Medium)</option>
+                        <option value="wave-hm">Wave (High-Medium)</option>
+                        <option value="wave-hh">Wave (High-High)</option>
+                        <option value="fractal-lm">Fractal (Low-Medium)</option>
+                        <option value="fractal-hm">Fractal (High-Medium)</option>
+                        <option value="fractal-hh">Fractal (High-High)</option>
+                        <option value="chaos-lm">Chaos (Low-Medium)</option>
+                        <option value="chaos-hm">Chaos (High-Medium)</option>
+                        <option value="chaos-hh">Chaos (High-High)</option>
+                        <option value="vortex-lm">Vortex (Low-Medium)</option>
+                        <option value="vortex-hm">Vortex (High-Medium)</option>
+                        <option value="vortex-hh">Vortex (High-High)</option>
+                        <option value="turbulence-lm">Turbulence (Low-Medium)</option>
+                        <option value="turbulence-hm">Turbulence (High-Medium)</option>
+                        <option value="turbulence-hh">Turbulence (High-High)</option>
+                        <option value="dissonance-lm">Dissonance (Low-Medium)</option>
+                        <option value="dissonance-hm">Dissonance (High-Medium)</option>
+                        <option value="dissonance-hh">Dissonance (High-High)</option>
+                        <option value="harmony-lm">Harmony (Low-Medium)</option>
+                        <option value="harmony-hm">Harmony (High-Medium)</option>
+                        <option value="harmony-hh">Harmony (High-High)</option>
+                        <option value="resonance-lm">Resonance (Low-Medium)</option>
+                        <option value="resonance-hm">Resonance (High-Medium)</option>
+                        <option value="resonance-hh">Resonance (High-High)</option>
+                        <option value="oscillation-lm">Oscillation (Low-Medium)</option>
+                        <option value="oscillation-hm">Oscillation (High-Medium)</option>
+                        <option value="oscillation-hh">Oscillation (High-High)</option>
+                        <option value="pulsation-lm">Pulsation (Low-Medium)</option>
+                        <option value="pulsation-hm">Pulsation (High-Medium)</option>
+                        <option value="pulsation-hh">Pulsation (High-High)</option>
+                        <option value="undulation-lm">Undulation (Low-Medium)</option>
+                        <option value="undulation-hm">Undulation (High-Medium)</option>
+                        <option value="undulation-hh">Undulation (High-High)</option>
                       </select>
                     </div>
                     
@@ -792,60 +829,20 @@ function CurveBuilder() {
                       />
                     </div>
 
-                    {/* Noise - Universal for all curve types */}
+
                     <div className="form-group">
-                      <label>Noise Strength:</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        min="0"
-                        max="3"
-                        value={Number(editingCurve["coordinate-noise-strength"]) || 0}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          handleFieldChange("coordinate-noise-strength", isNaN(val) ? 0 : val);
-                        }}
-                        title="How much to distort the input coordinates before curve processing (0 = no noise)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Noise Scale:</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        min="0"
-                        max="1"
-                        value={Number(editingCurve["coordinate-noise-scale"]) || 0}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          handleFieldChange("coordinate-noise-scale", isNaN(val) ? 0 : val);
-                        }}
-                        title="Scale of the noise pattern (0 = no noise)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Noise Seed:</label>
+                      <label>Random Seed:</label>
                       <input
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        value={editingCurve["coordinate-noise-seed"]?.toString() || "0"}
-                        onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
-                        title="Random seed for consistent noise patterns (0 = no seed)"
+                        value={editingCurve["random-seed"]?.toString() || "0"}
+                        onChange={(e) => handleFieldChange("random-seed", parseInt(e.target.value) || 0)}
+                        title="Random seed for consistent patterns (0 = no seed)"
                       />
                     </div>
 
-                    {/* Debug Values - Simple */}
-                    <div className="form-group" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '6px' }}>
-                      <label style={{ color: '#ff6b6b', fontWeight: 'bold' }}>🔍 Debug: Current Values</label>
-                      <div style={{ fontSize: '12px', color: '#ccc', marginTop: '8px' }}>
-                        <div>Noise Strength: <code>{editingCurve["coordinate-noise-strength"]}</code></div>
-                        <div>Noise Scale: <code>{editingCurve["coordinate-noise-scale"]}</code></div>
-                        <div>Index Scaling: <code>{editingCurve["curve-index-scaling"]}</code></div>
-                      </div>
-                    </div>
+
                   </div>
                 )}
               </div>
