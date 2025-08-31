@@ -543,6 +543,14 @@ function CurveBuilder() {
         }
       })
       setHasUnsavedChanges(true)
+      
+      // Auto-save when curve type changes to update the math immediately
+      if (field === "curve-type") {
+        // Use a small delay to ensure the state is updated first
+        setTimeout(() => {
+          saveCurveChanges()
+        }, 100)
+      }
     } catch (error) {
       console.error('Error in handleFieldChange:', error, { field, value });
     }
@@ -1106,10 +1114,12 @@ function CurveBuilder() {
                         value={editingCurve["curve-type"] || "radial-lm"}
                         onChange={(e) => handleFieldChange("curve-type", e.target.value)}
                         title="Select the coordinate system for this curve"
-                        disabled={isLoadingCurveTypes}
+                        disabled={isLoadingCurveTypes || isSaving}
                       >
                         {isLoadingCurveTypes ? (
                           <option value="">Loading curve types...</option>
+                        ) : isSaving ? (
+                          <option value="">Saving changes...</option>
                         ) : (
                           curveTypesList.map((curveType) => (
                             <option key={curveType.id} value={curveType.id}>
@@ -1118,6 +1128,11 @@ function CurveBuilder() {
                           ))
                         )}
                       </select>
+                      {isSaving && (
+                        <div style={{ fontSize: '12px', color: '#ff6b6b', marginTop: '4px' }}>
+                          ⚡ Auto-saving curve type changes...
+                        </div>
+                      )}
                     </div>
                     
                     {/* Universal Index Scaling */}
