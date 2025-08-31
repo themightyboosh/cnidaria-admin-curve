@@ -6,7 +6,7 @@ import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import ThreeJSGrid from './ThreeJSGrid'
-import curveTypesService, { CurveTypeInfo } from '../../services/curveTypes'
+import curveTypesService from '../../services/curveTypes'
 
 import './CurveBuilder.css'
 
@@ -73,7 +73,6 @@ function CurveBuilder() {
   const [show3DPreview, setShow3DPreview] = useState(false)
   const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
-  const [curveTypes, setCurveTypes] = useState<CurveTypeInfo[]>([])
   const [curveTypesList, setCurveTypesList] = useState<Array<{id: string, name: string, cpuLoad: string, displayName: string}>>([])
   const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
 
