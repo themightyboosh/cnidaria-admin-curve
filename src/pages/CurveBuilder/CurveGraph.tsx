@@ -30,11 +30,10 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
     )
   }
 
-  const graphWidth = curveWidth
-  const graphHeight = 255
   const padding = 20
-  const actualWidth = graphWidth + (padding * 2)
-  const actualHeight = graphHeight + (padding * 2)
+  const maxHeight = 512
+  const graphHeight = Math.min(255, maxHeight - (padding * 2))
+  const graphWidth = Math.max(100, curveWidth) // Minimum width of 100px
 
   // Create background gradient using the active spectrum
   const getSpectrumGradient = () => {
