@@ -135,9 +135,13 @@ class VisibleRectanglesService {
       newViewportBounds.maxY < currentBounds.maxY - this.bufferSize * 2
 
     if (needsExpansion) {
+      console.log('📈 Expanding viewport - adding new rectangles')
       await this.expandViewport(newViewportBounds, curveId)
     } else if (needsContraction) {
+      console.log('📉 Contracting viewport - removing excess rectangles')
       this.contractViewport(newViewportBounds)
+    } else {
+      console.log('✅ Viewport bounds are optimal - no changes needed')
     }
   }
 

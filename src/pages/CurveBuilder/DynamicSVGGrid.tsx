@@ -474,6 +474,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     if (isDragging && !isZooming) {
       // Update viewport bounds in visible rectangles service
       const newViewportBounds = calculateCurrentViewportBounds()
+      console.log('🔄 Updating viewport bounds after drag:', newViewportBounds)
       await visibleRectanglesService.updateViewportBounds(newViewportBounds, curveId)
       
       // Update colors for any new rectangles
