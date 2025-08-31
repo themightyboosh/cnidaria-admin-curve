@@ -89,8 +89,6 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
         viewBox={`0 0 ${actualWidth} ${actualHeight}`}
         preserveAspectRatio="xMidYMid meet"
         style={{
-          border: '1px solid #00ffff',
-          borderRadius: '4px',
           maxHeight: '512px',
           maxWidth: '100%'
         }}
