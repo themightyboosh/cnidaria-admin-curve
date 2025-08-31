@@ -24,6 +24,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 })
   const [hoveredCell, setHoveredCell] = useState<{ worldX: number; worldY: number; curveValue?: number; indexPosition?: number; isNew?: boolean } | null>(null)
   const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [isOptionPressed, setIsOptionPressed] = useState(false)
   
   const CELL_SIZE = 50
   const GRID_SIZE = 512
@@ -60,6 +62,42 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       updateColorsFromCurveData()
     }
   }, [colorMode, spectrum, curveWidth])
+
+  // Handle keyboard events for Option key and wheel zoom
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt' || e.key === 'Option') {
+        setIsOptionPressed(true)
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt' || e.key === 'Option') {
+        setIsOptionPressed(false)
+      }
+    }
+
+    const handleWheel = (e: WheelEvent) => {
+      if (isOptionPressed) {
+        e.preventDefault()
+        const delta = e.deltaY > 0 ? -0.1 : 0.1
+        setZoomLevel(prevZoom => {
+          const newZoom = prevZoom + delta
+          return Math.max(0.1, Math.min(5, newZoom))
+        })
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keyup', handleKeyUp)
+    document.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keyup', handleKeyUp)
+      document.removeEventListener('wheel', handleWheel)
+    }
+  }, [isOptionPressed])
 
   // Load initial curve data for the entire grid
   const loadInitialCurveData = async () => {
@@ -447,8 +485,9 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         width={TOTAL_SIZE} 
         height={TOTAL_SIZE}
         style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-          transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+          transformOrigin: 'center'
         }}
       >
         <defs>
@@ -490,11 +529,13 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         fontFamily: 'monospace'
       }}>
         Pan: ({panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)})<br/>
+        Zoom: {(zoomLevel * 100).toFixed(0)}%<br/>
         Grid Center: ({Math.floor(-panOffset.x / CELL_SIZE)}, {Math.floor(-panOffset.y / CELL_SIZE)})<br/>
         Squares: {visibleSquares.length}<br/>
         Status: {isDragging ? 'Dragging' : 'Ready'}<br/>
         {curveId && `Curve: ${curveId}`}<br/>
         {isLoadingCurveData && 'Loading curve data...'}<br/>
+        {isOptionPressed && '🔍 Option + Scroll to zoom'}<br/>
         {hoveredCell && (
           <>
             Hover: ({hoveredCell.worldX}, {hoveredCell.worldY})<br/>
