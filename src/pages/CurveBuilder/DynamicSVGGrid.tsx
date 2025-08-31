@@ -27,7 +27,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [hoveredCell, setHoveredCell] = useState<VisibleRectangle | null>(null)
   
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [zoomLevel, setZoomLevel] = useState(0.9)
@@ -243,21 +242,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     setIsDragging(false)
   }
 
-  // Handle cell hover
-  const handleCellMouseEnter = (worldX: number, worldY: number) => {
-    if (!isDragging) {
-             const rectData = visibleRectanglesService.getRectangleData(`square-${worldX}-${worldY}`)
-      if (rectData) {
-        setHoveredCell(rectData)
-      }
-    }
-  }
-
-  const handleCellMouseLeave = () => {
-    if (!isDragging) {
-      setHoveredCell(null)
-    }
-  }
+  
   
   // Generate visible squares from visible rectangles service
   const visibleSquares = useMemo(() => {
@@ -326,8 +311,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           stroke={strokeColor}
           strokeWidth={isCenter ? 2 : 1}
           strokeDasharray={isCenter ? '5,5' : 'none'}
-          onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
-          onMouseLeave={handleCellMouseLeave}
         />
       )
     }
@@ -417,15 +400,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         Status: {isDragging ? 'Dragging' : isZooming ? 'Zooming' : 'Ready'}<br/>
         {curveId && `Curve: ${curveId}`}<br/>
         {isLoadingCurveData && 'Loading curve data...'}<br/>
-        {isOptionPressed && '🔍 Option + Scroll to zoom'}<br/>
-        {hoveredCell && (
-          <>
-            Hover: ({hoveredCell.worldX}, {hoveredCell.worldY})<br/>
-            {hoveredCell.curveValue !== undefined && `Value: ${hoveredCell.curveValue}`}<br/>
-            {hoveredCell.indexPosition !== undefined && `Index: ${hoveredCell.indexPosition}`}<br/>
-            {hoveredCell.isNew && '🆕 New Cell'}<br/>
-          </>
-        )}
+        {isOptionPressed && '🔍 Option + Scroll to zoom'}
       </div>
     </div>
   )

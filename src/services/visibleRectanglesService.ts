@@ -290,15 +290,25 @@ class VisibleRectanglesService {
 
   // Update colors for all visible rectangles
   updateColors(colorMode: 'value' | 'index', spectrum: number, curveWidth: number): void {
+    console.log('🎨 Updating colors for', this.visibleRectangles.size, 'rectangles')
+    console.log('🎨 Color mode:', colorMode, 'spectrum:', spectrum, 'curveWidth:', curveWidth)
+    
+    let valueModeCount = 0
+    let indexModeCount = 0
+    let randomCount = 0
+    
     for (const rectangle of this.visibleRectangles.values()) {
       let colorValue: number
 
       if (colorMode === 'value' && rectangle.curveValue !== undefined) {
         colorValue = rectangle.curveValue
+        valueModeCount++
       } else if (colorMode === 'index' && rectangle.indexPosition !== undefined) {
         colorValue = (rectangle.indexPosition / curveWidth) * spectrum
+        indexModeCount++
       } else {
         colorValue = Math.random() * spectrum
+        randomCount++
       }
 
       // Map to RGB (grayscale for now)
@@ -307,6 +317,8 @@ class VisibleRectanglesService {
       rectangle.fillG = rgbValue
       rectangle.fillB = rgbValue
     }
+    
+    console.log('🎨 Color distribution - Value mode:', valueModeCount, 'Index mode:', indexModeCount, 'Random:', randomCount)
   }
 
   // Get all visible rectangles
