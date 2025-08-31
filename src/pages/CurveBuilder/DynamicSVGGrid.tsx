@@ -85,7 +85,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         const delta = e.deltaY > 0 ? -0.1 : 0.1
         setZoomLevel(prevZoom => {
           const newZoom = prevZoom + delta
-          return Math.max(0.1, Math.min(5, newZoom))
+          return Math.max(0.1, Math.min(1, newZoom))
         })
         
         // Reset zooming state after a short delay
