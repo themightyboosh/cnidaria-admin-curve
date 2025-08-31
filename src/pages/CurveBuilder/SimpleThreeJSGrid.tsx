@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react'
-import * as THREE from 'three'
 
 interface CellColor {
   x: number
@@ -20,12 +19,21 @@ const SimpleThreeJSGrid: React.FC<SimpleThreeJSGridProps> = ({
   onGridBoundsChange,
   selectedCurveId
 }) => {
-  const mountRef = useRef<HTMLDivElement>(null)
-  const [gridInfo, setGridInfo] = useState<{ x: number, y: number }>({ x: 20, y: 20 })
+  const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   
-  // Fixed grid dimensions - never change
-  const FIXED_GRID_SIZE = 20
-  const FIXED_CELL_SIZE = 50
+  // Fixed cell size
+  const CELL_SIZE = 50 // Each square is 50px
+  const EXTENSION_CELLS = 30 // Extend 30 cells in each direction beyond viewport
+
+  // Pan state
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
+
+  // Dynamic grid dimensions based on viewport + extension
+  const [gridDimensions, setGridDimensions] = useState<{ width: number, height: number }>({ width: 60, height: 60 })
+  const [lastProcessedBounds, setLastProcessedBounds] = useState<{ minX: number, maxX: number, minY: number, maxY: number }>({ minX: -30, maxX: 30, minY: -30, maxY: 30 })
 
   // Permanent color cache - only clears when new curve is loaded
   const colorCacheRef = useRef<Map<string, string>>(new Map())
@@ -39,6 +47,7 @@ const SimpleThreeJSGrid: React.FC<SimpleThreeJSGridProps> = ({
     if (selectedCurveId && selectedCurveId !== lastCurveIdRef.current) {
       console.log(`🔄 New curve loaded: ${selectedCurveId}, clearing color cache`)
       colorCacheRef.current.clear()
+      setPanOffset({ x: 0, y: 0 }) // Reset pan to center
       lastCurveIdRef.current = selectedCurveId
     }
     
@@ -63,317 +72,375 @@ const SimpleThreeJSGrid: React.FC<SimpleThreeJSGridProps> = ({
     return newColors
   }, [cellColors, selectedCurveId])
 
-  useEffect(() => {
-    console.log('🔵 SimpleThreeJSGrid: useEffect started')
+  // Calculate dynamic grid size based on container dimensions + extension
+  const calculateGridSize = (containerWidth: number, containerHeight: number) => {
+    const viewportCellsX = Math.ceil(containerWidth / CELL_SIZE)
+    const viewportCellsY = Math.ceil(containerHeight / CELL_SIZE)
     
-    // Check WebGL support
-    try {
-      const canvas = document.createElement('canvas')
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
-      if (!gl) {
-        console.error('❌ WebGL is not available!')
-        return
-      }
-      console.log('✅ WebGL is available')
-    } catch (error) {
-      console.error('❌ WebGL error:', error)
-      return
+    // Add extension cells in each direction
+    const totalCellsX = viewportCellsX + (EXTENSION_CELLS * 2)
+    const totalCellsY = viewportCellsY + (EXTENSION_CELLS * 2)
+    
+    return {
+      width: totalCellsX,
+      height: totalCellsY
     }
+  }
+
+  // Calculate current visible bounds based on pan offset
+  const calculateVisibleBounds = () => {
+    if (!containerRef.current) return { minX: -30, maxX: 30, minY: -30, maxY: 30 }
     
-    if (!mountRef.current) {
-      console.log('❌ Mount ref is null')
+    const containerWidth = containerRef.current.clientWidth
+    const containerHeight = containerRef.current.clientHeight
+    
+    // Calculate viewport bounds in world coordinates
+    const viewportCellsX = Math.ceil(containerWidth / CELL_SIZE)
+    const viewportCellsY = Math.ceil(containerHeight / CELL_SIZE)
+    
+    // Calculate center of viewport in world coordinates
+    const centerX = Math.floor(panOffset.x / CELL_SIZE)
+    const centerY = Math.floor(panOffset.y / CELL_SIZE)
+    
+    // Calculate bounds with extension
+    const halfViewportX = Math.floor(viewportCellsX / 2)
+    const halfViewportY = Math.floor(viewportCellsY / 2)
+    
+    const minX = centerX - halfViewportX - EXTENSION_CELLS
+    const maxX = centerX + halfViewportX + EXTENSION_CELLS
+    const minY = centerY - halfViewportY - EXTENSION_CELLS
+    const maxY = centerY + halfViewportY + EXTENSION_CELLS
+    
+    return { minX, maxX, minY, maxY }
+  }
+
+  // Handle mouse events for panning
+  const handleMouseDown = (event: React.MouseEvent) => {
+    setIsDragging(true)
+    setLastMousePos({ x: event.clientX, y: event.clientY })
+    console.log('🖱️ Mouse down - starting pan')
+  }
+
+  const handleMouseMove = (event: React.MouseEvent) => {
+    if (!isDragging) return
+    
+    const deltaX = event.clientX - lastMousePos.x
+    const deltaY = event.clientY - lastMousePos.y
+    
+    setPanOffset(prev => {
+      const newOffset = {
+        x: prev.x - deltaX, // REVERSED: Drag left = grid moves left, drag right = grid moves right
+        y: prev.y + deltaY  // Keep Y the same
+      }
+      console.log('🖱️ Panning to:', newOffset, 'delta:', { deltaX, deltaY })
+      return newOffset
+    })
+    
+    setLastMousePos({ x: event.clientX, y: event.clientY })
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+    console.log('🖱️ Mouse up - stopping pan')
+  }
+
+  useEffect(() => {
+    console.log('🔵 SimpleThreeJSGrid: Compound SVG grid started')
+    
+    if (!containerRef.current) {
+      console.log('❌ Container ref is null')
       return
     }
 
     // Get container dimensions
-    const containerWidth = mountRef.current.clientWidth
-    const containerHeight = mountRef.current.clientHeight
+    const containerWidth = containerRef.current.clientWidth
+    const containerHeight = containerRef.current.clientHeight
     
     console.log('📏 Container dimensions:', { containerWidth, containerHeight })
 
     if (containerWidth === 0 || containerHeight === 0) {
       console.log('⚠️ Container has zero dimensions, waiting...')
       setTimeout(() => {
-        if (mountRef.current) {
-          const newWidth = mountRef.current.clientWidth
-          const newHeight = mountRef.current.clientHeight
+        if (containerRef.current) {
+          const newWidth = containerRef.current.clientWidth
+          const newHeight = containerRef.current.clientHeight
           console.log('🔄 Retry container dimensions:', { newWidth, newHeight })
         }
       }, 100)
       return
     }
 
-    console.log('🎬 Creating Three.js scene with perfect square grid...')
-
-    // Scene
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x1a1a1a)
-
-    // Fixed grid dimensions - always perfect squares
-    const gridWidth = FIXED_GRID_SIZE * FIXED_CELL_SIZE
-    const gridHeight = FIXED_GRID_SIZE * FIXED_CELL_SIZE
+    // Calculate dynamic grid size
+    const dynamicGridSize = calculateGridSize(containerWidth, containerHeight)
     
-    // Calculate viewport to maintain 1:1 aspect ratio with clean cropping
-    const containerAspect = containerWidth / containerHeight
-    const gridAspect = gridWidth / gridHeight
-    
-    let cameraLeft, cameraRight, cameraTop, cameraBottom
-    
-    if (containerAspect > gridAspect) {
-      // Container is wider than grid - crop horizontally
-      const scale = containerHeight / gridHeight
-      const scaledWidth = gridWidth * scale
-      const offset = (scaledWidth - containerWidth) / 2
-      
-      cameraLeft = -containerWidth / 2
-      cameraRight = containerWidth / 2
-      cameraTop = containerHeight / 2
-      cameraBottom = -containerHeight / 2
-    } else {
-      // Container is taller than grid - crop vertically
-      const scale = containerWidth / gridWidth
-      const scaledHeight = gridHeight * scale
-      const offset = (scaledHeight - containerHeight) / 2
-      
-      cameraLeft = -containerWidth / 2
-      cameraRight = containerWidth / 2
-      cameraTop = containerHeight / 2
-      cameraBottom = -containerHeight / 2
+    // Only update state if grid size actually changed
+    if (gridDimensions.width !== dynamicGridSize.width || gridDimensions.height !== dynamicGridSize.height) {
+      setGridDimensions(dynamicGridSize)
     }
     
-    // Camera with perfect square grid bounds
-    const camera = new THREE.OrthographicCamera(
-      cameraLeft, cameraRight,
-      cameraTop, cameraBottom,
-      0.1, 1000
-    )
-    camera.position.set(0, 0, 100)
-    camera.lookAt(0, 0, 0)
+    console.log('🎬 Creating compound SVG grid...')
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true,
-      alpha: true
-    })
-    renderer.setSize(containerWidth, containerHeight)
-    renderer.setClearColor(0x1a1a1a, 1)
-    mountRef.current.appendChild(renderer.domElement)
-
-    // Fixed grid info - never changes
-    setGridInfo({ x: FIXED_GRID_SIZE, y: FIXED_GRID_SIZE })
-    onCellCountChange?.({ x: FIXED_GRID_SIZE, y: FIXED_GRID_SIZE })
+    // Update grid info
+    onCellCountChange?.({ x: dynamicGridSize.width, y: dynamicGridSize.height })
     
-    // Fixed grid bounds - never change
-    const minX = -Math.floor(FIXED_GRID_SIZE / 2)
-    const maxX = Math.floor(FIXED_GRID_SIZE / 2)
-    const minY = -Math.floor(FIXED_GRID_SIZE / 2)
-    const maxY = Math.floor(FIXED_GRID_SIZE / 2)
+    // Calculate initial visible bounds
+    const visibleBounds = calculateVisibleBounds()
     
-    onGridBoundsChange?.({ minX, maxX, minY, maxY })
-
-    console.log('📐 Perfect square grid calculations:', {
-      gridSize: FIXED_GRID_SIZE,
-      cellSize: FIXED_CELL_SIZE,
-      gridWidth,
-      gridHeight,
-      containerAspect,
-      gridAspect,
-      totalCells: FIXED_GRID_SIZE * FIXED_GRID_SIZE,
-      bounds: { minX, maxX, minY, maxY }
-    })
-
-    // Create color texture with permanent cache
-    const createColorTexture = (colors: CellColor[]) => {
-      const textureSize = FIXED_GRID_SIZE
-      const canvas = document.createElement('canvas')
-      canvas.width = textureSize
-      canvas.height = textureSize
-      const ctx = canvas.getContext('2d')!
-      
-      // Fill with default color (dark gray)
-      ctx.fillStyle = '#2a2a2a'
-      ctx.fillRect(0, 0, textureSize, textureSize)
-      
-      // Apply cached colors - never recalculate
-      colors.forEach(({ x, y, color }) => {
-        if (x >= 0 && x < FIXED_GRID_SIZE && y >= 0 && y < FIXED_GRID_SIZE) {
-          ctx.fillStyle = color
-          ctx.fillRect(x, y, 1, 1)
-        }
-      })
-      
-      const texture = new THREE.CanvasTexture(canvas)
-      texture.minFilter = THREE.NearestFilter
-      texture.magFilter = THREE.NearestFilter
-      texture.wrapS = THREE.ClampToEdgeWrapping
-      texture.wrapT = THREE.ClampToEdgeWrapping
-      
-      return texture
+    // Only call onGridBoundsChange if bounds actually changed
+    const currentBoundsString = JSON.stringify(visibleBounds)
+    const lastBoundsString = JSON.stringify(lastProcessedBounds)
+    if (currentBoundsString !== lastBoundsString) {
+      onGridBoundsChange?.(visibleBounds)
+      setLastProcessedBounds(visibleBounds)
     }
 
-    // Shader material with completely static grid lines
-    const vertexShader = `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `
-
-    const fragmentShader = `
-      uniform vec2 resolution;
-      uniform vec3 gridColor;
-      uniform sampler2D cellColors;
-      varying vec2 vUv;
-      
-      void main() {
-        vec2 uv = vUv;
-        
-        // Fixed 20x20 grid - never changes, perfect squares
-        vec2 fixedGridScale = vec2(20.0, 20.0);
-        vec2 pixelCoord = uv * fixedGridScale;
-        vec2 cellCoord = floor(pixelCoord);
-        vec2 gridCoord = fract(pixelCoord);
-        
-        // Integer cell coordinates for stability
-        ivec2 cellIndex = ivec2(cellCoord);
-        
-        // Map to texture coordinates (only for cell colors)
-        vec2 textureUv = (cellCoord + 0.5) / 20.0;
-        
-        // Sample cell color from texture (cached, never recalculated)
-        vec4 cellColor = texture2D(cellColors, textureUv);
-        
-        // Completely static grid lines - never move
-        float lineWidth = 0.02;
-        float gridLine = 0.0;
-        
-        // Static horizontal lines
-        if (gridCoord.y < lineWidth || gridCoord.y > 1.0 - lineWidth) {
-          gridLine = 1.0;
-        }
-        
-        // Static vertical lines
-        if (gridCoord.x < lineWidth || gridCoord.x > 1.0 - lineWidth) {
-          gridLine = 1.0;
-        }
-        
-        // Mix cell color with static grid lines
-        vec3 finalColor = mix(cellColor.rgb, gridColor, gridLine);
-        gl_FragColor = vec4(finalColor, 1.0);
-      }
-    `
-
-    // Create initial color texture with cached colors
-    const colorTexture = createColorTexture(processedColors)
-
-    // Create shader material with fixed uniforms
-    const shaderMaterial = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      uniforms: {
-        resolution: { value: new THREE.Vector2(containerWidth, containerHeight) },
-        gridColor: { value: new THREE.Color(0x00ffff) }, // Cyan grid lines
-        cellColors: { value: colorTexture }
-      }
-    })
-
-    // Create a single plane geometry with fixed size (perfect squares)
-    const geometry = new THREE.PlaneGeometry(gridWidth, gridHeight)
-    const mesh = new THREE.Mesh(geometry, shaderMaterial)
-    mesh.position.set(0, 0, 0)
-    scene.add(mesh)
-
-    console.log('🎨 Perfect square grid created with curve-based color cache:', {
+    console.log('🎨 Compound SVG grid created:', {
       resolution: [containerWidth, containerHeight],
-      gridSize: FIXED_GRID_SIZE,
+      gridSize: dynamicGridSize,
+      cellSize: CELL_SIZE,
+      extensionCells: EXTENSION_CELLS,
       cachedColors: colorCacheRef.current.size,
       processedColors: processedColors.length,
-      totalCells: FIXED_GRID_SIZE * FIXED_GRID_SIZE,
-      currentCurveId: selectedCurveId
+      visibleBounds,
+      panOffset: [panOffset.x, panOffset.y]
     })
 
-    // Render
-    renderer.render(scene, camera)
-    console.log('🎭 Perfect square grid rendered successfully')
+    console.log('🎭 Compound SVG grid rendered successfully')
 
-    // Handle resize - maintain perfect squares with clean cropping
+    // Handle resize
     const handleResize = () => {
-      if (!mountRef.current) return
-      const newWidth = mountRef.current.clientWidth
-      const newHeight = mountRef.current.clientHeight
+      if (!containerRef.current) return
+      const newWidth = containerRef.current.clientWidth
+      const newHeight = containerRef.current.clientHeight
       
       console.log('📱 Resize to:', { newWidth, newHeight })
       
-      // Recalculate viewport for perfect squares
-      const newContainerAspect = newWidth / newHeight
-      const newGridAspect = gridWidth / gridHeight
+      // Calculate new dynamic grid size
+      const newDynamicGridSize = calculateGridSize(newWidth, newHeight)
       
-      let newCameraLeft, newCameraRight, newCameraTop, newCameraBottom
-      
-      if (newContainerAspect > newGridAspect) {
-        // Container is wider than grid - crop horizontally
-        const scale = newHeight / gridHeight
-        const scaledWidth = gridWidth * scale
-        const offset = (scaledWidth - newWidth) / 2
-        
-        newCameraLeft = -newWidth / 2
-        newCameraRight = newWidth / 2
-        newCameraTop = newHeight / 2
-        newCameraBottom = -newHeight / 2
-      } else {
-        // Container is taller than grid - crop vertically
-        const scale = newWidth / gridWidth
-        const scaledHeight = gridHeight * scale
-        const offset = (scaledHeight - newHeight) / 2
-        
-        newCameraLeft = -newWidth / 2
-        newCameraRight = newWidth / 2
-        newCameraTop = newHeight / 2
-        newCameraBottom = -newHeight / 2
+      // Only update if grid size changed
+      if (gridDimensions.width !== newDynamicGridSize.width || gridDimensions.height !== newDynamicGridSize.height) {
+        setGridDimensions(newDynamicGridSize)
       }
       
-      // Update camera for clean cropping
-      camera.left = newCameraLeft
-      camera.right = newCameraRight
-      camera.top = newCameraTop
-      camera.bottom = newCameraBottom
-      camera.updateProjectionMatrix()
+      // Calculate new visible bounds
+      const newVisibleBounds = calculateVisibleBounds()
       
-      // Only update renderer size - grid never changes
-      renderer.setSize(newWidth, newHeight)
-      shaderMaterial.uniforms.resolution.value.set(newWidth, newHeight)
+      // Only update if bounds changed (new cells appeared)
+      const newBoundsString = JSON.stringify(newVisibleBounds)
+      if (newBoundsString !== currentBoundsString) {
+        onGridBoundsChange?.(newVisibleBounds)
+        setLastProcessedBounds(newVisibleBounds)
+      }
       
-      renderer.render(scene, camera)
-      console.log('✅ Resize completed with perfect square cropping')
+      // Update grid info
+      onCellCountChange?.({ x: newDynamicGridSize.width, y: newDynamicGridSize.height })
+      
+      console.log('✅ Resize completed - Compound SVG grid maintained')
     }
 
     window.addEventListener('resize', handleResize)
 
     return () => {
-      console.log('🧹 Cleaning up Three.js perfect square grid')
+      console.log('🧹 Cleaning up compound SVG grid')
       window.removeEventListener('resize', handleResize)
-      if (mountRef.current && renderer.domElement) {
-        mountRef.current.removeChild(renderer.domElement)
-      }
-      geometry.dispose()
-      shaderMaterial.dispose()
-      colorTexture.dispose()
-      renderer.dispose()
     }
   }, [processedColors, onCellCountChange, onGridBoundsChange])
 
+  // Create color map for quick lookup
+  const colorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    processedColors.forEach(({ x, y, color }) => {
+      map.set(`${x},${y}`, color)
+    })
+    return map
+  }, [processedColors])
+
+  // Calculate grid bounds for rendering
+  const gridBounds = useMemo(() => {
+    const visibleBounds = calculateVisibleBounds()
+    return {
+      minX: visibleBounds.minX,
+      maxX: visibleBounds.maxX,
+      minY: visibleBounds.minY,
+      maxY: visibleBounds.maxY,
+      width: visibleBounds.maxX - visibleBounds.minX + 1,
+      height: visibleBounds.maxY - visibleBounds.minY + 1
+    }
+  }, [panOffset])
+
+  // Process all visible square coordinates when curve is loaded - ONLY UNCOLORED SQUARES
+  useEffect(() => {
+    if (!selectedCurveId) return
+    
+    console.log('🎯 Processing coordinates for uncolored squares only...')
+    
+    // Get all visible square coordinates that don't have colors yet
+    const uncoloredSquareCoordinates: { x: number, y: number }[] = []
+    
+    for (let y = gridBounds.minY; y <= gridBounds.maxY; y++) {
+      for (let x = gridBounds.minX; x <= gridBounds.maxX; x++) {
+        const key = `${x},${y}`
+        // Only process squares that don't have colors yet
+        if (!colorCacheRef.current.has(key)) {
+          uncoloredSquareCoordinates.push({ x, y })
+        }
+      }
+    }
+    
+    console.log(`📊 Processing ${uncoloredSquareCoordinates.length} uncolored square coordinates:`, uncoloredSquareCoordinates)
+    
+    // Only call the coordinate processor if there are uncolored squares
+    if (onGridBoundsChange && uncoloredSquareCoordinates.length > 0) {
+      onGridBoundsChange({
+        minX: gridBounds.minX,
+        maxX: gridBounds.maxX,
+        minY: gridBounds.minY,
+        maxY: gridBounds.maxY
+      })
+    } else if (uncoloredSquareCoordinates.length === 0) {
+      console.log('✅ All visible squares already have colors - no processing needed')
+    }
+    
+  }, [selectedCurveId, gridBounds])
+
+  // Update bounds when pan offset changes - ONLY FOR NEW UNCOLORED SQUARES
+  useEffect(() => {
+    console.log('🔄 Pan offset changed to:', panOffset)
+    
+    // Calculate new visible bounds
+    const newVisibleBounds = calculateVisibleBounds()
+    
+    // Only update if bounds changed AND there are new uncolored squares
+    const newBoundsString = JSON.stringify(newVisibleBounds)
+    const currentBoundsString = JSON.stringify(lastProcessedBounds)
+    
+    if (newBoundsString !== currentBoundsString) {
+      // Check if there are any new uncolored squares in the new bounds
+      const hasNewUncoloredSquares = (() => {
+        for (let y = newVisibleBounds.minY; y <= newVisibleBounds.maxY; y++) {
+          for (let x = newVisibleBounds.minX; x <= newVisibleBounds.maxX; x++) {
+            const key = `${x},${y}`
+            if (!colorCacheRef.current.has(key)) {
+              return true // Found at least one uncolored square
+            }
+          }
+        }
+        return false // All squares in new bounds already have colors
+      })()
+      
+      if (hasNewUncoloredSquares) {
+        onGridBoundsChange?.(newVisibleBounds)
+        setLastProcessedBounds(newVisibleBounds)
+        console.log('🎯 New visible bounds with uncolored squares:', newVisibleBounds)
+      } else {
+        console.log('✅ New bounds contain only colored squares - no processing needed')
+        setLastProcessedBounds(newVisibleBounds)
+      }
+    }
+  }, [panOffset])
+
   return (
     <div 
-      ref={mountRef} 
+      ref={containerRef}
       style={{ 
         width: '100%', 
         height: '100%', 
         background: '#1a1a1a',
         position: 'relative',
-        border: '2px solid #00ff00'
-      }} 
-    />
+        border: '2px solid #00ff00',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      <svg
+        ref={svgRef}
+        width={gridBounds.width * CELL_SIZE}
+        height={gridBounds.height * CELL_SIZE}
+        style={{
+          transform: `translate(${-panOffset.x}px, ${-panOffset.y}px)`,
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+        }}
+      >
+        {/* Grid lines */}
+        <defs>
+          <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
+            <path
+              d={`M ${CELL_SIZE} 0 L 0 0 0 ${CELL_SIZE}`}
+              fill="none"
+              stroke="#00ffff"
+              strokeWidth="1"
+            />
+          </pattern>
+        </defs>
+        
+        {/* Background with grid pattern */}
+        <rect
+          width={gridBounds.width * CELL_SIZE}
+          height={gridBounds.height * CELL_SIZE}
+          fill="url(#grid)"
+          x={0}
+          y={0}
+        />
+        
+        {/* Compound object: Individual squares named by coordinates with different gray colors */}
+        {Array.from({ length: gridBounds.height }, (_, y) =>
+          Array.from({ length: gridBounds.width }, (_, x) => {
+            const worldX = gridBounds.minX + x
+            const worldY = gridBounds.minY + y
+            const squareName = `square-${worldX}-${worldY}`
+            
+            // Generate slightly different gray color based on coordinates
+            const grayValue = 40 + ((worldX + worldY) % 20) * 8 // 40-200 range
+            const grayColor = `rgb(${grayValue}, ${grayValue}, ${grayValue})`
+            
+            // Use cached color if available, otherwise use generated gray
+            const color = colorMap.get(`${worldX},${worldY}`) || grayColor
+            
+            return (
+              <rect
+                key={squareName}
+                id={squareName}
+                data-coordinates={`${worldX},${worldY}`}
+                x={x * CELL_SIZE}
+                y={y * CELL_SIZE}
+                width={CELL_SIZE}
+                height={CELL_SIZE}
+                fill={color}
+                stroke="none"
+                style={{
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  console.log(`🎯 Square clicked: ${squareName} at coordinates (${worldX}, ${worldY})`)
+                }}
+              />
+            )
+          })
+        )}
+        
+        {/* Center cell highlight (0,0) */}
+        <rect
+          id="center-square"
+          data-coordinates="0,0"
+          x={(-gridBounds.minX) * CELL_SIZE}
+          y={(-gridBounds.minY) * CELL_SIZE}
+          width={CELL_SIZE}
+          height={CELL_SIZE}
+          fill="none"
+          stroke="#ff0000"
+          strokeWidth="2"
+          strokeDasharray="5,5"
+        />
+      </svg>
+    </div>
   )
 }
 

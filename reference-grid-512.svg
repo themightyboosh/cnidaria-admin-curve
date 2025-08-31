@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="25600" height="25600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#00ffff" stroke-width="1"/>
+    </pattern>
+  </defs>
+  
+  <!-- Background with grid pattern -->
+  <rect width="25600" height="25600" fill="url(#grid)" x="0" y="0"/>
+  
+  <!-- 512x512 squares named by coordinates -->
+  <!-- Center is (0,0), range is -256 to +255 -->
+  <!-- Each square is 50x50 pixels -->
+  <!-- Total SVG size: 25600x25600 pixels -->
+  
+  <!-- Center square (0,0) with red border -->
+  <rect id="center-square" data-coordinates="0,0" x="12800" y="12800" width="50" height="50" fill="none" stroke="#ff0000" stroke-width="2" stroke-dasharray="5,5"/>
+  
+  <!-- Grid dimensions: 512x512 = 262,144 squares -->
+  <!-- Center at (0,0) -->
+  <!-- Coordinates range: -256 to +255 in both X and Y -->
+  <!-- Each square is 50x50 pixels -->
+  <!-- Total SVG size: 25600x25600 pixels -->
+  
+  <!-- Example squares showing the naming pattern: -->
+  <!-- Top-left corner -->
+  <rect id="square--256--256" data-coordinates="-256,-256" x="0" y="0" width="50" height="50" fill="rgb(40,40,40)" stroke="none"/>
+  
+  <!-- Top row examples -->
+  <rect id="square--255--256" data-coordinates="-255,-256" x="50" y="0" width="50" height="50" fill="rgb(48,48,48)" stroke="none"/>
+  <rect id="square--254--256" data-coordinates="-254,-256" x="100" y="0" width="50" height="50" fill="rgb(56,56,56)" stroke="none"/>
+  <rect id="square--253--256" data-coordinates="-253,-256" x="150" y="0" width="50" height="50" fill="rgb(64,64,64)" stroke="none"/>
+  <rect id="square--252--256" data-coordinates="-252,-256" x="200" y="0" width="50" height="50" fill="rgb(72,72,72)" stroke="none"/>
+  
+  <!-- Center row examples -->
+  <rect id="square--2-0" data-coordinates="-2,0" x="12700" y="12800" width="50" height="50" fill="rgb(96,96,96)" stroke="none"/>
+  <rect id="square--1-0" data-coordinates="-1,0" x="12750" y="12800" width="50" height="50" fill="rgb(104,104,104)" stroke="none"/>
+  <rect id="square-0-0" data-coordinates="0,0" x="12800" y="12800" width="50" height="50" fill="rgb(112,112,112)" stroke="none"/>
+  <rect id="square-1-0" data-coordinates="1,0" x="12850" y="12800" width="50" height="50" fill="rgb(120,120,120)" stroke="none"/>
+  <rect id="square-2-0" data-coordinates="2,0" x="12900" y="12800" width="50" height="50" fill="rgb(128,128,128)" stroke="none"/>
+  
+  <!-- Bottom-right corner -->
+  <rect id="square-255-255" data-coordinates="255,255" x="25550" y="25550" width="50" height="50" fill="rgb(200,200,200)" stroke="none"/>
+  
+  <!-- Naming pattern: id="square-X-Y" data-coordinates="X,Y" -->
+  <!-- Where X and Y range from -256 to +255 -->
+  <!-- Center square is at (0,0) -->
+  <!-- Total squares: 512 * 512 = 262,144 -->
+</svg>
+
+
+
