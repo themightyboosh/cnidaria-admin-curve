@@ -26,6 +26,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(1)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
+  const [isZooming, setIsZooming] = useState(false)
   
   const CELL_SIZE = 50
   const GRID_SIZE = 512
@@ -80,11 +81,17 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const handleWheel = (e: WheelEvent) => {
       if (isOptionPressed) {
         e.preventDefault()
+        setIsZooming(true)
         const delta = e.deltaY > 0 ? -0.1 : 0.1
         setZoomLevel(prevZoom => {
           const newZoom = prevZoom + delta
           return Math.max(0.1, Math.min(5, newZoom))
         })
+        
+        // Reset zooming state after a short delay
+        setTimeout(() => {
+          setIsZooming(false)
+        }, 100)
       }
     }
 
@@ -367,7 +374,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   }
   
   const handleMouseUp = () => {
-    if (isDragging) {
+    if (isDragging && !isZooming) {
       // Calculate changes after drag ends
       const changes = calculateGridChanges(dragStartOffset, panOffset)
       
@@ -393,7 +400,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   }
 
   const handleCellMouseEnter = (worldX: number, worldY: number) => {
-    if (!isDragging) {
+    if (!isDragging && !isZooming) {
       const rectangleId = `square-${worldX}-${worldY}`
       const curveData = curveDataService.getCellData(rectangleId)
       
@@ -408,7 +415,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   }
 
   const handleCellMouseLeave = () => {
-    if (!isDragging) {
+    if (!isDragging && !isZooming) {
       setHoveredCell(null)
     }
   }
@@ -532,7 +539,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         Zoom: {(zoomLevel * 100).toFixed(0)}%<br/>
         Grid Center: ({Math.floor(-panOffset.x / CELL_SIZE)}, {Math.floor(-panOffset.y / CELL_SIZE)})<br/>
         Squares: {visibleSquares.length}<br/>
-        Status: {isDragging ? 'Dragging' : 'Ready'}<br/>
+        Status: {isDragging ? 'Dragging' : isZooming ? 'Zooming' : 'Ready'}<br/>
         {curveId && `Curve: ${curveId}`}<br/>
         {isLoadingCurveData && 'Loading curve data...'}<br/>
         {isOptionPressed && '🔍 Option + Scroll to zoom'}<br/>
