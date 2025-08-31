@@ -11,9 +11,9 @@ interface DynamicSVGGridProps {
   onCurveDataLoaded?: (cells: Map<string, CurveDataCell>) => void
 }
 
-const CELL_SIZE = 50
+const CELL_SIZE = 10 // 10x10 units in SVG coordinates
 const GRID_SIZE = 128
-const TOTAL_SIZE = 1280 // Fixed size for better performance
+const TOTAL_SIZE = 1280 // 1280x1280 units total
 
 const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({ 
   curveId, 
@@ -61,21 +61,21 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const viewportHeight = container.clientHeight
     
     // Convert pixel coordinates to world coordinates
-    // The SVG is moving, so we calculate what's visible in the viewport
+    // The viewport group is moving via transform, so we calculate what's visible
     const scaledCellSize = CELL_SIZE * zoomLevel
     
     // Calculate the visible area in world coordinates
-    // panOffset represents how much the SVG has moved
+    // panOffset represents how much the viewport group has moved
     const visibleLeft = Math.floor((-panOffset.x) / scaledCellSize)
     const visibleRight = Math.floor((-panOffset.x + viewportWidth) / scaledCellSize)
     const visibleTop = Math.floor((-panOffset.y) / scaledCellSize)
     const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / scaledCellSize)
     
     const bounds = {
-      minX: Math.max(-12, visibleLeft),
-      maxX: Math.min(11, visibleRight),
-      minY: Math.max(-12, visibleTop),
-      maxY: Math.min(11, visibleBottom)
+      minX: Math.max(-64, visibleLeft),
+      maxX: Math.min(63, visibleRight),
+      minY: Math.max(-64, visibleTop),
+      maxY: Math.min(63, visibleBottom)
     }
 
     console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'zoomLevel:', zoomLevel, 'container:', { width: viewportWidth, height: viewportHeight })
@@ -274,11 +274,10 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     for (const [rectangleId, rect] of visibleRects) {
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
-      // Calculate pixel position based on world coordinates
-      // The SVG moves, so rectangles are positioned relative to SVG origin
-      // Center is at (640, 640) in pixel coordinates (1280/2)
-      const pixelX = (worldX + 12.8) * CELL_SIZE // 640/50 = 12.8
-      const pixelY = (worldY + 12.8) * CELL_SIZE
+      // Calculate position based on world coordinates
+      // Mapping: (X+64)*10, (Y+64)*10 for -64 to +63 range
+      const pixelX = (worldX + 64) * CELL_SIZE
+      const pixelY = (worldY + 64) * CELL_SIZE
       
       // Debug coordinate conversion
       if (squares.length < 3) {
@@ -288,7 +287,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           pixelX,
           pixelY,
           cellSize: CELL_SIZE,
-          offset: 12.8
+          offset: 64
         })
       }
       
@@ -353,11 +352,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       <svg 
         width={TOTAL_SIZE} 
         height={TOTAL_SIZE}
-        style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
-          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-          transformOrigin: 'center'
-        }}
       >
         <defs>
           <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
@@ -368,33 +362,28 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         {/* Background with grid pattern */}
         <rect width={TOTAL_SIZE} height={TOTAL_SIZE} fill="url(#grid)" x="0" y="0"/>
         
-        {/* Test rectangle to verify SVG is working */}
-        <rect 
-          x="640" 
-          y="640" 
-          width="200" 
-          height="200" 
-          fill="red" 
-          stroke="yellow" 
-          strokeWidth="5"
-        />
-        
-        {/* Center square indicator */}
-        <rect
-          id="center-square"
-          data-coordinates="0,0"
-          x={12.8 * CELL_SIZE}
-          y={12.8 * CELL_SIZE}
-          width={CELL_SIZE}
-          height={CELL_SIZE}
-          fill="none"
-          stroke="#ff0000"
-          strokeWidth="2"
-          strokeDasharray="5,5"
-        />
-        
-        {/* Only render rectangles that exist in the data */}
-        {visibleSquares}
+        {/* Viewport group with transform */}
+        <g 
+          id="viewport"
+          transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`}
+        >
+          {/* Center square indicator */}
+          <rect
+            id="center-square"
+            data-coordinates="0,0"
+            x={64 * CELL_SIZE}
+            y={64 * CELL_SIZE}
+            width={CELL_SIZE}
+            height={CELL_SIZE}
+            fill="none"
+            stroke="#ff0000"
+            strokeWidth="2"
+            strokeDasharray="5,5"
+          />
+          
+          {/* Only render rectangles that exist in the data */}
+          {visibleSquares}
+        </g>
       </svg>
       
       {/* Debug info */}
