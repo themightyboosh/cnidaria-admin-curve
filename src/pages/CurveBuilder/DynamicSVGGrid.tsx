@@ -153,13 +153,15 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     }
   }, [isOptionPressed])
 
-  // Load curve data for visible rectangles
+    // Load curve data for visible rectangles
   const loadCurveDataForVisibleRectangles = async () => {
     if (!curveId) return
     
+    console.log('🔄 Starting to load curve data for curveId:', curveId)
     setIsLoadingCurveData(true)
     try {
       await visibleRectanglesService.loadCurveData(curveId)
+      console.log('✅ Curve data loaded from service, updating colors...')
       updateColorsFromVisibleRectangles()
       
       // Notify parent component
@@ -168,16 +170,16 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         const cells: CurveDataCell[] = []
         const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
         
-                 for (const [_, rect] of visibleRects) {
-           cells.push({
-             rectangleId: rect.rectangleId,
-             worldX: rect.worldX,
-             worldY: rect.worldY,
-             curveValue: rect.curveValue || 0,
-             indexPosition: rect.indexPosition || 0,
-             isNew: rect.isNew
-           })
-         }
+        for (const [_, rect] of visibleRects) {
+          cells.push({
+            rectangleId: rect.rectangleId,
+            worldX: rect.worldX,
+            worldY: rect.worldY,
+            curveValue: rect.curveValue || 0,
+            indexPosition: rect.indexPosition || 0,
+            isNew: rect.isNew
+          })
+        }
         
         onCurveDataLoaded(cells)
       }
@@ -214,6 +216,9 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         x: dragStartOffset.x + deltaX,
         y: dragStartOffset.y + deltaY
       })
+      
+      // Update last mouse position for next move
+      setLastMousePos({ x: e.clientX, y: e.clientY })
     }
   }
 
@@ -278,7 +283,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           pixelX,
           pixelY,
           cellSize: CELL_SIZE,
-          offset: 256
+          offset: 128
         })
       }
       
