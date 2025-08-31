@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import curveDataService, { type CurveDataCell } from '../../services/curveDataService'
 
 interface DynamicSVGGridProps {
@@ -27,6 +27,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [isZooming, setIsZooming] = useState(false)
+  const [visibleRectangles, setVisibleRectangles] = useState<Set<string>>(new Set())
   
   const CELL_SIZE = 50
   const GRID_SIZE = 128
@@ -194,6 +195,58 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     
     return data
   })
+  
+  // Calculate which rectangles are visible in the viewport
+  const calculateVisibleRectangles = useCallback(() => {
+    const container = document.querySelector('.canvas-area') as HTMLElement
+    if (!container) return
+
+    const containerRect = container.getBoundingClientRect()
+    const viewportWidth = containerRect.width
+    const viewportHeight = containerRect.height
+
+    // Calculate the visible area in SVG coordinates
+    const visibleLeft = -panOffset.x / zoomLevel
+    const visibleTop = -panOffset.y / zoomLevel
+    const visibleRight = visibleLeft + viewportWidth / zoomLevel
+    const visibleBottom = visibleTop + viewportHeight / zoomLevel
+
+    const visibleSet = new Set<string>()
+
+    // Check each rectangle for visibility
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        if (!gridData[y] || !gridData[y][x]) continue
+
+        const { worldX, worldY } = gridData[y][x]
+        const rectX = x * CELL_SIZE
+        const rectY = y * CELL_SIZE
+        const rectRight = rectX + CELL_SIZE
+        const rectBottom = rectY + CELL_SIZE
+
+        // Check if rectangle intersects with visible area
+        const isVisible = !(
+          rectRight < visibleLeft ||
+          rectX > visibleRight ||
+          rectBottom < visibleTop ||
+          rectY > visibleBottom
+        )
+
+        if (isVisible) {
+          const rectangleId = `square-${worldX}-${worldY}`
+          visibleSet.add(rectangleId)
+        }
+      }
+    }
+
+    setVisibleRectangles(visibleSet)
+    console.log(`👁️ Visible rectangles: ${visibleSet.size} out of ${GRID_SIZE * GRID_SIZE}`)
+  }, [panOffset, zoomLevel, gridData])
+
+  // Update visible rectangles when pan or zoom changes
+  useEffect(() => {
+    calculateVisibleRectangles()
+  }, [calculateVisibleRectangles])
   
   // Calculate how many rows/columns need to be added/removed after drag
   const calculateGridChanges = (startOffset: { x: number; y: number }, endOffset: { x: number; y: number }) => {
@@ -540,6 +593,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         Zoom: {(zoomLevel * 100).toFixed(0)}%<br/>
         Grid Center: ({Math.floor(-panOffset.x / CELL_SIZE)}, {Math.floor(-panOffset.y / CELL_SIZE)})<br/>
         Squares: {visibleSquares.length}<br/>
+        Visible: {visibleRectangles.size}<br/>
         Status: {isDragging ? 'Dragging' : isZooming ? 'Zooming' : 'Ready'}<br/>
         {curveId && `Curve: ${curveId}`}<br/>
         {isLoadingCurveData && 'Loading curve data...'}<br/>
