@@ -36,6 +36,11 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
   const displayWidth = Math.max(100, curveWidth * 3) // Show 3x curve width to see seams
   const actualWidth = displayWidth + (padding * 2)
   const actualHeight = graphHeight + (padding * 2)
+  
+  // Calculate average value
+  const averageValue = curveData.length > 0 
+    ? curveData.reduce((sum, value) => sum + value, 0) / curveData.length 
+    : 0
 
   // Create background gradient using the active spectrum
   const getSpectrumGradient = () => {
@@ -74,14 +79,14 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#1a1a1a'
+      backgroundColor: '#000000'
     }}>
       <svg 
         width="100%"
         height="100%"
         viewBox={`0 0 ${actualWidth} ${actualHeight}`}
         style={{
-          border: '1px solid #333',
+          border: '1px solid #00ffff',
           borderRadius: '4px',
           maxHeight: '512px'
         }}
@@ -95,18 +100,17 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           </linearGradient>
         </defs>
         
-        {/* Background rectangle with spectrum */}
+        {/* Background rectangle - black */}
         <rect 
           x={padding} 
           y={padding} 
           width={displayWidth} 
           height={graphHeight}
-          fill="url(#spectrumGradient)"
-          opacity="0.1"
+          fill="#000000"
         />
         
         {/* Grid lines */}
-        <g stroke="#333" strokeWidth="1">
+        <g stroke="#00ffff" strokeWidth="1" opacity="0.3">
           {/* Horizontal grid lines (every 50 units) */}
           {Array.from({ length: 6 }, (_, i) => {
             const y = padding + (i * graphHeight / 5)
@@ -140,7 +144,7 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
         </g>
         
         {/* Axis labels */}
-        <g fill="#666" fontSize="12" textAnchor="middle">
+        <g fill="#00ffff" fontSize="12" textAnchor="middle">
           {/* Y-axis labels (0, 50, 100, 150, 200, 255) */}
           {Array.from({ length: 6 }, (_, i) => {
             const y = padding + (i * graphHeight / 5)
@@ -156,6 +160,16 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           <text x={padding + displayWidth / 2} y={actualHeight - 5}>
             Curve Width: {curveWidth} (3x display to show seams)
           </text>
+          
+          {/* Average value label */}
+          <text 
+            x={padding + displayWidth + 5} 
+            y={padding + graphHeight - (averageValue / 255) * graphHeight + 4}
+            fill="#00ffff"
+            fontSize="10"
+          >
+            Avg: {Math.round(averageValue)}
+          </text>
         </g>
         
         {/* Curve line */}
@@ -166,23 +180,35 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           fill="none"
         />
         
+        {/* Average value line */}
+        <line
+          x1={padding}
+          y1={padding + graphHeight - (averageValue / 255) * graphHeight}
+          x2={padding + displayWidth}
+          y2={padding + graphHeight - (averageValue / 255) * graphHeight}
+          stroke="#00ffff"
+          strokeWidth="1"
+          strokeDasharray="5,5"
+          opacity="0.7"
+        />
+        
         {/* Data points (3x repeated to show seams) */}
         {Array.from({ length: 3 }, (_, repeat) => 
           curveData.map((value, index) => {
             const x = padding + (repeat * curveWidth) + (index / (curveData.length - 1)) * curveWidth
             const y = padding + graphHeight - (value / 255) * graphHeight
             
-            return (
-              <circle
-                key={`${repeat}-${index}`}
-                cx={x}
-                cy={y}
-                r="2"
-                fill="#ffffff"
-                stroke="#00ffff"
-                strokeWidth="1"
-              />
-            )
+                         return (
+               <circle
+                 key={`${repeat}-${index}`}
+                 cx={x}
+                 cy={y}
+                 r="2"
+                 fill="#00ffff"
+                 stroke="#00ffff"
+                 strokeWidth="1"
+               />
+             )
           })
         )}
       </svg>
