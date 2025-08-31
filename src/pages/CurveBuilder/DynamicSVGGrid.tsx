@@ -588,12 +588,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       style={{ 
         width: '100%', 
         height: '100%', 
+        minHeight: '600px',
         overflow: 'hidden',
         position: 'relative',
         transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
         transition: isDragging ? 'none' : 'transform 0.1s ease-out',
         transformOrigin: 'center',
-        cursor: isDragging ? 'grabbing' : 'grab'
+        cursor: isDragging ? 'grabbing' : 'grab',
+        border: '2px solid blue'
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -613,6 +615,17 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         {/* Background with grid pattern */}
         <rect width={TOTAL_SIZE} height={TOTAL_SIZE} fill="url(#grid)" x="0" y="0"/>
         
+        {/* Test rectangle to verify SVG is working */}
+        <rect 
+          x="12800" 
+          y="12800" 
+          width="200" 
+          height="200" 
+          fill="red" 
+          stroke="yellow" 
+          strokeWidth="5"
+        />
+        
         {/* Center square indicator */}
         <rect
           id="center-square"
@@ -629,17 +642,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         
         {/* Only render rectangles that exist in the data */}
         {visibleSquares}
-        
-        {/* Test rectangle to verify SVG is working */}
-        <rect
-          x={12800}
-          y={12800}
-          width={50}
-          height={50}
-          fill="red"
-          stroke="yellow"
-          strokeWidth="3"
-        />
       </svg>
       
       {/* Debug info */}
