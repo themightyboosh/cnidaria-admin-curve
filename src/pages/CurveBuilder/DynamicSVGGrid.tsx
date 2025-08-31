@@ -1,72 +1,70 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import curveDataService, { type CurveDataCell } from '../../services/curveDataService'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import visibleRectanglesService, { type VisibleRectangle, type ViewportBounds } from '../../services/visibleRectanglesService'
+import curveDataService, { type CurveDataCell } from '../../services/curveDataService'
+import { apiUrl } from '../../config/environments'
 
 interface DynamicSVGGridProps {
-  width?: number
-  height?: number
   curveId?: string
-  colorMode?: 'value' | 'index'
-  spectrum?: number
-  curveWidth?: number
-  onCurveDataLoaded?: (data: Map<string, CurveDataCell>) => void
+  colorMode: 'value' | 'index'
+  spectrum: number
+  curveWidth: number
+  onCurveDataLoaded?: (cells: CurveDataCell[]) => void
 }
+
+const CELL_SIZE = 50
+const GRID_SIZE = 512
+const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 25600
 
 const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({ 
   curveId, 
-  colorMode = 'value', 
-  spectrum = 255, 
-  curveWidth = 1,
+  colorMode, 
+  spectrum, 
+  curveWidth, 
   onCurveDataLoaded 
 }) => {
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isZooming, setIsZooming] = useState(false)
+  const [isOptionPressed, setIsOptionPressed] = useState(false)
+  const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [hoveredCell, setHoveredCell] = useState<VisibleRectangle | null>(null)
+  
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [zoomLevel, setZoomLevel] = useState(0.9)
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 })
-  const [hoveredCell, setHoveredCell] = useState<{ worldX: number; worldY: number; curveValue?: number; indexPosition?: number; isNew?: boolean } | null>(null)
-  const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const [isOptionPressed, setIsOptionPressed] = useState(false)
-  const [isZooming, setIsZooming] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
   
-  const CELL_SIZE = 50
-  const GRID_SIZE = 512
-  const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 25600
-  
-  // Calculate center offset to keep SVG centered in canvas
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Calculate center offset to center the grid
   const centerOffset = useMemo(() => {
-    // Get the container dimensions (assuming 100% width/height)
-    const containerWidth = window.innerWidth || 800
-    const containerHeight = window.innerHeight || 600
+    if (!containerRef.current) return { x: 0, y: 0 }
     
-    // Calculate how much to offset to center the SVG
-    // The SVG center (0,0) should be at the center of the viewport
+    const container = containerRef.current
+    const containerWidth = container.clientWidth
+    const containerHeight = container.clientHeight
+    
+    // Center the grid by offsetting by half the container size
     const centerX = (containerWidth - TOTAL_SIZE) / 2
     const centerY = (containerHeight - TOTAL_SIZE) / 2
     
     return { x: centerX, y: centerY }
   }, [])
-  
-  // Calculate current viewport bounds
-  const calculateCurrentViewportBounds = useCallback((): ViewportBounds => {
-    const container = document.querySelector('.canvas-area') as HTMLElement
-    if (!container) {
-      console.log('⚠️ No canvas-area container found, using default bounds')
-      return { minX: -10, maxX: 10, minY: -10, maxY: 10 } // Default bounds
-    }
 
-    const containerRect = container.getBoundingClientRect()
-    const viewportWidth = containerRect.width
-    const viewportHeight = containerRect.height
-
-    // Calculate the visible area in world coordinates
-    // Convert from pixel coordinates to world coordinates (-256 to +255)
-    const visibleLeft = Math.floor((-panOffset.x - viewportWidth/2) / CELL_SIZE)
-    const visibleTop = Math.floor((-panOffset.y - viewportHeight/2) / CELL_SIZE)
-    const visibleRight = Math.ceil((-panOffset.x + viewportWidth/2) / CELL_SIZE)
-    const visibleBottom = Math.ceil((-panOffset.y + viewportHeight/2) / CELL_SIZE)
-
+  // Calculate current viewport bounds based on pan offset and container size
+  const calculateCurrentViewportBounds = useCallback(() => {
+    if (!containerRef.current) return { minX: -10, maxX: 10, minY: -10, maxY: 10 }
+    
+    const container = containerRef.current
+    const viewportWidth = container.clientWidth
+    const viewportHeight = container.clientHeight
+    
+    // Convert pixel coordinates to world coordinates
+    const visibleLeft = Math.floor((-panOffset.x) / CELL_SIZE)
+    const visibleRight = Math.floor((-panOffset.x + viewportWidth) / CELL_SIZE)
+    const visibleTop = Math.floor((-panOffset.y) / CELL_SIZE)
+    const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / CELL_SIZE)
+    
     const bounds = {
       minX: Math.max(-256, visibleLeft),
       maxX: Math.min(255, visibleRight),
@@ -167,308 +165,58 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       // Notify parent component
       if (onCurveDataLoaded) {
         // Convert VisibleRectangle to CurveDataCell for compatibility
-        const curveDataMap = new Map<string, CurveDataCell>()
+        const cells: CurveDataCell[] = []
         const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
         
-        for (const [id, rect] of visibleRects) {
-          if (rect.curveValue !== undefined) {
-            curveDataMap.set(id, {
-              rectangleId: rect.rectangleId,
-              curveValue: rect.curveValue,
-              indexPosition: rect.indexPosition || 0,
-              worldX: rect.worldX,
-              worldY: rect.worldY,
-              isNew: rect.isNew
-            })
-          }
-        }
+                 for (const [_, rect] of visibleRects) {
+           cells.push({
+             rectangleId: rect.rectangleId,
+             worldX: rect.worldX,
+             worldY: rect.worldY,
+             curveValue: rect.curveValue || 0,
+             indexPosition: rect.indexPosition || 0,
+             isNew: rect.isNew
+           })
+         }
         
-        onCurveDataLoaded(curveDataMap)
+        onCurveDataLoaded(cells)
       }
       
-      console.log('✅ Curve data loaded for visible rectangles')
+      console.log('✅ Curve data loaded for SVG grid:', visibleRectanglesService.getCount(), 'cells')
     } catch (error) {
-      console.error('❌ Failed to load curve data for visible rectangles:', error)
+      console.error('❌ Failed to load curve data:', error)
     } finally {
       setIsLoadingCurveData(false)
     }
   }
 
-  // Update colors from visible rectangles service
+  // Update colors from visible rectangles
   const updateColorsFromVisibleRectangles = () => {
     visibleRectanglesService.updateColors(colorMode, spectrum, curveWidth)
   }
 
-  // Load initial curve data for the entire grid
-  const loadInitialCurveData = async () => {
-    if (!curveId) return
-
-    setIsLoadingCurveData(true)
-    try {
-      console.log('🔄 Loading initial curve data for grid')
-      
-      // Calculate grid bounds based on current grid data
-      const minX = -64
-      const maxX = 63
-      const minY = -64
-      const maxY = 63
-
-      const data = await curveDataService.fetchCurveData(curveId, minX, minY, maxX, maxY)
-      const curveName = Object.keys(data)[0]
-      
-      if (data[curveName]) {
-        curveDataService.updateLocalDataArray(curveName, data[curveName])
-        updateColorsFromCurveData()
-        
-        // Notify parent component
-        if (onCurveDataLoaded) {
-          onCurveDataLoaded(curveDataService.getAllCurveData())
-        }
-        
-        console.log('✅ Initial curve data loaded successfully')
-      }
-    } catch (error) {
-      console.error('❌ Failed to load initial curve data:', error)
-    } finally {
-      setIsLoadingCurveData(false)
+  // Mouse event handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    console.log('🖱️ Mouse down')
+    if (e.button === 0) { // Left click only
+      setIsDragging(true)
+      setLastMousePos({ x: e.clientX, y: e.clientY })
+      setDragStartOffset({ ...panOffset })
     }
   }
 
-  // Update colors based on current curve data
-  const updateColorsFromCurveData = () => {
-    const colorMap = curveDataService.applyColorsToRectangles(colorMode, spectrum, curveWidth)
-    
-    // Update grid data with new colors
-    setGridData(prevData => {
-      const newData = prevData.map(row => row.map(cell => {
-        const rectangleId = `square-${cell.worldX}-${cell.worldY}`
-        const curveData = curveDataService.getCellData(rectangleId)
-        
-        if (curveData) {
-          // Parse color string to RGB values
-          const colorMatch = colorMap.get(rectangleId)?.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
-          if (colorMatch) {
-            return {
-              ...cell,
-              fillR: parseInt(colorMatch[1]),
-              fillG: parseInt(colorMatch[2]),
-              fillB: parseInt(colorMatch[3])
-            }
-          }
-        }
-        
-        return cell
-      }))
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && !isZooming) {
+      const deltaX = e.clientX - lastMousePos.x
+      const deltaY = e.clientY - lastMousePos.y
       
-      return newData
-    })
-  }
-  
-  // Grid data with proper initialization
-  const [gridData, setGridData] = useState<Array<Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }>>>(() => {
-    const data: Array<Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }>> = []
-    
-    // Initialize with center area (-64 to +63)
-    for (let y = 0; y < GRID_SIZE; y++) {
-      const row: Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }> = []
-      for (let x = 0; x < GRID_SIZE; x++) {
-        const worldX = x - 64 // Convert to -64 to +63 range
-        const worldY = y - 64 // Convert to -64 to +63 range
-        
-        // Random RGB values for initial grid
-        const fillR = Math.floor(Math.random() * 256)
-        const fillG = Math.floor(Math.random() * 256)
-        const fillB = Math.floor(Math.random() * 256)
-        
-        row.push({ fillR, fillG, fillB, worldX, worldY, isNew: false })
-      }
-      data.push(row)
-    }
-    
-    return data
-  })
-  
-  // Calculate how many rows/columns need to be added/removed after drag
-  const calculateGridChanges = (startOffset: { x: number; y: number }, endOffset: { x: number; y: number }) => {
-    const startGridX = Math.floor(-startOffset.x / CELL_SIZE)
-    const startGridY = Math.floor(-startOffset.y / CELL_SIZE)
-    const endGridX = Math.floor(-endOffset.x / CELL_SIZE)
-    const endGridY = Math.floor(-endOffset.y / CELL_SIZE)
-    
-    const deltaX = endGridX - startGridX
-    const deltaY = endGridY - startGridY
-    
-    return {
-      addColumns: Math.max(0, deltaX),
-      removeColumns: Math.max(0, -deltaX),
-      addRows: Math.max(0, deltaY),
-      removeRows: Math.max(0, -deltaY)
+      setPanOffset({
+        x: dragStartOffset.x + deltaX,
+        y: dragStartOffset.y + deltaY
+      })
     }
   }
-  
-  // Apply grid changes after drag ends
-  const applyGridChanges = async (changes: { addColumns: number; removeColumns: number; addRows: number; removeRows: number }) => {
-    let newCells: Array<{ worldX: number; worldY: number }> = []
-    
-    setGridData(prevData => {
-      let newData = prevData.map(row => [...row]) // Deep copy
-      newCells = []
-      
-      // Apply column changes
-      if (changes.addColumns > 0) {
-        // Add columns to the right
-        for (let y = 0; y < GRID_SIZE; y++) {
-          for (let i = 0; i < changes.addColumns; i++) {
-            const lastWorldX = newData[y][GRID_SIZE - 1].worldX
-            const fillR = Math.floor(Math.random() * 256)
-            const fillG = Math.floor(Math.random() * 256)
-            const fillB = Math.floor(Math.random() * 256)
-            const newCell = { 
-              fillR, fillG, fillB, 
-              worldX: lastWorldX + 1, 
-              worldY: newData[y][0].worldY,
-              isNew: true
-            }
-            newData[y].push(newCell)
-            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
-          }
-          // Remove excess columns from left
-          newData[y] = newData[y].slice(changes.addColumns)
-        }
-      } else if (changes.removeColumns > 0) {
-        // Add columns to the left
-        for (let y = 0; y < GRID_SIZE; y++) {
-          for (let i = 0; i < changes.removeColumns; i++) {
-            const firstWorldX = newData[y][0].worldX
-            const fillR = Math.floor(Math.random() * 256)
-            const fillG = Math.floor(Math.random() * 256)
-            const fillB = Math.floor(Math.random() * 256)
-            const newCell = { 
-              fillR, fillG, fillB, 
-              worldX: firstWorldX - 1, 
-              worldY: newData[y][0].worldY,
-              isNew: true
-            }
-            newData[y].unshift(newCell)
-            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
-          }
-          // Remove excess columns from right
-          newData[y] = newData[y].slice(0, GRID_SIZE)
-        }
-      }
-      
-      // Apply row changes
-      if (changes.addRows > 0) {
-        // Add rows to the bottom
-        for (let i = 0; i < changes.addRows; i++) {
-          const lastWorldY = newData[GRID_SIZE - 1][0].worldY
-          const newRow: Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }> = []
-          for (let x = 0; x < GRID_SIZE; x++) {
-            const fillR = Math.floor(Math.random() * 256)
-            const fillG = Math.floor(Math.random() * 256)
-            const fillB = Math.floor(Math.random() * 256)
-            const newCell = { 
-              fillR, fillG, fillB, 
-              worldX: newData[0][x].worldX, 
-              worldY: lastWorldY + 1,
-              isNew: true
-            }
-            newRow.push(newCell)
-            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
-          }
-          newData.push(newRow)
-        }
-        // Remove excess rows from top
-        newData = newData.slice(changes.addRows)
-      } else if (changes.removeRows > 0) {
-        // Add rows to the top
-        for (let i = 0; i < changes.removeRows; i++) {
-          const firstWorldY = newData[0][0].worldY
-          const newRow: Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }> = []
-          for (let x = 0; x < GRID_SIZE; x++) {
-            const fillR = Math.floor(Math.random() * 256)
-            const fillG = Math.floor(Math.random() * 256)
-            const fillB = Math.floor(Math.random() * 256)
-            const newCell = { 
-              fillR, fillG, fillB, 
-              worldX: newData[0][x].worldX, 
-              worldY: firstWorldY - 1,
-              isNew: true
-            }
-            newRow.push(newCell)
-            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
-          }
-          newData.unshift(newRow)
-        }
-        // Remove excess rows from bottom
-        newData = newData.slice(0, GRID_SIZE)
-      }
-      
-      return newData
-    })
-    
-    // Update curve data service structure
-    curveDataService.updateArrayStructure(changes, gridData)
-    
-    // Fetch curve data for new cells if curve is loaded
-    if (curveId && newCells.length > 0) {
-      try {
-        await curveDataService.fetchDataForNewCells(curveId, newCells)
-        updateColorsFromCurveData()
-      } catch (error) {
-        console.error('❌ Failed to fetch data for new cells:', error)
-      }
-    }
-    
-    // Adjust pan offset to maintain visual consistency
-    setPanOffset(prevOffset => {
-      let newOffset = { ...prevOffset }
-      
-      // When we add columns to the right, we need to move the view right to keep existing cells in place
-      if (changes.addColumns > 0) {
-        newOffset.x -= changes.addColumns * CELL_SIZE
-      }
-      // When we add columns to the left, we need to move the view left to keep existing cells in place
-      else if (changes.removeColumns > 0) {
-        newOffset.x += changes.removeColumns * CELL_SIZE
-      }
-      
-      // When we add rows to the bottom, we need to move the view down to keep existing cells in place
-      if (changes.addRows > 0) {
-        newOffset.y += changes.addRows * CELL_SIZE
-      }
-      // When we add rows to the top, we need to move the view up to keep existing cells in place
-      else if (changes.removeRows > 0) {
-        newOffset.y -= changes.removeRows * CELL_SIZE
-      }
-      
-      return newOffset
-    })
-  }
-  
-  const handleMouseDown = (event: React.MouseEvent) => {
-    console.log('🖱️ Mouse down:', event.clientX, event.clientY)
-    setIsDragging(true)
-    setLastMousePos({ x: event.clientX, y: event.clientY })
-    setDragStartOffset({ ...panOffset }) // Store the starting position
-  }
-  
-  const handleMouseMove = (event: React.MouseEvent) => {
-    if (!isDragging) return
-    
-    const deltaX = event.clientX - lastMousePos.x
-    const deltaY = event.clientY - lastMousePos.y
-    
-    console.log('🖱️ Mouse move:', deltaX, deltaY, 'panOffset:', panOffset)
-    
-    setPanOffset(prev => ({
-      x: prev.x + deltaX, // Swapped direction for left/right
-      y: prev.y + deltaY  // Keep up/down as is
-    }))
-    
-    setLastMousePos({ x: event.clientX, y: event.clientY })
-  }
-  
+
   const handleMouseUp = async () => {
     console.log('🖱️ Mouse up, isDragging:', isDragging, 'isZooming:', isZooming)
     if (isDragging && !isZooming) {
@@ -483,35 +231,28 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     
     setIsDragging(false)
   }
-  
+
   const handleMouseLeave = () => {
-    if (isDragging) {
-      handleMouseUp()
-    }
+    setIsDragging(false)
   }
 
+  // Handle cell hover
   const handleCellMouseEnter = (worldX: number, worldY: number) => {
-    if (!isDragging && !isZooming) {
-      const rectangleId = `square-${worldX}-${worldY}`
-      const rectData = visibleRectanglesService.getRectangleData(rectangleId)
-      
-      setHoveredCell({
-        worldX,
-        worldY,
-        curveValue: rectData?.curveValue,
-        indexPosition: rectData?.indexPosition,
-        isNew: rectData?.isNew
-      })
+    if (!isDragging) {
+             const rectData = visibleRectanglesService.getRectangleData(`square-${worldX}-${worldY}`)
+      if (rectData) {
+        setHoveredCell(rectData)
+      }
     }
   }
 
   const handleCellMouseLeave = () => {
-    if (!isDragging && !isZooming) {
+    if (!isDragging) {
       setHoveredCell(null)
     }
   }
   
-    // Generate visible squares from visible rectangles service
+  // Generate visible squares from visible rectangles service
   const visibleSquares = useMemo(() => {
     const squares: JSX.Element[] = []
     const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
@@ -585,6 +326,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   
   return (
     <div 
+      ref={containerRef}
       style={{ 
         width: '100%', 
         height: '100%', 
@@ -669,7 +411,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
             Hover: ({hoveredCell.worldX}, {hoveredCell.worldY})<br/>
             {hoveredCell.curveValue !== undefined && `Value: ${hoveredCell.curveValue}`}<br/>
             {hoveredCell.indexPosition !== undefined && `Index: ${hoveredCell.indexPosition}`}<br/>
-            {hoveredCell.isNew && 'New cell'}
+            {hoveredCell.isNew && '🆕 New Cell'}<br/>
           </>
         )}
       </div>
