@@ -33,8 +33,8 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
   const padding = 20
   const maxHeight = 512
   const graphHeight = Math.min(255, maxHeight - (padding * 2))
-  const graphWidth = Math.max(100, curveWidth) // Minimum width of 100px
-  const actualWidth = graphWidth + (padding * 2)
+  const displayWidth = Math.max(100, curveWidth * 3) // Show 3x curve width to see seams
+  const actualWidth = displayWidth + (padding * 2)
   const actualHeight = graphHeight + (padding * 2)
 
   // Create background gradient using the active spectrum
@@ -48,17 +48,23 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
     return `linear-gradient(to bottom, ${stops})`
   }
 
-  // Generate SVG path for the curve
+  // Generate SVG path for the curve (3x repeated to show seams)
   const generateCurvePath = () => {
     if (curveData.length === 0) return ''
     
-    const points = curveData.map((value, index) => {
-      const x = padding + (index / (curveData.length - 1)) * graphWidth
-      const y = padding + graphHeight - (value / 255) * graphHeight
-      return `${x},${y}`
-    })
+    let allPoints = []
     
-    return `M ${points.join(' L ')}`
+    // Repeat the curve data 3 times
+    for (let repeat = 0; repeat < 3; repeat++) {
+      const points = curveData.map((value, index) => {
+        const x = padding + (repeat * curveWidth) + (index / (curveData.length - 1)) * curveWidth
+        const y = padding + graphHeight - (value / 255) * graphHeight
+        return `${x},${y}`
+      })
+      allPoints.push(...points)
+    }
+    
+    return `M ${allPoints.join(' L ')}`
   }
 
   return (
@@ -93,7 +99,7 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
         <rect 
           x={padding} 
           y={padding} 
-          width={graphWidth} 
+          width={displayWidth} 
           height={graphHeight}
           fill="url(#spectrumGradient)"
           opacity="0.1"
@@ -109,16 +115,16 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
                 key={`h-${i}`}
                 x1={padding} 
                 y1={y} 
-                x2={padding + graphWidth} 
+                x2={padding + displayWidth} 
                 y2={y}
               />
             )
           })}
           
           {/* Vertical grid lines (every 50 units if width > 200) */}
-          {graphWidth > 200 && Array.from({ length: Math.floor(graphWidth / 50) + 1 }, (_, i) => {
+          {displayWidth > 200 && Array.from({ length: Math.floor(displayWidth / 50) + 1 }, (_, i) => {
             const x = padding + (i * 50)
-            if (x <= padding + graphWidth) {
+            if (x <= padding + displayWidth) {
               return (
                 <line 
                   key={`v-${i}`}
@@ -147,8 +153,8 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           })}
           
           {/* X-axis labels */}
-          <text x={padding + graphWidth / 2} y={actualHeight - 5}>
-            Curve Width: {curveWidth}
+          <text x={padding + displayWidth / 2} y={actualHeight - 5}>
+            Curve Width: {curveWidth} (3x display to show seams)
           </text>
         </g>
         
@@ -160,23 +166,25 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           fill="none"
         />
         
-        {/* Data points */}
-        {curveData.map((value, index) => {
-          const x = padding + (index / (curveData.length - 1)) * graphWidth
-          const y = padding + graphHeight - (value / 255) * graphHeight
-          
-          return (
-            <circle
-              key={index}
-              cx={x}
-              cy={y}
-              r="2"
-              fill="#ffffff"
-              stroke="#00ffff"
-              strokeWidth="1"
-            />
-          )
-        })}
+        {/* Data points (3x repeated to show seams) */}
+        {Array.from({ length: 3 }, (_, repeat) => 
+          curveData.map((value, index) => {
+            const x = padding + (repeat * curveWidth) + (index / (curveData.length - 1)) * curveWidth
+            const y = padding + graphHeight - (value / 255) * graphHeight
+            
+            return (
+              <circle
+                key={`${repeat}-${index}`}
+                cx={x}
+                cy={y}
+                r="2"
+                fill="#ffffff"
+                stroke="#00ffff"
+                strokeWidth="1"
+              />
+            )
+          })
+        )}
       </svg>
     </div>
   )
