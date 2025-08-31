@@ -36,6 +36,7 @@ class VisibleRectanglesService {
     }
 
     // Create rectangles for the expanded viewport
+    console.log('🔧 Creating rectangles for bounds:', expandedBounds)
     for (let y = expandedBounds.minY; y <= expandedBounds.maxY; y++) {
       for (let x = expandedBounds.minX; x <= expandedBounds.maxX; x++) {
         const rectangleId = `square-${x}-${y}`
@@ -288,6 +289,7 @@ class VisibleRectanglesService {
 
   // Get all visible rectangles
   getAllVisibleRectangles(): Map<string, VisibleRectangle> {
+    console.log('📊 getAllVisibleRectangles called, returning', this.visibleRectangles.size, 'rectangles')
     return new Map(this.visibleRectangles)
   }
 

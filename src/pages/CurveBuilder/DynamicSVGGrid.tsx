@@ -51,6 +51,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const calculateCurrentViewportBounds = useCallback((): ViewportBounds => {
     const container = document.querySelector('.canvas-area') as HTMLElement
     if (!container) {
+      console.log('⚠️ No canvas-area container found, using default bounds')
       return { minX: -10, maxX: 10, minY: -10, maxY: 10 } // Default bounds
     }
 
@@ -64,12 +65,15 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const visibleRight = Math.ceil((-panOffset.x + viewportWidth) / CELL_SIZE)
     const visibleBottom = Math.ceil((-panOffset.y + viewportHeight) / CELL_SIZE)
 
-    return {
+    const bounds = {
       minX: visibleLeft,
       maxX: visibleRight,
       minY: visibleTop,
       maxY: visibleBottom
     }
+
+    console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'container:', { width: viewportWidth, height: viewportHeight })
+    return bounds
   }, [panOffset])
 
   // Initialize pan offset to center the grid and visible rectangles
@@ -498,39 +502,78 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const squares: JSX.Element[] = []
     const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
     
-    for (const [rectangleId, rect] of visibleRects) {
-      const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
-      
-      // Calculate pixel position based on world coordinates
-      const pixelX = (worldX + 64) * CELL_SIZE // Convert from world coords to pixel coords
-      const pixelY = (worldY + 64) * CELL_SIZE
-      
-      const uniqueKey = `visible-${worldX}-${worldY}`
-      const isCenter = worldX === 0 && worldY === 0
-      
-      const fillColor = `rgb(${fillR},${fillG},${fillB})`
-      const strokeColor = isCenter ? '#ff0000' : '#00ffff'
-      
-      squares.push(
-        <rect
-          key={uniqueKey}
-          id={rectangleId}
-          data-coordinates={`${worldX},${worldY}`}
-          data-is-new={isNew ? 'true' : 'false'}
-          x={pixelX}
-          y={pixelY}
-          width={CELL_SIZE}
-          height={CELL_SIZE}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={isCenter ? 2 : 1}
-          strokeDasharray={isCenter ? '5,5' : 'none'}
-          onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
-          onMouseLeave={handleCellMouseLeave}
-        />
-      )
+    console.log('🎨 Generating visible squares:', visibleRects.size, 'rectangles')
+    
+    // Fallback: if no rectangles are available, create some default ones
+    if (visibleRects.size === 0) {
+      console.log('⚠️ No visible rectangles, creating fallback grid')
+      for (let y = -5; y <= 5; y++) {
+        for (let x = -5; x <= 5; x++) {
+          const rectangleId = `fallback-${x}-${y}`
+          const pixelX = (x + 64) * CELL_SIZE
+          const pixelY = (y + 64) * CELL_SIZE
+          const uniqueKey = `fallback-${x}-${y}`
+          const isCenter = x === 0 && y === 0
+          const fillR = Math.floor(Math.random() * 256)
+          const fillG = Math.floor(Math.random() * 256)
+          const fillB = Math.floor(Math.random() * 256)
+          
+          squares.push(
+            <rect
+              key={uniqueKey}
+              id={rectangleId}
+              data-coordinates={`${x},${y}`}
+              data-is-new="false"
+              x={pixelX}
+              y={pixelY}
+              width={CELL_SIZE}
+              height={CELL_SIZE}
+              fill={`rgb(${fillR},${fillG},${fillB})`}
+              stroke={isCenter ? '#ff0000' : '#00ffff'}
+              strokeWidth={isCenter ? 2 : 1}
+              strokeDasharray={isCenter ? '5,5' : 'none'}
+              onMouseEnter={() => handleCellMouseEnter(x, y)}
+              onMouseLeave={handleCellMouseLeave}
+            />
+          )
+        }
+      }
+    } else {
+      for (const [rectangleId, rect] of visibleRects) {
+        const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
+        
+        // Calculate pixel position based on world coordinates
+        const pixelX = (worldX + 64) * CELL_SIZE // Convert from world coords to pixel coords
+        const pixelY = (worldY + 64) * CELL_SIZE
+        
+        const uniqueKey = `visible-${worldX}-${worldY}`
+        const isCenter = worldX === 0 && worldY === 0
+        
+        const fillColor = `rgb(${fillR},${fillG},${fillB})`
+        const strokeColor = isCenter ? '#ff0000' : '#00ffff'
+        
+        squares.push(
+          <rect
+            key={uniqueKey}
+            id={rectangleId}
+            data-coordinates={`${worldX},${worldY}`}
+            data-is-new={isNew ? 'true' : 'false'}
+            x={pixelX}
+            y={pixelY}
+            width={CELL_SIZE}
+            height={CELL_SIZE}
+            fill={fillColor}
+            stroke={strokeColor}
+            strokeWidth={isCenter ? 2 : 1}
+            strokeDasharray={isCenter ? '5,5' : 'none'}
+            onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
+            onMouseLeave={handleCellMouseLeave}
+          />
+        )
+      }
     }
     
+    console.log('🎨 Generated', squares.length, 'squares')
     return squares
   }, [isDragging, isInitialized])
   
