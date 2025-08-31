@@ -148,7 +148,7 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
         </g>
         
         {/* Axis labels */}
-        <g fill="#00ffff" fontSize="12" textAnchor="middle">
+        <g fill="#00ffff" fontSize="10" textAnchor="middle">
           {/* Y-axis labels (0, 50, 100, 150, 200, 255) */}
           {Array.from({ length: 6 }, (_, i) => {
             const y = padding + (i * graphHeight / 5)
@@ -170,7 +170,7 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
             x={padding + displayWidth + 5} 
             y={padding + graphHeight - (averageValue / 255) * graphHeight + 4}
             fill="#00ffff"
-            fontSize="10"
+            fontSize="8"
           >
             Avg: {Math.round(averageValue)}
           </text>
