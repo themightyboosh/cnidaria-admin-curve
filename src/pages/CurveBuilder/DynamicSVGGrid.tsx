@@ -523,8 +523,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
       // Calculate pixel position based on world coordinates
-      // worldX: -256 to +255, worldY: -256 to +255
-      // pixelX: 0 to 25550, pixelY: 0 to 25550
+      // The SVG is fixed at 25600x25600, rectangles are positioned absolutely
       const pixelX = (worldX + 256) * CELL_SIZE
       const pixelY = (worldY + 256) * CELL_SIZE
       
@@ -589,22 +588,20 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         width: '100%', 
         height: '100%', 
         overflow: 'hidden',
-        position: 'relative'
+        position: 'relative',
+        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+        transformOrigin: 'center',
+        cursor: isDragging ? 'grabbing' : 'grab'
       }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       <svg 
         width={TOTAL_SIZE} 
         height={TOTAL_SIZE}
-        style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
-          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-          transformOrigin: 'center',
-          cursor: isDragging ? 'grabbing' : 'grab'
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
       >
         <defs>
           <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
