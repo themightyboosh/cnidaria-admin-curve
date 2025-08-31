@@ -66,7 +66,7 @@ class CurveTypesService {
     this.isLoading = true;
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/cnidaria-dev/us-central1/cnidaria-api-dev';
+      const apiUrl = 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev';
       const response = await fetch(`${apiUrl}/api/curve-types`);
       
       if (!response.ok) {
@@ -105,7 +105,7 @@ class CurveTypesService {
    */
   async fetchCurveTypesList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/cnidaria-dev/us-central1/cnidaria-api-dev';
+      const apiUrl = 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev';
       const response = await fetch(`${apiUrl}/api/curve-types/list`);
       
       if (!response.ok) {
