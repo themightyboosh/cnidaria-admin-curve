@@ -444,6 +444,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         const pixelY = y * CELL_SIZE
         
         const squareId = `square-${worldX}-${worldY}`
+        const uniqueKey = `grid-${x}-${y}-world-${worldX}-${worldY}`
         const isCenter = worldX === 0 && worldY === 0
         
         // Use curve data colors if available, otherwise use random colors
@@ -452,7 +453,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         
         squares.push(
           <rect
-            key={squareId}
+            key={uniqueKey}
             id={squareId}
             data-coordinates={`${worldX},${worldY}`}
             data-is-new={isNew ? 'true' : 'false'}
