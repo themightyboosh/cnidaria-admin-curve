@@ -23,6 +23,20 @@ export interface CurveTypesResponse {
   message: string;
 }
 
+export interface CurveTypesListResponse {
+  success: boolean;
+  data: {
+    curveTypes: Array<{
+      id: string;
+      name: string;
+      cpuLoad: string;
+      displayName: string;
+    }>;
+    total: number;
+  };
+  message: string;
+}
+
 class CurveTypesService {
   private curveTypes: CurveTypeInfo[] = [];
   private curveTypesMap: Record<string, CurveTypeInfo> = {};
@@ -87,6 +101,41 @@ class CurveTypesService {
   }
 
   /**
+   * Fetch simple curve types list for dropdowns
+   */
+  async fetchCurveTypesList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/cnidaria-dev/us-central1/cnidaria-api-dev';
+      const response = await fetch(`${apiUrl}/api/curve-types/list`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch curve types list: ${response.status} ${response.statusText}`);
+      }
+
+      const data: CurveTypesListResponse = await response.json();
+      
+      if (!data.success) {
+        throw new Error(`API error: ${data.message}`);
+      }
+
+      console.log(`📊 Loaded ${data.data.total} curve types for dropdown`);
+      
+      return data.data.curveTypes;
+
+    } catch (error) {
+      console.error('❌ Failed to fetch curve types list:', error);
+      
+      // Return fallback curve types if API fails
+      return this.getFallbackCurveTypes().map(ct => ({
+        id: ct.id,
+        name: ct.name,
+        cpuLoad: ct.cpuLoad,
+        displayName: this.formatCurveType(ct)
+      }));
+    }
+  }
+
+  /**
    * Get curve types (cached if available)
    */
   async getCurveTypes(): Promise<CurveTypeInfo[]> {
@@ -94,6 +143,13 @@ class CurveTypesService {
       return this.fetchCurveTypes();
     }
     return this.curveTypes;
+  }
+
+  /**
+   * Get simple curve types list for dropdowns
+   */
+  async getCurveTypesList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
+    return this.fetchCurveTypesList();
   }
 
   /**

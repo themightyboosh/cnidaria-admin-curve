@@ -74,6 +74,7 @@ function CurveBuilder() {
   const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
   const [curveTypes, setCurveTypes] = useState<CurveTypeInfo[]>([])
+  const [curveTypesList, setCurveTypesList] = useState<Array<{id: string, name: string, cpuLoad: string, displayName: string}>>([])
   const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -97,8 +98,10 @@ function CurveBuilder() {
     setIsLoadingCurveTypes(true)
     try {
       const types = await curveTypesService.getCurveTypes()
+      const typesList = await curveTypesService.getCurveTypesList()
       setCurveTypes(types)
-      console.log(`📊 Loaded ${types.length} curve types`)
+      setCurveTypesList(typesList)
+      console.log(`📊 Loaded ${types.length} curve types and ${typesList.length} for dropdown`)
     } catch (error) {
       console.error('Failed to load curve types:', error)
       setError('Failed to load curve types')
@@ -1108,9 +1111,9 @@ function CurveBuilder() {
                         {isLoadingCurveTypes ? (
                           <option value="">Loading curve types...</option>
                         ) : (
-                          curveTypes.map((curveType) => (
+                          curveTypesList.map((curveType) => (
                             <option key={curveType.id} value={curveType.id}>
-                              {curveTypesService.formatCurveType(curveType)} - {curveType.description}
+                              {curveType.displayName}
                             </option>
                           ))
                         )}
