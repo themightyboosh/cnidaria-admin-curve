@@ -523,7 +523,9 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
       // Calculate pixel position based on world coordinates
-      const pixelX = (worldX + 256) * CELL_SIZE // Convert from world coords to pixel coords (-256 to +255)
+      // worldX: -256 to +255, worldY: -256 to +255
+      // pixelX: 0 to 25550, pixelY: 0 to 25550
+      const pixelX = (worldX + 256) * CELL_SIZE
       const pixelY = (worldY + 256) * CELL_SIZE
       
       // Debug coordinate conversion

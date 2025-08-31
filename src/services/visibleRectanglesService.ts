@@ -29,6 +29,7 @@ class VisibleRectanglesService {
     
     // Only create rectangles for the exact viewport bounds (no buffer initially)
     console.log('🔧 Creating rectangles for initial viewport bounds:', viewportBounds)
+    console.log('🔧 Grid dimensions:', viewportBounds.maxX - viewportBounds.minX + 1, 'x', viewportBounds.maxY - viewportBounds.minY + 1)
     for (let y = viewportBounds.minY; y <= viewportBounds.maxY; y++) {
       for (let x = viewportBounds.minX; x <= viewportBounds.maxX; x++) {
         const rectangleId = `square-${x}-${y}`
@@ -47,7 +48,7 @@ class VisibleRectanglesService {
         })
         
         // Debug first few rectangles
-        if (this.visibleRectangles.size <= 5) {
+        if (this.visibleRectangles.size <= 10) {
           console.log('🔧 Created rectangle:', {
             rectangleId,
             worldX: x,
@@ -56,6 +57,17 @@ class VisibleRectanglesService {
             fillG,
             fillB
           })
+        }
+        
+        // Debug grid structure
+        if (this.visibleRectangles.size === 1) {
+          console.log('🔧 First rectangle at:', x, y)
+        }
+        if (this.visibleRectangles.size === 25) {
+          console.log('🔧 25th rectangle at:', x, y)
+        }
+        if (this.visibleRectangles.size === 50) {
+          console.log('🔧 50th rectangle at:', x, y)
         }
       }
     }
