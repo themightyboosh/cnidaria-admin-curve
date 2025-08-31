@@ -298,7 +298,10 @@ function CurveBuilder() {
         const width = Math.ceil(rect.width / cellSize)
         const height = Math.ceil(rect.height / cellSize)
         
+        console.log('Updating grid dimensions:', { rectWidth: rect.width, rectHeight: rect.height, cellSize, width, height })
         setGridDimensions({ width, height })
+      } else {
+        console.log('Canvas ref is null')
       }
     }
 
@@ -777,6 +780,13 @@ function CurveBuilder() {
   // Render grid cells
   const renderGridCells = () => {
     const { width, height } = gridDimensions
+    console.log('Rendering grid cells:', { width, height, cellSize })
+    
+    if (width === 0 || height === 0) {
+      console.log('Grid dimensions are 0, returning empty grid')
+      return <div>Loading grid...</div>
+    }
+    
     const cells = []
     
     for (let x = 0; x < width; x++) {
@@ -814,6 +824,7 @@ function CurveBuilder() {
       }
     }
     
+    console.log(`Rendered ${cells.length} cells`)
     return cells
   }
 
@@ -1232,7 +1243,7 @@ function CurveBuilder() {
           )}
         </div>
         
-        {/* Canvas Area */}
+                {/* Canvas Area */}
         <div className="canvas-area">
           <div 
             ref={canvasRef}
@@ -1251,10 +1262,14 @@ function CurveBuilder() {
                 left: '50%',
                 top: '50%',
                 transform: 'translate(-50%, -50%)',
-                width: `${gridDimensions.width * cellSize}px`,
-                height: `${gridDimensions.height * cellSize}px`
+                width: `${(gridDimensions.width || 20) * cellSize}px`,
+                height: `${(gridDimensions.height || 20) * cellSize}px`,
+                border: '1px solid red' // Debug border
               }}
             >
+              <div style={{ color: 'white', fontSize: '12px', position: 'absolute', top: '-20px', left: '0' }}>
+                Debug: {gridDimensions.width || 20}x{gridDimensions.height || 20} cells, {cellSize}px each
+              </div>
               {renderGridCells()}
             </div>
           </div>
