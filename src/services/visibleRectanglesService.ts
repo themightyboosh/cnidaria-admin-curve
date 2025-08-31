@@ -45,6 +45,18 @@ class VisibleRectanglesService {
           fillB,
           isNew: false
         })
+        
+        // Debug first few rectangles
+        if (this.visibleRectangles.size <= 5) {
+          console.log('🔧 Created rectangle:', {
+            rectangleId,
+            worldX: x,
+            worldY: y,
+            fillR,
+            fillG,
+            fillB
+          })
+        }
       }
     }
 

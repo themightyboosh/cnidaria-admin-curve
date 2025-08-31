@@ -447,6 +447,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   }
   
   const handleMouseDown = (event: React.MouseEvent) => {
+    console.log('🖱️ Mouse down:', event.clientX, event.clientY)
     setIsDragging(true)
     setLastMousePos({ x: event.clientX, y: event.clientY })
     setDragStartOffset({ ...panOffset }) // Store the starting position
@@ -458,6 +459,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const deltaX = event.clientX - lastMousePos.x
     const deltaY = event.clientY - lastMousePos.y
     
+    console.log('🖱️ Mouse move:', deltaX, deltaY, 'panOffset:', panOffset)
+    
     setPanOffset(prev => ({
       x: prev.x + deltaX, // Swapped direction for left/right
       y: prev.y + deltaY  // Keep up/down as is
@@ -467,6 +470,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   }
   
   const handleMouseUp = async () => {
+    console.log('🖱️ Mouse up, isDragging:', isDragging, 'isZooming:', isZooming)
     if (isDragging && !isZooming) {
       // Update viewport bounds in visible rectangles service
       const newViewportBounds = calculateCurrentViewportBounds()
@@ -522,11 +526,36 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       const pixelX = (worldX + 256) * CELL_SIZE // Convert from world coords to pixel coords (-256 to +255)
       const pixelY = (worldY + 256) * CELL_SIZE
       
+      // Debug coordinate conversion
+      if (squares.length < 3) {
+        console.log('📍 Coordinate conversion:', {
+          worldX,
+          worldY,
+          pixelX,
+          pixelY,
+          cellSize: CELL_SIZE,
+          offset: 256
+        })
+      }
+      
       const uniqueKey = `visible-${worldX}-${worldY}`
       const isCenter = worldX === 0 && worldY === 0
       
       const fillColor = `rgb(${fillR},${fillG},${fillB})`
       const strokeColor = isCenter ? '#ff0000' : '#00ffff'
+      
+      // Debug first few rectangles
+      if (squares.length < 5) {
+        console.log('🔍 Rectangle:', {
+          rectangleId,
+          worldX,
+          worldY,
+          pixelX,
+          pixelY,
+          fillColor,
+          isCenter
+        })
+      }
       
       squares.push(
         <rect
@@ -558,13 +587,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         width: '100%', 
         height: '100%', 
         overflow: 'hidden',
-        cursor: isDragging ? 'grabbing' : 'grab',
         position: 'relative'
       }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
     >
       <svg 
         width={TOTAL_SIZE} 
@@ -572,8 +596,13 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
           transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-          transformOrigin: 'center'
+          transformOrigin: 'center',
+          cursor: isDragging ? 'grabbing' : 'grab'
         }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       >
         <defs>
           <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
@@ -600,6 +629,17 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         
         {/* Only render rectangles that exist in the data */}
         {visibleSquares}
+        
+        {/* Test rectangle to verify SVG is working */}
+        <rect
+          x={12800}
+          y={12800}
+          width={50}
+          height={50}
+          fill="red"
+          stroke="yellow"
+          strokeWidth="3"
+        />
       </svg>
       
       {/* Debug info */}
