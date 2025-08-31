@@ -43,10 +43,12 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
     
-    // Center the grid by offsetting by half the container size
+    // Center the SVG so it fills the viewport
+    // The SVG should be positioned so its center aligns with the container center
     const centerX = (containerWidth - TOTAL_SIZE) / 2
     const centerY = (containerHeight - TOTAL_SIZE) / 2
     
+    console.log('🎯 Center offset calculated:', { centerX, centerY, containerWidth, containerHeight, totalSize: TOTAL_SIZE })
     return { x: centerX, y: centerY }
   }, [])
 
@@ -59,16 +61,15 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const viewportHeight = container.clientHeight
     
     // Convert pixel coordinates to world coordinates
-    // Since SVG is moving, we need to account for its position
+    // The SVG is moving, so we calculate what's visible in the viewport
     const scaledCellSize = CELL_SIZE * zoomLevel
-    const svgCenterX = TOTAL_SIZE / 2
-    const svgCenterY = TOTAL_SIZE / 2
     
-    // Calculate visible area in world coordinates
-    const visibleLeft = Math.floor((-panOffset.x - svgCenterX) / scaledCellSize)
-    const visibleRight = Math.floor((-panOffset.x + viewportWidth - svgCenterX) / scaledCellSize)
-    const visibleTop = Math.floor((-panOffset.y - svgCenterY) / scaledCellSize)
-    const visibleBottom = Math.floor((-panOffset.y + viewportHeight - svgCenterY) / scaledCellSize)
+    // Calculate the visible area in world coordinates
+    // panOffset represents how much the SVG has moved
+    const visibleLeft = Math.floor((-panOffset.x) / scaledCellSize)
+    const visibleRight = Math.floor((-panOffset.x + viewportWidth) / scaledCellSize)
+    const visibleTop = Math.floor((-panOffset.y) / scaledCellSize)
+    const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / scaledCellSize)
     
     const bounds = {
       minX: Math.max(-12, visibleLeft),
@@ -343,10 +344,11 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none'
       }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
+              onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onMouseEnter={() => console.log('🖱️ Mouse entered container')}
     >
       <svg 
         width={TOTAL_SIZE} 
