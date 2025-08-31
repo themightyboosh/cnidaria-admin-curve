@@ -1,5 +1,9 @@
 // Smart Environment Configuration
 // Automatically detects environment and configures API endpoints
+// 
+// IMPORTANT: This project uses a cloud-only API approach.
+// Local development requires the Cloud Function to have proper CORS configuration
+// for localhost:5173. If CORS errors occur, the server-side CORS settings need updating.
 
 export interface DeploymentConfig {
   platform: 'cloud-run' | 'docker' | 'firebase';
@@ -69,6 +73,8 @@ export const getEnvironmentConfig = (): EnvironmentConfig => {
   const configs = {
     development: {
       environment: 'development',
+      // NOTE: Cloud-only API approach - CORS must be configured on server side for localhost:5173
+      // If CORS errors occur, the Cloud Function needs to be updated to allow localhost origins
       apiUrl: 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev',
       webUrl: isLocal ? window.location.origin : 'https://cnidaria-admin-curves-dev-824079132046.us-central1.run.app',
       appTitle: 'Cnidaria Admin Curves (Development)',
