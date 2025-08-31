@@ -31,8 +31,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
   const [isInitialized, setIsInitialized] = useState(false)
   
   const CELL_SIZE = 50
-  const GRID_SIZE = 128
-  const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 6400
+  const GRID_SIZE = 512
+  const TOTAL_SIZE = GRID_SIZE * CELL_SIZE // 25600
   
   // Calculate center offset to keep SVG centered in canvas
   const centerOffset = useMemo(() => {
@@ -41,6 +41,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const containerHeight = window.innerHeight || 600
     
     // Calculate how much to offset to center the SVG
+    // The SVG center (0,0) should be at the center of the viewport
     const centerX = (containerWidth - TOTAL_SIZE) / 2
     const centerY = (containerHeight - TOTAL_SIZE) / 2
     
@@ -60,16 +61,17 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const viewportHeight = containerRect.height
 
     // Calculate the visible area in world coordinates
-    const visibleLeft = Math.floor(-panOffset.x / CELL_SIZE)
-    const visibleTop = Math.floor(-panOffset.y / CELL_SIZE)
-    const visibleRight = Math.ceil((-panOffset.x + viewportWidth) / CELL_SIZE)
-    const visibleBottom = Math.ceil((-panOffset.y + viewportHeight) / CELL_SIZE)
+    // Convert from pixel coordinates to world coordinates (-256 to +255)
+    const visibleLeft = Math.floor((-panOffset.x - viewportWidth/2) / CELL_SIZE)
+    const visibleTop = Math.floor((-panOffset.y - viewportHeight/2) / CELL_SIZE)
+    const visibleRight = Math.ceil((-panOffset.x + viewportWidth/2) / CELL_SIZE)
+    const visibleBottom = Math.ceil((-panOffset.y + viewportHeight/2) / CELL_SIZE)
 
     const bounds = {
-      minX: visibleLeft,
-      maxX: visibleRight,
-      minY: visibleTop,
-      maxY: visibleBottom
+      minX: Math.max(-256, visibleLeft),
+      maxX: Math.min(255, visibleRight),
+      minY: Math.max(-256, visibleTop),
+      maxY: Math.min(255, visibleBottom)
     }
 
     console.log('🔍 Calculated viewport bounds:', bounds, 'from panOffset:', panOffset, 'container:', { width: viewportWidth, height: viewportHeight })
@@ -82,9 +84,16 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     
     // Initialize visible rectangles service with current viewport
     if (!isInitialized) {
+      // Calculate the visible viewport and add 5 coordinates buffer in all directions
       const viewportBounds = calculateCurrentViewportBounds()
-      console.log('🔧 Initializing with viewport bounds:', viewportBounds)
-      visibleRectanglesService.initializeVisibleRectangles(viewportBounds)
+      const bufferedViewportBounds = {
+        minX: viewportBounds.minX - 5,
+        maxX: viewportBounds.maxX + 5,
+        minY: viewportBounds.minY - 5,
+        maxY: viewportBounds.maxY + 5
+      }
+      console.log('🔧 Initializing with buffered viewport bounds:', bufferedViewportBounds, '(original:', viewportBounds, ')')
+      visibleRectanglesService.initializeVisibleRectangles(bufferedViewportBounds)
       setIsInitialized(true)
       console.log('🚀 Initialized visible rectangles service')
     }
@@ -497,80 +506,46 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     }
   }
   
-  // Generate visible squares from visible rectangles service
+    // Generate visible squares from visible rectangles service
   const visibleSquares = useMemo(() => {
     const squares: JSX.Element[] = []
     const visibleRects = visibleRectanglesService.getAllVisibleRectangles()
     
     console.log('🎨 Generating visible squares:', visibleRects.size, 'rectangles')
     
-    // Fallback: if no rectangles are available, create some default ones
-    if (visibleRects.size === 0) {
-      console.log('⚠️ No visible rectangles, creating fallback grid')
-      for (let y = -5; y <= 5; y++) {
-        for (let x = -5; x <= 5; x++) {
-          const rectangleId = `fallback-${x}-${y}`
-          const pixelX = (x + 64) * CELL_SIZE
-          const pixelY = (y + 64) * CELL_SIZE
-          const uniqueKey = `fallback-${x}-${y}`
-          const isCenter = x === 0 && y === 0
-          const fillR = Math.floor(Math.random() * 256)
-          const fillG = Math.floor(Math.random() * 256)
-          const fillB = Math.floor(Math.random() * 256)
-          
-          squares.push(
-            <rect
-              key={uniqueKey}
-              id={rectangleId}
-              data-coordinates={`${x},${y}`}
-              data-is-new="false"
-              x={pixelX}
-              y={pixelY}
-              width={CELL_SIZE}
-              height={CELL_SIZE}
-              fill={`rgb(${fillR},${fillG},${fillB})`}
-              stroke={isCenter ? '#ff0000' : '#00ffff'}
-              strokeWidth={isCenter ? 2 : 1}
-              strokeDasharray={isCenter ? '5,5' : 'none'}
-              onMouseEnter={() => handleCellMouseEnter(x, y)}
-              onMouseLeave={handleCellMouseLeave}
-            />
-          )
-        }
-      }
-    } else {
-      for (const [rectangleId, rect] of visibleRects) {
-        const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
-        
-        // Calculate pixel position based on world coordinates
-        const pixelX = (worldX + 64) * CELL_SIZE // Convert from world coords to pixel coords
-        const pixelY = (worldY + 64) * CELL_SIZE
-        
-        const uniqueKey = `visible-${worldX}-${worldY}`
-        const isCenter = worldX === 0 && worldY === 0
-        
-        const fillColor = `rgb(${fillR},${fillG},${fillB})`
-        const strokeColor = isCenter ? '#ff0000' : '#00ffff'
-        
-        squares.push(
-          <rect
-            key={uniqueKey}
-            id={rectangleId}
-            data-coordinates={`${worldX},${worldY}`}
-            data-is-new={isNew ? 'true' : 'false'}
-            x={pixelX}
-            y={pixelY}
-            width={CELL_SIZE}
-            height={CELL_SIZE}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={isCenter ? 2 : 1}
-            strokeDasharray={isCenter ? '5,5' : 'none'}
-            onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
-            onMouseLeave={handleCellMouseLeave}
-          />
-        )
-      }
+    // Always render the full grid structure, but only populate visible rectangles
+    // This ensures the SVG maintains its full size and grid pattern
+    for (const [rectangleId, rect] of visibleRects) {
+      const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
+      
+      // Calculate pixel position based on world coordinates
+      const pixelX = (worldX + 256) * CELL_SIZE // Convert from world coords to pixel coords (-256 to +255)
+      const pixelY = (worldY + 256) * CELL_SIZE
+      
+      const uniqueKey = `visible-${worldX}-${worldY}`
+      const isCenter = worldX === 0 && worldY === 0
+      
+      const fillColor = `rgb(${fillR},${fillG},${fillB})`
+      const strokeColor = isCenter ? '#ff0000' : '#00ffff'
+      
+      squares.push(
+        <rect
+          key={uniqueKey}
+          id={rectangleId}
+          data-coordinates={`${worldX},${worldY}`}
+          data-is-new={isNew ? 'true' : 'false'}
+          x={pixelX}
+          y={pixelY}
+          width={CELL_SIZE}
+          height={CELL_SIZE}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={isCenter ? 2 : 1}
+          strokeDasharray={isCenter ? '5,5' : 'none'}
+          onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
+          onMouseLeave={handleCellMouseLeave}
+        />
+      )
     }
     
     console.log('🎨 Generated', squares.length, 'squares')
@@ -616,8 +591,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         <rect
           id="center-square"
           data-coordinates="0,0"
-          x={64 * CELL_SIZE}
-          y={64 * CELL_SIZE}
+          x={256 * CELL_SIZE}
+          y={256 * CELL_SIZE}
           width={CELL_SIZE}
           height={CELL_SIZE}
           fill="none"
