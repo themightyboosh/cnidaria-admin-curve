@@ -306,13 +306,12 @@
 }
 
 .grid-cell {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.1s ease;
+  border: none;
+  transition: none;
 }
 
 .grid-cell:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  z-index: 10;
+  /* Remove hover effects - cells should be invisible until processed */
 }
 
 /* Responsive Design */

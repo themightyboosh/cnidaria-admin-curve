@@ -6,6 +6,7 @@ import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import ThreeJSGrid from './ThreeJSGrid'
+import curveTypesService, { CurveTypeInfo } from '../../services/curveTypes'
 
 import './CurveBuilder.css'
 
@@ -51,6 +52,7 @@ function CurveBuilder() {
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
   const [cellColors, setCellColors] = useState<Map<string, string>>(new Map())
+  const [coordinateCache, setCoordinateCache] = useState<Map<string, ProcessCoordinateResponse>>(new Map())
   const [isLoadingCurves, setIsLoadingCurves] = useState(false)
   const [isProcessingCoordinates, setIsProcessingCoordinates] = useState(false)
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 })
@@ -71,9 +73,39 @@ function CurveBuilder() {
   const [show3DPreview, setShow3DPreview] = useState(false)
   const [previewSmoothing, setPreviewSmoothing] = useState(0.5)
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 50, z: 0 })
+  const [curveTypes, setCurveTypes] = useState<CurveTypeInfo[]>([])
+  const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Helper function to get coordinate key
+  const getCoordinateKey = (x: number, y: number) => `${x}_${y}`
+
+  // Helper function to check if coordinate is cached
+  const isCoordinateCached = (x: number, y: number) => {
+    return coordinateCache.has(getCoordinateKey(x, y))
+  }
+
+  // Helper function to get cached coordinate data
+  const getCachedCoordinate = (x: number, y: number) => {
+    return coordinateCache.get(getCoordinateKey(x, y))
+  }
+
+  // Load curve types from API
+  const loadCurveTypes = async () => {
+    setIsLoadingCurveTypes(true)
+    try {
+      const types = await curveTypesService.getCurveTypes()
+      setCurveTypes(types)
+      console.log(`📊 Loaded ${types.length} curve types`)
+    } catch (error) {
+      console.error('Failed to load curve types:', error)
+      setError('Failed to load curve types')
+    } finally {
+      setIsLoadingCurveTypes(false)
+    }
+  }
 
   // Load curves from API
   const loadCurves = async () => {
@@ -187,6 +219,7 @@ function CurveBuilder() {
 
   // Load curves and tags on component mount
   useEffect(() => {
+    loadCurveTypes()
     loadCurves()
     loadAllTags()
   }, [])
@@ -294,7 +327,7 @@ function CurveBuilder() {
     return { topLeft, bottomRight }
   }
 
-  // Process coordinates for a curve
+  // Process coordinates for a curve with caching
   const processCurveCoordinates = async (curve: Curve, forceColorMode?: 'value' | 'index') => {
     const currentColorMode = forceColorMode || colorMode
     if (!curve) return
@@ -309,7 +342,27 @@ function CurveBuilder() {
       console.log(`Processing coordinates for curve: ${curve["curve-name"]}`)
       console.log(`Grid bounds: (${topLeft[0]}, ${topLeft[1]}) to (${bottomRight[0]}, ${bottomRight[1]})`)
       
-      // Call GetCurveIndexValue API with visible coordinates
+      // Determine which coordinates need processing (not cached)
+      const uncachedCoordinates: [number, number][] = []
+      for (let x = topLeft[0]; x <= bottomRight[0]; x++) {
+        for (let y = topLeft[1]; y <= bottomRight[1]; y++) {
+          if (!isCoordinateCached(x, y)) {
+            uncachedCoordinates.push([x, y])
+          }
+        }
+      }
+      
+      console.log(`Found ${uncachedCoordinates.length} uncached coordinates out of ${(bottomRight[0] - topLeft[0] + 1) * (bottomRight[1] - topLeft[1] + 1)} total`)
+      
+      if (uncachedCoordinates.length === 0) {
+        // All coordinates are cached, just update colors from cache
+        console.log('All coordinates cached, updating colors from cache')
+        updateColorsFromCache(currentColorMode)
+        setIsProcessingCoordinates(false)
+        return
+      }
+      
+      // Call API only for uncached coordinates
       const response = await fetch(
         `${apiUrl}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
         {
@@ -332,13 +385,20 @@ function CurveBuilder() {
         if (results && Array.isArray(results)) {
           console.log(`Processing ${results.length} coordinate results`)
           
-          // Process results and update cell colors
+          // Update cache with new results
+          const newCoordinateCache = new Map(coordinateCache)
           const newCellColors = new Map(cellColors)
           
           results.forEach((result: ProcessCoordinateResponse, index: number) => {
-            const coordKey = `${result["cell-coordinates"][0]}_${result["cell-coordinates"][1]}`
-            const indexPosition = result["index-position"] // Use the actual curve index position, not array index
-            const curveWidth = selectedCurve?.["curve-width"] || 1 // Add null check with default
+            const [x, y] = result["cell-coordinates"]
+            const coordKey = getCoordinateKey(x, y)
+            
+            // Cache the raw coordinate data
+            newCoordinateCache.set(coordKey, result)
+            
+            // Update colors
+            const indexPosition = result["index-position"]
+            const curveWidth = selectedCurve?.["curve-width"] || 1
             const color = indexToColorString(result["index-value"], currentColorMode, indexPosition, curveWidth)
             newCellColors.set(coordKey, color)
             
@@ -351,8 +411,10 @@ function CurveBuilder() {
             setProcessingProgress({ current: index + 1, total: results.length })
           })
           
+          // Update both cache and colors
+          setCoordinateCache(newCoordinateCache)
           setCellColors(newCellColors)
-          console.log(`Successfully processed ${results.length} coordinates`)
+          console.log(`Successfully processed and cached ${results.length} coordinates`)
         } else {
           setError('Invalid response format from API')
         }
@@ -370,13 +432,90 @@ function CurveBuilder() {
     }
   }
 
+  // Update colors from cache when color mode changes
+  const updateColorsFromCache = (currentColorMode: 'value' | 'index') => {
+    const newCellColors = new Map<string, string>()
+    
+    coordinateCache.forEach((cachedData, coordKey) => {
+      const indexPosition = cachedData["index-position"]
+      const curveWidth = selectedCurve?.["curve-width"] || 1
+      const color = indexToColorString(cachedData["index-value"], currentColorMode, indexPosition, curveWidth)
+      newCellColors.set(coordKey, color)
+    })
+    
+    setCellColors(newCellColors)
+    console.log(`Updated colors for ${coordinateCache.size} cached coordinates`)
+  }
+
+  // Preload coordinates for a larger area to improve zoom out experience
+  const preloadCoordinates = async (curve: Curve, currentColorMode: 'value' | 'index') => {
+    if (!curve) return
+    
+    const { topLeft, bottomRight } = getVisibleCoordinates()
+    
+    // Calculate a larger area for preloading (2x the current visible area)
+    const width = bottomRight[0] - topLeft[0]
+    const height = bottomRight[1] - topLeft[1]
+    const preloadTopLeft = [topLeft[0] - width, topLeft[1] - height]
+    const preloadBottomRight = [bottomRight[0] + width, bottomRight[1] + height]
+    
+    // Check which coordinates in the preload area are not cached
+    const uncachedCoordinates: [number, number][] = []
+    for (let x = preloadTopLeft[0]; x <= preloadBottomRight[0]; x++) {
+      for (let y = preloadTopLeft[1]; y <= preloadBottomRight[1]; y++) {
+        if (!isCoordinateCached(x, y)) {
+          uncachedCoordinates.push([x, y])
+        }
+      }
+    }
+    
+    if (uncachedCoordinates.length > 0) {
+      console.log(`Preloading ${uncachedCoordinates.length} additional coordinates`)
+      
+      try {
+        const response = await fetch(
+          `${apiUrl}/api/curves/${curve.id}/process?x=${preloadTopLeft[0]}&y=${preloadTopLeft[1]}&x2=${preloadBottomRight[0]}&y2=${preloadBottomRight[1]}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept-Encoding': 'gzip, deflate'
+            }
+          }
+        )
+        
+        if (response.ok) {
+          const data = await response.json()
+          const curveName = Object.keys(data)[0]
+          const results = data[curveName]
+          
+          if (results && Array.isArray(results)) {
+            const newCoordinateCache = new Map(coordinateCache)
+            
+            results.forEach((result: ProcessCoordinateResponse) => {
+              const [x, y] = result["cell-coordinates"]
+              const coordKey = getCoordinateKey(x, y)
+              newCoordinateCache.set(coordKey, result)
+            })
+            
+            setCoordinateCache(newCoordinateCache)
+            console.log(`Preloaded ${results.length} additional coordinates`)
+          }
+        }
+      } catch (error) {
+        console.log('Preload failed, continuing with current cache')
+      }
+    }
+  }
+
   // Handle curve selection
   const handleCurveSelect = (curve: Curve) => {
     setSelectedCurve(curve)
     setEditingCurve({ ...curve }) // Create a copy for editing
     setHasUnsavedChanges(false)
     setError(null)
-    // Clear existing colors before processing new curve
+    // Clear cache and colors for new curve
+    setCoordinateCache(new Map())
     setCellColors(new Map())
     // Close all sections except selection when loading a curve
     setExpandedSections({
@@ -548,7 +687,8 @@ function CurveBuilder() {
             )
           )
           
-          // Clear namespace cache and redraw grid
+          // Clear cache and redraw grid since settings changed
+          setCoordinateCache(new Map())
           setCellColors(new Map())
           if (editingCurve) {
             processCurveCoordinates(editingCurve)
@@ -582,6 +722,8 @@ function CurveBuilder() {
       // Set new timeout for processing coordinates
       processingTimeoutRef.current = setTimeout(() => {
         processCurveCoordinates(selectedCurve)
+        // Also preload coordinates for better zoom experience
+        preloadCoordinates(selectedCurve, colorMode)
       }, 500) // 500ms debounce delay
     }
     
@@ -592,7 +734,7 @@ function CurveBuilder() {
     }
   }, [cellSize, gridDimensions, selectedCurve])
 
-  // Set dark gray colors for initial grid
+  // Set default colors for initial grid, preserving existing colors
   const setDefaultGridColors = () => {
     const newCellColors = new Map<string, string>()
     const { width, height } = gridDimensions
@@ -600,7 +742,17 @@ function CurveBuilder() {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        newCellColors.set(coordKey, '#333333') // Dark gray
+        // Preserve existing colors from cache, only set transparent for new cells
+        const existingColor = cellColors.get(coordKey)
+        const cachedData = coordinateCache.get(coordKey)
+        
+        if (existingColor && cachedData) {
+          // Keep existing color if we have cached data
+          newCellColors.set(coordKey, existingColor)
+        } else {
+          // Set transparent only for new cells
+          newCellColors.set(coordKey, 'transparent')
+        }
       }
     }
     
@@ -622,7 +774,20 @@ function CurveBuilder() {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const coordKey = `${x - Math.floor(width / 2)}_${Math.floor(height / 2) - y}`
-        const color = cellColors.get(coordKey) || '#333333'
+        
+        // Get color from cellColors, or generate from cache if available
+        let color = cellColors.get(coordKey)
+        if (!color) {
+          const cachedData = coordinateCache.get(coordKey)
+          if (cachedData) {
+            // Generate color from cached data
+            const indexPosition = cachedData["index-position"]
+            const curveWidth = selectedCurve?.["curve-width"] || 1
+            color = indexToColorString(cachedData["index-value"], colorMode, indexPosition, curveWidth)
+          } else {
+            color = 'transparent'
+          }
+        }
         
         cells.push(
           <div
@@ -704,8 +869,10 @@ function CurveBuilder() {
                         onChange={(e) => {
                           setActiveSpectrumPreset(e.target.value)
                           setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                          // Refresh both views by re-processing coordinates
-                          if (selectedCurve) {
+                          // Update colors from cache if available, otherwise process new coordinates
+                          if (coordinateCache.size > 0) {
+                            updateColorsFromCache(colorMode)
+                          } else if (selectedCurve) {
                             processCurveCoordinates(selectedCurve)
                           }
                         }}
@@ -732,8 +899,10 @@ function CurveBuilder() {
                               console.log('=== SWITCHING TO VALUE MODE ===')
                               setColorMode('value')
                               setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                              // Immediately redraw the grid with new color mode
-                              if (selectedCurve) {
+                              // Update colors from cache if available, otherwise process new coordinates
+                              if (coordinateCache.size > 0) {
+                                updateColorsFromCache('value')
+                              } else if (selectedCurve) {
                                 processCurveCoordinates(selectedCurve, 'value')
                               }
                             }}
@@ -750,8 +919,10 @@ function CurveBuilder() {
                               console.log('=== SWITCHING TO INDEX MODE ===')
                               setColorMode('index')
                               setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                              // Immediately redraw the grid with new color mode
-                              if (selectedCurve) {
+                              // Update colors from cache if available, otherwise process new coordinates
+                              if (coordinateCache.size > 0) {
+                                updateColorsFromCache('index')
+                              } else if (selectedCurve) {
                                 processCurveCoordinates(selectedCurve, 'index')
                               }
                             }}
@@ -759,7 +930,23 @@ function CurveBuilder() {
                           Index ({selectedCurve["curve-width"]})
                         </label>
                       </div>
-
+                      
+                      {/* Cache Status Indicator */}
+                      {coordinateCache.size > 0 && (
+                        <div style={{ 
+                          marginTop: '8px', 
+                          fontSize: '12px', 
+                          color: '#00d4ff',
+                          fontStyle: 'italic'
+                        }}>
+                          📦 Cache: {coordinateCache.size} coordinates cached
+                          {isProcessingCoordinates && (
+                            <span style={{ color: '#ffaa00', marginLeft: '8px' }}>
+                              🔄 Processing new cells...
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     {/* 3D Preview Button - Only show in 2D mode */}
@@ -913,13 +1100,20 @@ function CurveBuilder() {
                     <div className="form-group">
                       <label>Curve Type:</label>
                       <select
-                        value={editingCurve["curve-type"] || "Radial"}
+                        value={editingCurve["curve-type"] || "radial-lm"}
                         onChange={(e) => handleFieldChange("curve-type", e.target.value)}
                         title="Select the coordinate system for this curve"
+                        disabled={isLoadingCurveTypes}
                       >
-                        <option value="Radial">Radial</option>
-                        <option value="Cartesian X">Cartesian X</option>
-                        <option value="Cartesian Y">Cartesian Y</option>
+                        {isLoadingCurveTypes ? (
+                          <option value="">Loading curve types...</option>
+                        ) : (
+                          curveTypes.map((curveType) => (
+                            <option key={curveType.id} value={curveType.id}>
+                              {curveTypesService.formatCurveType(curveType)} - {curveType.description}
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
                     

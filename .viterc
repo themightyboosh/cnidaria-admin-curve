@@ -1,0 +1,11 @@
+{
+  "server": {
+    "fs": {
+      "allow": ["."],
+      "deny": [".."]
+    }
+  },
+  "optimizeDeps": {
+    "entries": ["src/main.tsx"]
+  }
+}
