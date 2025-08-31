@@ -200,26 +200,33 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
 
   // Mouse event handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    console.log('🖱️ Mouse down')
+    console.log('🖱️ Mouse down at:', e.clientX, e.clientY, 'button:', e.button)
     if (e.button === 0) { // Left click only
+      e.preventDefault() // Prevent text selection
       setIsDragging(true)
       setLastMousePos({ x: e.clientX, y: e.clientY })
       setDragStartOffset({ ...panOffset })
+      console.log('🖱️ Started dragging, panOffset:', panOffset)
     }
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging && !isZooming) {
+      e.preventDefault() // Prevent text selection
       const deltaX = e.clientX - lastMousePos.x
       const deltaY = e.clientY - lastMousePos.y
       
-      setPanOffset({
+      const newPanOffset = {
         x: dragStartOffset.x + deltaX,
         y: dragStartOffset.y + deltaY
-      })
+      }
+      
+      setPanOffset(newPanOffset)
       
       // Update last mouse position for next move
       setLastMousePos({ x: e.clientX, y: e.clientY })
+      
+      console.log('🖱️ Mouse move - delta:', deltaX, deltaY, 'new panOffset:', newPanOffset)
     }
   }
 
@@ -325,14 +332,13 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       style={{ 
         width: '100%', 
         height: '100%', 
-        minHeight: '600px',
         overflow: 'hidden',
         position: 'relative',
         transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
         transition: isDragging ? 'none' : 'transform 0.1s ease-out',
         transformOrigin: 'center',
         cursor: isDragging ? 'grabbing' : 'grab',
-        border: '2px solid blue'
+        userSelect: 'none'
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
