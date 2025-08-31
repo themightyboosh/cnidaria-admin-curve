@@ -706,29 +706,29 @@ function CurveBuilder() {
                       ))}
                     </select>
                   </div>
-                  
-                  {/* Create New Curve Button */}
-                  <div className="form-group">
-                    <button
-                      type="button"
-                      onClick={createNewCurve}
-                      style={{
-                        backgroundColor: '#28a745',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '10px 16px',
-                        fontSize: '14px',
-                        cursor: 'pointer',
-                        fontWeight: '500',
-                        marginTop: '10px'
-                      }}
-                      title="Create a new curve from scratch"
-                    >
-                      Create New Curve
-                    </button>
-                  </div>
                 )}
+                
+                {/* Create New Curve Button */}
+                <div className="form-group">
+                  <button
+                    type="button"
+                    onClick={createNewCurve}
+                    style={{
+                      backgroundColor: '#28a745',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      marginTop: '10px'
+                    }}
+                    title="Create a new curve from scratch"
+                  >
+                    Create New Curve
+                  </button>
+                </div>
               </div>
             )}
           </div>
