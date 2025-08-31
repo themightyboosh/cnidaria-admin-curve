@@ -24,7 +24,7 @@ export interface CurveDataResponse {
 }
 
 class CurveDataService {
-  private apiUrl = 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev';
+  private apiUrl = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
   private localDataArray: Map<string, CurveDataCell> = new Map();
   private isLoading = false;
 
