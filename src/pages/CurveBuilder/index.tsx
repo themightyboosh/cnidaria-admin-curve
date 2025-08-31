@@ -97,11 +97,9 @@ function CurveBuilder() {
   const loadCurveTypes = async () => {
     setIsLoadingCurveTypes(true)
     try {
-      const types = await curveTypesService.getCurveTypes()
       const typesList = await curveTypesService.getCurveTypesList()
-      setCurveTypes(types)
       setCurveTypesList(typesList)
-      console.log(`📊 Loaded ${types.length} curve types and ${typesList.length} for dropdown`)
+      console.log(`📊 Loaded ${typesList.length} curve types for dropdown`)
     } catch (error) {
       console.error('Failed to load curve types:', error)
       setError('Failed to load curve types')
