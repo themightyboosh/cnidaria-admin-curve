@@ -1,15 +1,29 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
+import curveDataService, { type CurveDataCell } from '../../services/curveDataService'
 
 interface DynamicSVGGridProps {
   width?: number
   height?: number
+  curveId?: string
+  colorMode?: 'value' | 'index'
+  spectrum?: number
+  curveWidth?: number
+  onCurveDataLoaded?: (data: Map<string, CurveDataCell>) => void
 }
 
-const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
+const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({ 
+  curveId, 
+  colorMode = 'value', 
+  spectrum = 255, 
+  curveWidth = 1,
+  onCurveDataLoaded 
+}) => {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 })
+  const [hoveredCell, setHoveredCell] = useState<{ worldX: number; worldY: number; curveValue?: number; indexPosition?: number; isNew?: boolean } | null>(null)
+  const [isLoadingCurveData, setIsLoadingCurveData] = useState(false)
   
   const CELL_SIZE = 50
   const GRID_SIZE = 512
@@ -32,6 +46,85 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
   useEffect(() => {
     setPanOffset(centerOffset)
   }, [centerOffset])
+
+  // Load initial curve data when curveId is provided
+  useEffect(() => {
+    if (curveId) {
+      loadInitialCurveData()
+    }
+  }, [curveId])
+
+  // Update colors when color mode or spectrum changes
+  useEffect(() => {
+    if (curveId && curveDataService.getAllCurveData().size > 0) {
+      updateColorsFromCurveData()
+    }
+  }, [colorMode, spectrum, curveWidth])
+
+  // Load initial curve data for the entire grid
+  const loadInitialCurveData = async () => {
+    if (!curveId) return
+
+    setIsLoadingCurveData(true)
+    try {
+      console.log('🔄 Loading initial curve data for grid')
+      
+      // Calculate grid bounds based on current grid data
+      const minX = -256
+      const maxX = 255
+      const minY = -256
+      const maxY = 255
+
+      const data = await curveDataService.fetchCurveData(curveId, minX, minY, maxX, maxY)
+      const curveName = Object.keys(data)[0]
+      
+      if (data[curveName]) {
+        curveDataService.updateLocalDataArray(curveName, data[curveName])
+        updateColorsFromCurveData()
+        
+        // Notify parent component
+        if (onCurveDataLoaded) {
+          onCurveDataLoaded(curveDataService.getAllCurveData())
+        }
+        
+        console.log('✅ Initial curve data loaded successfully')
+      }
+    } catch (error) {
+      console.error('❌ Failed to load initial curve data:', error)
+    } finally {
+      setIsLoadingCurveData(false)
+    }
+  }
+
+  // Update colors based on current curve data
+  const updateColorsFromCurveData = () => {
+    const colorMap = curveDataService.applyColorsToRectangles(colorMode, spectrum, curveWidth)
+    
+    // Update grid data with new colors
+    setGridData(prevData => {
+      const newData = prevData.map(row => row.map(cell => {
+        const rectangleId = `square-${cell.worldX}-${cell.worldY}`
+        const curveData = curveDataService.getCellData(rectangleId)
+        
+        if (curveData) {
+          // Parse color string to RGB values
+          const colorMatch = colorMap.get(rectangleId)?.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
+          if (colorMatch) {
+            return {
+              ...cell,
+              fillR: parseInt(colorMatch[1]),
+              fillG: parseInt(colorMatch[2]),
+              fillB: parseInt(colorMatch[3])
+            }
+          }
+        }
+        
+        return cell
+      }))
+      
+      return newData
+    })
+  }
   
   // Grid data with proper initialization
   const [gridData, setGridData] = useState<Array<Array<{ fillR: number; fillG: number; fillB: number; worldX: number; worldY: number; isNew?: boolean }>>>(() => {
@@ -76,9 +169,12 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
   }
   
   // Apply grid changes after drag ends
-  const applyGridChanges = (changes: { addColumns: number; removeColumns: number; addRows: number; removeRows: number }) => {
+  const applyGridChanges = async (changes: { addColumns: number; removeColumns: number; addRows: number; removeRows: number }) => {
+    let newCells: Array<{ worldX: number; worldY: number }> = []
+    
     setGridData(prevData => {
       let newData = prevData.map(row => [...row]) // Deep copy
+      newCells = []
       
       // Apply column changes
       if (changes.addColumns > 0) {
@@ -89,12 +185,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
             const fillR = Math.floor(Math.random() * 256)
             const fillG = Math.floor(Math.random() * 256)
             const fillB = Math.floor(Math.random() * 256)
-            newData[y].push({ 
+            const newCell = { 
               fillR, fillG, fillB, 
               worldX: lastWorldX + 1, 
               worldY: newData[y][0].worldY,
               isNew: true
-            })
+            }
+            newData[y].push(newCell)
+            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
           }
           // Remove excess columns from left
           newData[y] = newData[y].slice(changes.addColumns)
@@ -107,12 +205,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
             const fillR = Math.floor(Math.random() * 256)
             const fillG = Math.floor(Math.random() * 256)
             const fillB = Math.floor(Math.random() * 256)
-            newData[y].unshift({ 
+            const newCell = { 
               fillR, fillG, fillB, 
               worldX: firstWorldX - 1, 
               worldY: newData[y][0].worldY,
               isNew: true
-            })
+            }
+            newData[y].unshift(newCell)
+            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
           }
           // Remove excess columns from right
           newData[y] = newData[y].slice(0, GRID_SIZE)
@@ -129,12 +229,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
             const fillR = Math.floor(Math.random() * 256)
             const fillG = Math.floor(Math.random() * 256)
             const fillB = Math.floor(Math.random() * 256)
-            newRow.push({ 
+            const newCell = { 
               fillR, fillG, fillB, 
               worldX: newData[0][x].worldX, 
               worldY: lastWorldY + 1,
               isNew: true
-            })
+            }
+            newRow.push(newCell)
+            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
           }
           newData.push(newRow)
         }
@@ -149,12 +251,14 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
             const fillR = Math.floor(Math.random() * 256)
             const fillG = Math.floor(Math.random() * 256)
             const fillB = Math.floor(Math.random() * 256)
-            newRow.push({ 
+            const newCell = { 
               fillR, fillG, fillB, 
               worldX: newData[0][x].worldX, 
               worldY: firstWorldY - 1,
               isNew: true
-            })
+            }
+            newRow.push(newCell)
+            newCells.push({ worldX: newCell.worldX, worldY: newCell.worldY })
           }
           newData.unshift(newRow)
         }
@@ -164,6 +268,19 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
       
       return newData
     })
+    
+    // Update curve data service structure
+    curveDataService.updateArrayStructure(changes, gridData)
+    
+    // Fetch curve data for new cells if curve is loaded
+    if (curveId && newCells.length > 0) {
+      try {
+        await curveDataService.fetchDataForNewCells(curveId, newCells)
+        updateColorsFromCurveData()
+      } catch (error) {
+        console.error('❌ Failed to fetch data for new cells:', error)
+      }
+    }
     
     // Adjust pan offset to maintain visual consistency
     setPanOffset(prevOffset => {
@@ -236,6 +353,27 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
       handleMouseUp()
     }
   }
+
+  const handleCellMouseEnter = (worldX: number, worldY: number) => {
+    if (!isDragging) {
+      const rectangleId = `square-${worldX}-${worldY}`
+      const curveData = curveDataService.getCellData(rectangleId)
+      
+      setHoveredCell({
+        worldX,
+        worldY,
+        curveValue: curveData?.curveValue,
+        indexPosition: curveData?.indexPosition,
+        isNew: curveData?.isNew
+      })
+    }
+  }
+
+  const handleCellMouseLeave = () => {
+    if (!isDragging) {
+      setHoveredCell(null)
+    }
+  }
   
   // Generate visible squares from grid data
   const visibleSquares = useMemo(() => {
@@ -263,8 +401,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
         const squareId = `square-${worldX}-${worldY}`
         const isCenter = worldX === 0 && worldY === 0
         
-        // Only color new rectangles, keep existing ones with their original colors
-        const fillColor = isNew ? `rgb(${fillR},${fillG},${fillB})` : `rgb(${fillR},${fillG},${fillB})`
+        // Use curve data colors if available, otherwise use random colors
+        const fillColor = `rgb(${fillR},${fillG},${fillB})`
         const strokeColor = isCenter ? '#ff0000' : '#00ffff'
         
         squares.push(
@@ -281,13 +419,15 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
             stroke={strokeColor}
             strokeWidth={isCenter ? 2 : 1}
             strokeDasharray={isCenter ? '5,5' : 'none'}
+            onMouseEnter={() => handleCellMouseEnter(worldX, worldY)}
+            onMouseLeave={handleCellMouseLeave}
           />
         )
       }
     }
     
     return squares
-  }, [gridData])
+  }, [gridData, isDragging])
   
   return (
     <div 
@@ -352,7 +492,17 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = () => {
         Pan: ({panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)})<br/>
         Grid Center: ({Math.floor(-panOffset.x / CELL_SIZE)}, {Math.floor(-panOffset.y / CELL_SIZE)})<br/>
         Squares: {visibleSquares.length}<br/>
-        Status: {isDragging ? 'Dragging' : 'Ready'}
+        Status: {isDragging ? 'Dragging' : 'Ready'}<br/>
+        {curveId && `Curve: ${curveId}`}<br/>
+        {isLoadingCurveData && 'Loading curve data...'}<br/>
+        {hoveredCell && (
+          <>
+            Hover: ({hoveredCell.worldX}, {hoveredCell.worldY})<br/>
+            {hoveredCell.curveValue !== undefined && `Value: ${hoveredCell.curveValue}`}<br/>
+            {hoveredCell.indexPosition !== undefined && `Index: ${hoveredCell.indexPosition}`}<br/>
+            {hoveredCell.isNew && 'New cell'}
+          </>
+        )}
       </div>
     </div>
   )
