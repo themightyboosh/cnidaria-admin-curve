@@ -27,18 +27,10 @@ class VisibleRectanglesService {
   initializeVisibleRectangles(viewportBounds: ViewportBounds): void {
     this.visibleRectangles.clear()
     
-    // Expand bounds by buffer size in all directions
-    const expandedBounds = {
-      minX: viewportBounds.minX - this.bufferSize,
-      maxX: viewportBounds.maxX + this.bufferSize,
-      minY: viewportBounds.minY - this.bufferSize,
-      maxY: viewportBounds.maxY + this.bufferSize
-    }
-
-    // Create rectangles for the expanded viewport
-    console.log('🔧 Creating rectangles for bounds:', expandedBounds)
-    for (let y = expandedBounds.minY; y <= expandedBounds.maxY; y++) {
-      for (let x = expandedBounds.minX; x <= expandedBounds.maxX; x++) {
+    // Only create rectangles for the exact viewport bounds (no buffer initially)
+    console.log('🔧 Creating rectangles for initial viewport bounds:', viewportBounds)
+    for (let y = viewportBounds.minY; y <= viewportBounds.maxY; y++) {
+      for (let x = viewportBounds.minX; x <= viewportBounds.maxX; x++) {
         const rectangleId = `square-${x}-${y}`
         const fillR = Math.floor(Math.random() * 256)
         const fillG = Math.floor(Math.random() * 256)
@@ -56,7 +48,7 @@ class VisibleRectanglesService {
       }
     }
 
-    console.log(`📊 Initialized ${this.visibleRectangles.size} visible rectangles with buffer`)
+    console.log(`📊 Initialized ${this.visibleRectangles.size} visible rectangles`)
   }
 
   // Load curve data for all visible rectangles
@@ -103,31 +95,25 @@ class VisibleRectanglesService {
   // Check if viewport needs expansion/contraction and update accordingly
   async updateViewportBounds(newViewportBounds: ViewportBounds, curveId?: string): Promise<void> {
     const currentBounds = this.getVisibleBounds()
-    const expandedNewBounds = {
-      minX: newViewportBounds.minX - this.bufferSize,
-      maxX: newViewportBounds.maxX + this.bufferSize,
-      minY: newViewportBounds.minY - this.bufferSize,
-      maxY: newViewportBounds.maxY + this.bufferSize
-    }
-
+    
     // Check if we need to add rectangles (not enough buffer)
     const needsExpansion = 
-      expandedNewBounds.minX < currentBounds.minX ||
-      expandedNewBounds.maxX > currentBounds.maxX ||
-      expandedNewBounds.minY < currentBounds.minY ||
-      expandedNewBounds.maxY > currentBounds.maxY
+      newViewportBounds.minX < currentBounds.minX + this.bufferSize ||
+      newViewportBounds.maxX > currentBounds.maxX - this.bufferSize ||
+      newViewportBounds.minY < currentBounds.minY + this.bufferSize ||
+      newViewportBounds.maxY > currentBounds.maxY - this.bufferSize
 
     // Check if we need to remove rectangles (too much buffer)
     const needsContraction = 
-      expandedNewBounds.minX > currentBounds.minX + this.bufferSize ||
-      expandedNewBounds.maxX < currentBounds.maxX - this.bufferSize ||
-      expandedNewBounds.minY > currentBounds.minY + this.bufferSize ||
-      expandedNewBounds.maxY < currentBounds.maxY - this.bufferSize
+      newViewportBounds.minX > currentBounds.minX + this.bufferSize * 2 ||
+      newViewportBounds.maxX < currentBounds.maxX - this.bufferSize * 2 ||
+      newViewportBounds.minY > currentBounds.minY + this.bufferSize * 2 ||
+      newViewportBounds.maxY < currentBounds.maxY - this.bufferSize * 2
 
     if (needsExpansion) {
-      await this.expandViewport(expandedNewBounds, curveId)
+      await this.expandViewport(newViewportBounds, curveId)
     } else if (needsContraction) {
-      this.contractViewport(expandedNewBounds)
+      this.contractViewport(newViewportBounds)
     }
   }
 
@@ -136,9 +122,17 @@ class VisibleRectanglesService {
     const currentBounds = this.getVisibleBounds()
     const newRectangles: VisibleRectangle[] = []
 
-    // Add rectangles for new areas
-    for (let y = newBounds.minY; y <= newBounds.maxY; y++) {
-      for (let x = newBounds.minX; x <= newBounds.maxX; x++) {
+    // Add buffer to the new bounds
+    const expandedBounds = {
+      minX: newBounds.minX - this.bufferSize,
+      maxX: newBounds.maxX + this.bufferSize,
+      minY: newBounds.minY - this.bufferSize,
+      maxY: newBounds.maxY + this.bufferSize
+    }
+
+    // Add rectangles for new areas (including buffer)
+    for (let y = expandedBounds.minY; y <= expandedBounds.maxY; y++) {
+      for (let x = expandedBounds.minX; x <= expandedBounds.maxX; x++) {
         const rectangleId = `square-${x}-${y}`
         
         // Skip if already exists

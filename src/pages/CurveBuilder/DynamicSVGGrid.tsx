@@ -513,8 +513,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     
     console.log('🎨 Generating visible squares:', visibleRects.size, 'rectangles')
     
-    // Always render the full grid structure, but only populate visible rectangles
-    // This ensures the SVG maintains its full size and grid pattern
+    // Only create rectangles for coordinates that exist in the data
+    // No fallback - if no data exists, no rectangles are rendered
     for (const [rectangleId, rect] of visibleRects) {
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
@@ -584,9 +584,6 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         {/* Background with grid pattern */}
         <rect width={TOTAL_SIZE} height={TOTAL_SIZE} fill="url(#grid)" x="0" y="0"/>
         
-        {/* Visible squares */}
-        {visibleSquares}
-        
         {/* Center square indicator */}
         <rect
           id="center-square"
@@ -600,6 +597,9 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
           strokeWidth="2"
           strokeDasharray="5,5"
         />
+        
+        {/* Only render rectangles that exist in the data */}
+        {visibleSquares}
       </svg>
       
       {/* Debug info */}
