@@ -289,7 +289,7 @@ function CurveBuilder() {
   }, [isOptionPressed])
 
   // Calculate grid dimensions and visible coordinates
-  const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 })
+  const [gridDimensions, setGridDimensions] = useState({ width: 40, height: 40 })
 
   useEffect(() => {
     const updateGridDimensions = () => {
@@ -305,10 +305,14 @@ function CurveBuilder() {
       }
     }
 
-    updateGridDimensions()
+    // Add a small delay to ensure canvas is rendered
+    const timer = setTimeout(updateGridDimensions, 100)
     window.addEventListener('resize', updateGridDimensions)
     
-    return () => window.removeEventListener('resize', updateGridDimensions)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', updateGridDimensions)
+    }
   }, [cellSize])
 
   // Calculate visible grid coordinates (top-left to bottom-right)
@@ -946,7 +950,9 @@ function CurveBuilder() {
                               }
                             }}
                           />
-                          Index ({selectedCurve["curve-width"]})
+                          <span style={{ whiteSpace: 'nowrap' }}>
+                            Index ({selectedCurve["curve-width"] || 'N/A'})
+                          </span>
                         </label>
                       </div>
                       
