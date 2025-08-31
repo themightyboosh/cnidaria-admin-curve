@@ -59,12 +59,16 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
     const viewportHeight = container.clientHeight
     
     // Convert pixel coordinates to world coordinates
-    // Account for zoom level in the calculation
+    // Since SVG is moving, we need to account for its position
     const scaledCellSize = CELL_SIZE * zoomLevel
-    const visibleLeft = Math.floor((-panOffset.x) / scaledCellSize)
-    const visibleRight = Math.floor((-panOffset.x + viewportWidth) / scaledCellSize)
-    const visibleTop = Math.floor((-panOffset.y) / scaledCellSize)
-    const visibleBottom = Math.floor((-panOffset.y + viewportHeight) / scaledCellSize)
+    const svgCenterX = TOTAL_SIZE / 2
+    const svgCenterY = TOTAL_SIZE / 2
+    
+    // Calculate visible area in world coordinates
+    const visibleLeft = Math.floor((-panOffset.x - svgCenterX) / scaledCellSize)
+    const visibleRight = Math.floor((-panOffset.x + viewportWidth - svgCenterX) / scaledCellSize)
+    const visibleTop = Math.floor((-panOffset.y - svgCenterY) / scaledCellSize)
+    const visibleBottom = Math.floor((-panOffset.y + viewportHeight - svgCenterY) / scaledCellSize)
     
     const bounds = {
       minX: Math.max(-12, visibleLeft),
@@ -270,7 +274,7 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       const { worldX, worldY, fillR, fillG, fillB, isNew } = rect
       
       // Calculate pixel position based on world coordinates
-      // The SVG is fixed at 1280x1280, rectangles are positioned absolutely
+      // The SVG moves, so rectangles are positioned relative to SVG origin
       // Center is at (640, 640) in pixel coordinates (1280/2)
       const pixelX = (worldX + 12.8) * CELL_SIZE // 640/50 = 12.8
       const pixelY = (worldY + 12.8) * CELL_SIZE
@@ -336,12 +340,8 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
         height: '100%', 
         overflow: 'hidden',
         position: 'relative',
-        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
-        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-        transformOrigin: 'center',
         cursor: isDragging ? 'grabbing' : 'grab',
-        userSelect: 'none',
-        backgroundColor: isDragging ? 'rgba(255,0,0,0.1)' : 'transparent'
+        userSelect: 'none'
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -351,6 +351,11 @@ const DynamicSVGGrid: React.FC<DynamicSVGGridProps> = ({
       <svg 
         width={TOTAL_SIZE} 
         height={TOTAL_SIZE}
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+          transformOrigin: 'center'
+        }}
       >
         <defs>
           <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
