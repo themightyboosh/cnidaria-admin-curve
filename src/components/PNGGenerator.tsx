@@ -15,6 +15,7 @@ interface PNGGeneratorProps {
   curve: Curve;
   coordinateNoise: CoordinateNoise;
   onError?: (error: string) => void;
+  onNoiseCalcChange?: (noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y') => void;
 }
 
 interface GenerationProgress {
@@ -36,7 +37,7 @@ interface WorkerMessage {
   message?: string;
 }
 
-const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onError }) => {
+const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onError, onNoiseCalcChange }) => {
   // State management
   const [selectedPalette, setSelectedPalette] = useState<string>('default');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -46,6 +47,7 @@ const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onE
   const [lastGenerationParams, setLastGenerationParams] = useState<{
     curveId: string;
     noiseId: string;
+    noiseCalc: string;
     palette: string;
   } | null>(null);
 
@@ -131,6 +133,36 @@ function buildNoiseFn(exprSource) {
   return new Function("x", "y", body);
 }
 
+function applyNoiseCalculation(x, y, noiseValue, noiseCalc) {
+  switch (noiseCalc) {
+    case 'radial':
+      const r = Math.hypot(x, y);
+      if (r > 0) {
+        const scale = noiseValue / r;
+        const warpedX = x * scale;
+        const warpedY = y * scale;
+        return Math.hypot(warpedX, warpedY);
+      }
+      return 0;
+      
+    case 'cartesian-x':
+      return Math.abs(x + noiseValue);
+      
+    case 'cartesian-y':
+      return Math.abs(y + noiseValue);
+      
+    default:
+      const rDefault = Math.hypot(x, y);
+      if (rDefault > 0) {
+        const scaleDefault = noiseValue / rDefault;
+        const warpedXDefault = x * scaleDefault;
+        const warpedYDefault = y * scaleDefault;
+        return Math.hypot(warpedXDefault, warpedYDefault);
+      }
+      return 0;
+  }
+}
+
 function warpPointScalarRadius(x, y, n) {
   const r = Math.hypot(x, y);
   if (r > 0) {
@@ -175,7 +207,6 @@ self.onmessage = (e) => {
       try {
         const n = noiseFn(sx, sy);
         const [px, py] = warpPointScalarRadius(sx, sy, n);
-        
         const d = Math.hypot(px, py);
         const dPrime = d * curve['curve-index-scaling'];
         
@@ -210,7 +241,7 @@ self.onmessage = (e) => {
       
       pixelCount++;
       
-      if ((pixelCount & 0x3FFFF) === 0) {
+      if ((pixelCount & 0xFFFF) === 0) {
         self.postMessage({ 
           type: "progress", 
           jobId, 
@@ -380,6 +411,7 @@ self.onmessage = (e) => {
     setLastGenerationParams({
       curveId: curve['curve-name'],
       noiseId: coordinateNoise.name,
+      noiseCalc: curve['noise-calc'] || 'radial',
       palette: selectedPalette
     });
 
@@ -393,7 +425,8 @@ self.onmessage = (e) => {
     // If we have a previous result and only palette changed, just recolor
     if (lastResultRef.current && lastGenerationParams && 
         lastGenerationParams.curveId === curve['curve-name'] &&
-        lastGenerationParams.noiseId === coordinateNoise.name) {
+        lastGenerationParams.noiseId === coordinateNoise.name &&
+        lastGenerationParams.noiseCalc === (curve['noise-calc'] || 'radial')) {
       
       // Recolor the existing result
       const result = lastResultRef.current;
@@ -434,7 +467,8 @@ self.onmessage = (e) => {
   // Check if regeneration is needed
   const needsRegeneration = lastGenerationParams === null ||
     lastGenerationParams.curveId !== curve['curve-name'] ||
-    lastGenerationParams.noiseId !== coordinateNoise.name;
+    lastGenerationParams.noiseId !== coordinateNoise.name ||
+    lastGenerationParams.noiseCalc !== (curve['noise-calc'] || 'radial');
 
   // Test coordinate noise function
   const testCoordinateNoise = useCallback(() => {
@@ -546,6 +580,36 @@ function buildNoiseFn(exprSource) {
   return new Function("x", "y", body);
 }
 
+function applyNoiseCalculation(x, y, noiseValue, noiseCalc) {
+  switch (noiseCalc) {
+    case 'radial':
+      const r = Math.hypot(x, y);
+      if (r > 0) {
+        const scale = noiseValue / r;
+        const warpedX = x * scale;
+        const warpedY = y * scale;
+        return Math.hypot(warpedX, warpedY);
+      }
+      return 0;
+      
+    case 'cartesian-x':
+      return Math.abs(x + noiseValue);
+      
+    case 'cartesian-y':
+      return Math.abs(y + noiseValue);
+      
+    default:
+      const rDefault = Math.hypot(x, y);
+      if (rDefault > 0) {
+        const scaleDefault = noiseValue / rDefault;
+        const warpedXDefault = x * scaleDefault;
+        const warpedYDefault = y * scaleDefault;
+        return Math.hypot(warpedXDefault, warpedYDefault);
+      }
+      return 0;
+  }
+}
+
 function warpPointScalarRadius(x, y, n) {
   const r = Math.hypot(x, y);
   if (r > 0) {
@@ -590,7 +654,6 @@ self.onmessage = (e) => {
       try {
         const n = noiseFn(sx, sy);
         const [px, py] = warpPointScalarRadius(sx, sy, n);
-        
         const d = Math.hypot(px, py);
         const dPrime = d * curve['curve-index-scaling'];
         
@@ -625,7 +688,7 @@ self.onmessage = (e) => {
       
       pixelCount++;
       
-      if ((pixelCount & 0x3FFFF) === 0) {
+      if ((pixelCount & 0xFFFF) === 0) {
         self.postMessage({ 
           type: "progress", 
           jobId, 
@@ -756,21 +819,26 @@ self.onmessage = (e) => {
             </select>
           </div>
 
-          {/* Test Noise Button */}
-          <button
-            onClick={() => testCoordinateNoise()}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '4px',
-              border: '1px solid #555',
-              backgroundColor: '#444',
-              color: '#fff',
-              fontSize: '12px',
-              cursor: 'pointer'
-            }}
-          >
-            Test Noise
-          </button>
+          {/* Noise Calculation Method */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap' }}>Noise Calc:</label>
+            <select
+              value={curve['noise-calc'] || 'radial'}
+              onChange={(e) => onNoiseCalcChange?.(e.target.value as 'radial' | 'cartesian-x' | 'cartesian-y')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '4px',
+                border: '1px solid #555',
+                backgroundColor: '#2a2a2a',
+                color: '#fff',
+                fontSize: '14px'
+              }}
+            >
+              <option value="radial">Radial</option>
+              <option value="cartesian-x">Cartesian X</option>
+              <option value="cartesian-y">Cartesian Y</option>
+            </select>
+          </div>
 
           {/* Generate Button */}
           <button

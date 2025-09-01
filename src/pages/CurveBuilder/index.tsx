@@ -30,6 +30,7 @@ interface Curve {
   "curve-description": string
   "curve-tags"?: string[]  // Store document IDs
   "coordinate-noise": string
+  "noise-calc"?: "radial" | "cartesian-x" | "cartesian-y" // Optional until migrated
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
@@ -230,40 +231,71 @@ function CurveBuilder() {
         if (data.success) {
           // Fix: API returns data.curves, not just curves
           const curvesData = data.data?.curves || data.curves || []
-          console.log('Raw curves from API:', curvesData)
+          console.log('Raw curves from API:', curvesData.length, 'curves')
+          console.log('First curve sample:', curvesData[0])
           
           // Process curve data to ensure curve-tags contains only IDs and handle coordinate-noise migration
           const processedCurves = curvesData.map((curve: any) => {
-            console.log('🔍 Processing curve:', curve["curve-name"], 'Fields:', Object.keys(curve))
-            console.log('  curve-type:', curve["curve-type"])
-            console.log('  coordinate-noise:', curve["coordinate-noise"])
-            
+            try {
+              console.log('🔍 Processing curve:', curve["curve-name"], 'Fields:', Object.keys(curve))
+              console.log('  curve-type:', curve["curve-type"])
+              console.log('  coordinate-noise:', curve["coordinate-noise"])
+              console.log('  noise-calc:', curve["noise-calc"])
+              
             if (curve["curve-tags"]) {
               // Ensure curve-tags is an array of strings (IDs), not objects
-              curve["curve-tags"] = curve["curve-tags"].map((tag: any) => 
+                curve["curve-tags"] = curve["curve-tags"].map((tag: any) => 
                 typeof tag === 'string' ? tag : tag.id || tag
               )
             }
-            
-            // Handle coordinate-noise migration: curve-type -> coordinate-noise
-            if (curve["curve-type"] && !curve["coordinate-noise"]) {
-              curve["coordinate-noise"] = curve["curve-type"]
-              console.log('✅ Migrated curve-type to coordinate-noise for curve:', curve["curve-name"], 'from:', curve["curve-type"], 'to:', curve["coordinate-noise"])
-            } else if (!curve["coordinate-noise"]) {
-              // If no coordinate-noise field at all, default to radial
-              curve["coordinate-noise"] = "radial"
-              console.log('⚠️ No coordinate-noise found for curve:', curve["curve-name"], 'defaulting to radial')
-            } else {
-              console.log('✅ Curve already has coordinate-noise:', curve["curve-name"], '=', curve["coordinate-noise"])
-            }
+              
+              // Handle coordinate-noise migration: curve-type -> coordinate-noise
+              if (curve["curve-type"] && !curve["coordinate-noise"]) {
+                curve["coordinate-noise"] = curve["curve-type"]
+                console.log('✅ Migrated curve-type to coordinate-noise for curve:', curve["curve-name"], 'from:', curve["curve-type"], 'to:', curve["coordinate-noise"])
+              } else if (!curve["coordinate-noise"]) {
+                // If no coordinate-noise field at all, default to radial
+                curve["coordinate-noise"] = "radial"
+                console.log('⚠️ No coordinate-noise found for curve:', curve["curve-name"], 'defaulting to radial')
+              } else {
+                console.log('✅ Curve already has coordinate-noise:', curve["curve-name"], '=', curve["coordinate-noise"])
+              }
+              
+              // Handle noise-calc migration: add default if missing
+              if (!curve["noise-calc"]) {
+                // Default to radial for existing curves
+                curve["noise-calc"] = "radial"
+                console.log('✅ Added default noise-calc to curve:', curve["curve-name"], '=', curve["noise-calc"])
+              } else {
+                console.log('✅ Curve already has noise-calc:', curve["curve-name"], '=', curve["noise-calc"])
+              }
+              
+              // Ensure all required fields are present for curve processing
+              if (!curve["curve-index-scaling"]) {
+                curve["curve-index-scaling"] = 0.52 // Default value
+              }
+              if (!curve["curve-data"] || !Array.isArray(curve["curve-data"])) {
+                console.warn('⚠️ Curve missing curve-data:', curve["curve-name"])
+                return null // Skip invalid curves
+              }
             
             return curve as Curve
-          })
+            } catch (error) {
+              console.error('❌ Error processing curve:', curve["curve-name"], error)
+              // Return curve with defaults for any missing fields
+              return {
+                ...curve,
+                'coordinate-noise': curve['coordinate-noise'] || 'radial',
+                'noise-calc': curve['noise-calc'] || 'radial'
+              } as Curve
+            }
+          }).filter(curve => curve !== null) // Remove any null curves from processing errors
           
-          console.log('Setting processed curves:', processedCurves)
+          console.log('Setting processed curves:', processedCurves.length, 'valid curves')
+          console.log('Processed curve names:', processedCurves.map(c => c['curve-name']))
           setCurves(processedCurves)
           
-          // Auto-load the most recently modified curve
+          // Auto-load the most recent curve AFTER populating the dropdown
           if (processedCurves.length > 0) {
             // Sort curves by updated-at or created-at timestamp (most recent first)
             const sortedCurves = [...processedCurves].sort((a, b) => {
@@ -273,10 +305,18 @@ function CurveBuilder() {
             })
             
             const mostRecentCurve = sortedCurves[0]
-            console.log('🔄 Auto-loading most recent curve:', mostRecentCurve['curve-name'])
+            console.log('🔄 Auto-loading most recent curve after dropdown populated:', mostRecentCurve['curve-name'])
             
-            // Load the most recent curve
-            await handleCurveSelect(mostRecentCurve)
+            // Use setTimeout to ensure curves are rendered in dropdown first
+            setTimeout(async () => {
+              try {
+                await handleCurveSelect(mostRecentCurve)
+                console.log('✅ Auto-loaded most recent curve successfully')
+              } catch (error) {
+                console.error('❌ Failed to auto-load most recent curve:', error)
+                console.log('✅ Curves dropdown populated, auto-loading failed but user can select manually')
+              }
+            }, 100) // Small delay to ensure dropdown is populated
           }
         } else {
           console.error('API returned success: false:', data)
@@ -302,9 +342,7 @@ function CurveBuilder() {
       
       setError(`API temporarily unavailable. Please wait for deployment to complete and try again.`)
     } finally {
-      if (retryCount >= 5) {
-        setIsLoadingCurves(false)
-      }
+      setIsLoadingCurves(false)
       console.log('Finished loading curves')
     }
   }
@@ -1015,15 +1053,16 @@ function CurveBuilder() {
                   <div className="form-group">
                     <label>Select Curve:</label>
                     <select
+                      key={`curves-${curves.length}`} // Force re-render when curves change
                       value={selectedCurve?.id || ''}
                       onChange={(e) => {
                         const curve = curves.find(c => c.id === e.target.value)
                         if (curve) handleCurveSelect(curve)
                       }}
                       disabled={curves.length === 0}
-                      title="Choose a curve to edit and visualize"
+                      title={`Choose a curve to edit and visualize (${curves.length} available)`}
                     >
-                      <option value="">Select a curve...</option>
+                      <option value="">{curves.length > 0 ? `Select a curve... (${curves.length} available)` : 'Loading curves...'}</option>
                       {curves.map(curve => (
                         <option key={curve.id} value={curve.id}>
                           {curve["curve-name"]}
@@ -1530,7 +1569,7 @@ function CurveBuilder() {
                     Retry Now
                   </button>
                 )}
-                <button onClick={() => setError(null)}>Dismiss</button>
+              <button onClick={() => setError(null)}>Dismiss</button>
               </div>
             </div>
           )}
@@ -1554,6 +1593,33 @@ function CurveBuilder() {
                 curve={selectedCurve}
                 coordinateNoise={coordinateNoise}
                 onError={(error) => setPngError(error)}
+                onNoiseCalcChange={async (noiseCalc) => {
+                  if (editingCurve) {
+                    // Update the editing curve
+                    const updatedCurve = { ...editingCurve, 'noise-calc': noiseCalc }
+                    setEditingCurve(updatedCurve)
+                    setHasUnsavedChanges(true)
+                    
+                    // Auto-save the change
+                    try {
+                      const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updatedCurve)
+                      })
+                      
+                      if (response.ok) {
+                        setSelectedCurve(updatedCurve)
+                        setHasUnsavedChanges(false)
+                        console.log('✅ Noise-calc auto-saved:', noiseCalc)
+                      } else {
+                        console.error('❌ Failed to auto-save noise-calc')
+                      }
+                    } catch (error) {
+                      console.error('❌ Error auto-saving noise-calc:', error)
+                    }
+                  }
+                }}
               />
             ) : (
               <div style={{

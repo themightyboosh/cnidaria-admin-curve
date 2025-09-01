@@ -15,6 +15,7 @@ export interface Curve {
   'curve-name': string;
   'curve-description': string;
   'coordinate-noise': string; // The coordinate noise name
+  'noise-calc'?: 'radial' | 'cartesian-x' | 'cartesian-y'; // How to calculate noise (optional until migrated)
   'curve-width': number;
   'curve-height'?: number;
   'curve-index-scaling': number;
@@ -140,6 +141,45 @@ export function buildNoiseFn(exprSource: string): (x: number, y: number) => numb
 }
 
 // Scalar-radius mapping (noise contract)
+// Apply coordinate noise transformation based on noise-calc mode
+export function applyNoiseCalculation(
+  x: number, 
+  y: number, 
+  noiseValue: number, 
+  noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y'
+): number {
+  switch (noiseCalc) {
+    case 'radial':
+      // Traditional radial distance with noise warping
+      const r = Math.hypot(x, y);
+      if (r > 0) {
+        const scale = noiseValue / r;
+        const [warpedX, warpedY] = [x * scale, y * scale];
+        return Math.hypot(warpedX, warpedY);
+      }
+      return 0;
+      
+    case 'cartesian-x':
+      // Use noise value directly as X coordinate influence
+      return Math.abs(x + noiseValue);
+      
+    case 'cartesian-y':
+      // Use noise value directly as Y coordinate influence
+      return Math.abs(y + noiseValue);
+      
+    default:
+      // Fallback to radial
+      const rDefault = Math.hypot(x, y);
+      if (rDefault > 0) {
+        const scaleDefault = noiseValue / rDefault;
+        const [warpedXDefault, warpedYDefault] = [x * scaleDefault, y * scaleDefault];
+        return Math.hypot(warpedXDefault, warpedYDefault);
+      }
+      return 0;
+  }
+}
+
+// Legacy function for backward compatibility
 export function warpPointScalarRadius(x: number, y: number, n: number): [number, number] {
   const r = Math.hypot(x, y);
   if (r > 0) {
