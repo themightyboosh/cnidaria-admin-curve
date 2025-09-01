@@ -20,7 +20,7 @@ import {
   type WebGPUImageGenerationParams,
   type WebGPUImageResult
 } from '../utils/webgpuImageGeneration';
-import { getWebGPUCapabilities } from '../utils/webgpuDetection';
+import { getGPUConfig } from '../utils/webgpuConfig';
 
 // Local service types
 export interface CurveData {
@@ -74,9 +74,9 @@ export class WebGPUService {
   ): Promise<void> {
     console.log('🚀 Initializing WebGPU Service...');
     
-    const capabilities = await getWebGPUCapabilities();
-    if (!capabilities.supported) {
-      throw new Error('WebGPU is not supported');
+    const config = getGPUConfig();
+    if (!config.device) {
+      throw new Error('WebGPU device is not available');
     }
 
     // Clean up existing processors if pattern changed

@@ -4,6 +4,7 @@ import { CONFIG, type Curve, type CoordinateNoise, type GenerationJob, type Gene
 import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils/paletteUtils';
 import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
+import { getGPUConfig } from '../utils/webgpuConfig';
 
 // Hard-coded configuration values
 const GENERATION_CONFIG = {
@@ -56,21 +57,26 @@ const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onE
   // Get palette options for dropdown
   const paletteOptions = getPaletteOptions();
 
-  // Check WebGPU availability on mount
+  // Ensure WebGPU is ready for PNG generation
   useEffect(() => {
-    const checkWebGPU = async () => {
+    const ensureWebGPU = async () => {
       try {
+        // Initialize WebGPU capabilities first
         const capabilities = await getWebGPUCapabilities();
         if (!capabilities.supported) {
           onError?.('WebGPU is required but not available');
+          return;
         }
+        
+        // GPU config should now be available
+        console.log('🔧 WebGPU ready for PNG generation');
       } catch (error) {
-        console.error('WebGPU check failed:', error);
+        console.error('WebGPU initialization failed:', error);
         onError?.('WebGPU initialization failed');
       }
     };
 
-    checkWebGPU();
+    ensureWebGPU();
   }, [onError]);
 
   // Legacy Worker code (COMPLETELY REMOVED - using WebGPU now)

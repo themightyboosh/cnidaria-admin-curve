@@ -1038,11 +1038,6 @@ function CurveBuilder() {
     <div className="app">
       <Header title="Cnidaria" currentPage="Curve Builder" />
       <div className="main-content">
-        {/* WebGPU Compatibility Status */}
-        <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 1000 }}>
-          <WebGPUCompatibilityBadge />
-        </div>
-        
         {/* Left Pane */}
         <div className="left-pane">
           {/* Curve Selection */}
