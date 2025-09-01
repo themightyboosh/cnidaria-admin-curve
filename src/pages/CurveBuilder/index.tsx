@@ -30,8 +30,6 @@ interface Curve {
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
-  "coordinate-noise-strength"?: number
-  "coordinate-noise-scale"?: number
   "coordinate-noise-seed"?: number
 }
 
@@ -421,7 +419,9 @@ function CurveBuilder() {
       "curve-tags": [],
       "curve-type": "linear",
       "curve-width": 256,
-      "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256))
+      "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256)),
+      "curve-index-scaling": 1.0,
+      "coordinate-noise-seed": 0
     }
     
     setSelectedCurve(newCurve)
@@ -1007,39 +1007,7 @@ function CurveBuilder() {
                       />
                     </div>
 
-                    {/* Noise - Universal for all curve types */}
-                    <div className="form-group">
-                      <label>Noise Strength:</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        min="0"
-                        max="3"
-                        value={Number(editingCurve["coordinate-noise-strength"]) || 0}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          handleFieldChange("coordinate-noise-strength", isNaN(val) ? 0 : val);
-                        }}
-                        title="How much to distort the input coordinates before curve processing (0 = no noise)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Noise Scale:</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        min="0"
-                        max="1"
-                        value={Number(editingCurve["coordinate-noise-scale"]) || 0}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          handleFieldChange("coordinate-noise-scale", isNaN(val) ? 0 : val);
-                        }}
-                        title="Scale of the noise pattern (0 = no noise)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
-                    </div>
+
                     <div className="form-group">
                       <label>Noise Seed:</label>
                       <input
@@ -1056,8 +1024,6 @@ function CurveBuilder() {
                     <div className="form-group" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '6px' }}>
                       <label style={{ color: '#ff6b6b', fontWeight: 'bold' }}>🔍 Debug: Current Values</label>
                       <div style={{ fontSize: '12px', color: '#ccc', marginTop: '8px' }}>
-                        <div>Noise Strength: <code>{editingCurve["coordinate-noise-strength"]}</code></div>
-                        <div>Noise Scale: <code>{editingCurve["coordinate-noise-scale"]}</code></div>
                         <div>Index Scaling: <code>{editingCurve["curve-index-scaling"]}</code></div>
                       </div>
                     </div>

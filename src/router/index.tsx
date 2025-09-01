@@ -4,6 +4,7 @@ import Menu from '../pages/Menu'
 import CurveBuilder from '../pages/CurveBuilder'
 import WaveEditor from '../pages/WaveEditor'
 import TagManager from '../pages/TagManager'
+import WorldView from '../pages/WorldView/index'
 import ErrorBoundary from '../components/ErrorBoundary'
 
 export const router = createBrowserRouter([
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: 'wave-editor/:curveId',
         element: <WaveEditor />
+      },
+      {
+        path: 'world-view',
+        element: <WorldView />
       }
     ]
   }

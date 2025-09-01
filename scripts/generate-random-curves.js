@@ -42,8 +42,6 @@ function generateRandomCurve(index) {
   
   // Random parameters
   const indexScaling = (Math.random() * 2) + 0.5; // 0.5-2.5
-  const noiseStrength = Math.random() * 2; // 0-2
-  const noiseScale = (Math.random() * 0.8) + 0.1; // 0.1-0.9
   const noiseSeed = Math.floor(Math.random() * 1000);
   
   // Random tags (1-4 tags)
@@ -64,8 +62,6 @@ function generateRandomCurve(index) {
     "curve-width": width,
     "curve-data": curveData,
     "curve-index-scaling": parseFloat(indexScaling.toFixed(2)),
-    "coordinate-noise-strength": parseFloat(noiseStrength.toFixed(2)),
-    "coordinate-noise-scale": parseFloat(noiseScale.toFixed(2)),
     "coordinate-noise-seed": noiseSeed
   };
 }

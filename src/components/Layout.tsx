@@ -43,8 +43,8 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
 
   const pageInfo = getPageInfo()
 
-  // For CurveBuilder and TagManager, render without layout wrapper to allow full control
-  if (location.pathname.startsWith('/curves') || location.pathname.startsWith('/tags')) {
+  // For CurveBuilder, TagManager, and WorldView, render without layout wrapper to allow full control
+  if (location.pathname.startsWith('/curves') || location.pathname.startsWith('/tags') || location.pathname.startsWith('/world-view')) {
     return <Outlet />
   }
 

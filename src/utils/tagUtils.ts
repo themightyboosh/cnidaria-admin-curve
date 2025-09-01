@@ -29,8 +29,6 @@ export interface Curve {
   'generator-bottom-shelf'?: number;
   'generator-value-fill'?: number;
   'generator-value-offset'?: number;
-  'coordinate-noise-strength'?: number;
-  'coordinate-noise-scale'?: number;
   'coordinate-noise-seed'?: number;
   'created_at': string;
   'updated_at': string;

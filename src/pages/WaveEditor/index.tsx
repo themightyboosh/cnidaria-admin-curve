@@ -11,8 +11,6 @@ interface Curve {
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
-  "coordinate-noise-strength"?: number
-  "coordinate-noise-scale"?: number
   "coordinate-noise-seed"?: number
 }
 

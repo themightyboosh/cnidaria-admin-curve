@@ -7,17 +7,13 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "vite --host --open",
-    "dev:no-open": "vite --host",
-    "build": "tsc && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview --open",
-    "clean": "rm -rf node_modules/.vite .vite dist .cache",
-    "clean:all": "rm -rf node_modules package-lock.json && npm install",
+   
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
     "deploy:dev": "./deploy-cloudrun-dev.sh",
     "deploy:stage": "./deploy-cloudrun-stage.sh",
     "deploy:prod": "./deploy-cloudrun-prod.sh",
-    "deploy": "npm run deploy:dev",
     "cloud-run:status": "gcloud run services list --region=us-central1",
     "cloud-run:logs:dev": "gcloud run services logs read cnidaria-admin-curves-dev --region=us-central1",
     "cloud-run:logs:stage": "gcloud run services logs read cnidaria-admin-curves-stage --region=us-central1",
@@ -42,5 +38,6 @@
     "three": "0.179.1",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
-  }
+  },
+  "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
 }

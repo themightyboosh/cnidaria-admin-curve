@@ -1,168 +1,128 @@
 /**
- * Coordinate Noise Service
- * Handles fetching and managing coordinate noise patterns from the API
+ * Curve Types Service
+ * Handles fetching and managing curve types from the coordinate noise API
+ * Updated to use the new coordinate noise patterns instead of legacy curve types
  */
 
-export interface CoordinateNoiseInfo {
+export interface CurveTypeInfo {
   id: string;
   name: string;
   description: string;
-  cpuLoad: 'l' | 'lm' | 'm' | 'mh' | 'h' | 'vh';
+  cpuLoadLevel: number;
   category: string;
   gpuExpression: string;
   gpuDescription: string;
 }
 
-export interface CoordinateNoiseListResponse {
+export interface CurveTypesListResponse {
   success: boolean;
   data: {
-    coordinateNoise: Record<string, CoordinateNoiseInfo>;
-    coordinateNoiseByCpuLoad: CoordinateNoiseInfo[];
+    noiseTypes: CurveTypeInfo[];
     total: number;
+    cpuLoadDistribution: Record<string, number>;
   };
   message: string;
 }
 
-class CoordinateNoiseService {
-  private coordinateNoise: Record<string, CoordinateNoiseInfo> = {};
-  private coordinateNoiseList: Array<{id: string, name: string, cpuLoad: string, displayName: string}> = [];
+class CurveTypesService {
+  private curveTypes: CurveTypeInfo[] = [];
+  private curveTypesList: Array<{id: string, name: string, cpuLoad: string, displayName: string}> = [];
   private isLoading = false;
 
   /**
-   * Fetch coordinate noise patterns from the API
+   * Fetch coordinate noise patterns as curve types for dropdowns
    */
-  async fetchCoordinateNoise(): Promise<Record<string, CoordinateNoiseInfo>> {
+  async fetchCurveTypesList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
     try {
-      const apiUrl = 'https://us-central1-zone-eaters.cloudfunctions.net/cnidaria-api';
-      const response = await fetch(`${apiUrl}/api/coordinate-noise`);
+      const apiUrl = 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev';
+      const response = await fetch(`${apiUrl}/api/coordinate-noise/firebase`);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch coordinate noise: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch coordinate noise patterns: ${response.status} ${response.statusText}`);
       }
 
-      const data: CoordinateNoiseListResponse = await response.json();
+      const data: CurveTypesListResponse = await response.json();
       
       if (!data.success) {
         throw new Error(`API error: ${data.message}`);
       }
 
-      this.coordinateNoise = data.data.coordinateNoise;
-      console.log(`📊 Loaded ${data.data.total} coordinate noise patterns`);
-      
-      return this.coordinateNoise;
-
-    } catch (error) {
-      console.error('❌ Failed to fetch coordinate noise:', error);
-      
-      // Return fallback patterns if API fails
-      return this.getFallbackCoordinateNoise();
-    }
-  }
-
-  /**
-   * Fetch simple coordinate noise list for dropdowns
-   */
-  async fetchCoordinateNoiseList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
-    try {
-      const patterns = await this.fetchCoordinateNoise();
-      
-      this.coordinateNoiseList = Object.values(patterns).map(pattern => ({
+      // Convert coordinate noise patterns to curve types format
+      this.curveTypesList = data.data.noiseTypes.map(pattern => ({
         id: pattern.id,
         name: pattern.name,
-        cpuLoad: pattern.cpuLoad,
-        displayName: `${this.getCpuLoadIcon(pattern.cpuLoad)} ${pattern.name}`
+        cpuLoad: this.getCpuLoadString(pattern.cpuLoadLevel),
+        displayName: `${this.getCpuLoadIcon(pattern.cpuLoadLevel)} ${pattern.name}`
       }));
       
-      return this.coordinateNoiseList;
+      console.log(`📊 Loaded ${data.data.total} coordinate noise patterns as curve types`);
+      
+      return this.curveTypesList;
 
     } catch (error) {
-      console.error('❌ Failed to fetch coordinate noise list:', error);
-      return this.getFallbackCoordinateNoiseList();
+      console.error('❌ Failed to fetch coordinate noise patterns:', error);
+      
+      // Return fallback curve types if API fails
+      return this.getFallbackCurveTypesList();
     }
   }
 
   /**
-   * Get simple coordinate noise list for dropdowns
+   * Get simple curve types list for dropdowns
    */
-  async getCoordinateNoiseList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
-    if (this.coordinateNoiseList.length === 0) {
-      return this.fetchCoordinateNoiseList();
+  async getCurveTypesList(): Promise<Array<{id: string, name: string, cpuLoad: string, displayName: string}>> {
+    if (this.curveTypesList.length === 0) {
+      return this.fetchCurveTypesList();
     }
-    return this.coordinateNoiseList;
+    return this.curveTypesList;
+  }
+
+  /**
+   * Convert CPU load level (1-10) to string format
+   */
+  private getCpuLoadString(cpuLoadLevel: number): string {
+    if (cpuLoadLevel <= 1) return 'l';
+    if (cpuLoadLevel <= 2) return 'lm';
+    if (cpuLoadLevel <= 4) return 'm';
+    if (cpuLoadLevel <= 6) return 'mh';
+    if (cpuLoadLevel <= 8) return 'h';
+    return 'vh';
   }
 
   /**
    * Get CPU load icon for display
    */
-  private getCpuLoadIcon(cpuLoad: string): string {
-    const icons = {
-      'l': '⚡',
-      'lm': '⚡⚡',
-      'm': '⚡⚡⚡',
-      'mh': '⚡⚡⚡⚡',
-      'h': '⚡⚡⚡⚡⚡',
-      'vh': '⚡⚡⚡⚡⚡⚡'
-    };
-    return icons[cpuLoad as keyof typeof icons] || '⚡';
+  private getCpuLoadIcon(cpuLoadLevel: number): string {
+    if (cpuLoadLevel <= 1) return '⚡';
+    if (cpuLoadLevel <= 2) return '⚡⚡';
+    if (cpuLoadLevel <= 4) return '⚡⚡⚡';
+    if (cpuLoadLevel <= 6) return '⚡⚡⚡⚡';
+    if (cpuLoadLevel <= 8) return '⚡⚡⚡⚡⚡';
+    return '⚡⚡⚡⚡⚡⚡';
   }
 
   /**
-   * Fallback coordinate noise patterns if API is unavailable
+   * Fallback curve types if API is unavailable
    */
-  private getFallbackCoordinateNoise(): Record<string, CoordinateNoiseInfo> {
-    return {
-      'radial-lm': {
-        id: 'radial-lm',
-        name: 'Radial',
-        description: 'Classic circular distance (√x² + y²)',
-        cpuLoad: 'lm',
-        category: 'circular',
-        gpuExpression: 'sqrt(x * x + y * y)',
-        gpuDescription: 'Euclidean distance from origin'
-      },
-      'cartesian-x-l': {
-        id: 'cartesian-x-l',
-        name: 'Cartesian X',
-        description: 'Distance based on X coordinate only',
-        cpuLoad: 'l',
-        category: 'basic',
-        gpuExpression: 'abs(x)',
-        gpuDescription: 'Returns absolute value of X coordinate'
-      },
-      'cartesian-y-l': {
-        id: 'cartesian-y-l',
-        name: 'Cartesian Y',
-        description: 'Distance based on Y coordinate only',
-        cpuLoad: 'l',
-        category: 'basic',
-        gpuExpression: 'abs(y)',
-        gpuDescription: 'Returns absolute value of Y coordinate'
-      }
-    };
-  }
-
-  /**
-   * Fallback coordinate noise list if API is unavailable
-   */
-  private getFallbackCoordinateNoiseList(): Array<{id: string, name: string, cpuLoad: string, displayName: string}> {
+  private getFallbackCurveTypesList(): Array<{id: string, name: string, cpuLoad: string, displayName: string}> {
     return [
       {
-        id: 'radial-lm',
-        name: 'Radial',
-        cpuLoad: 'lm',
-        displayName: '⚡⚡ Radial'
+        id: 'radial',
+        name: 'radial',
+        cpuLoad: 'm',
+        displayName: '⚡⚡⚡ radial'
       },
       {
-        id: 'cartesian-x-l',
-        name: 'Cartesian X',
+        id: 'cartesian-x',
+        name: 'cartesian-x',
         cpuLoad: 'l',
-        displayName: '⚡ Cartesian X'
+        displayName: '⚡ cartesian-x'
       },
       {
-        id: 'cartesian-y-l',
-        name: 'Cartesian Y',
+        id: 'cartesian-y',
+        name: 'cartesian-y',
         cpuLoad: 'l',
-        displayName: '⚡ Cartesian Y'
+        displayName: '⚡ cartesian-y'
       }
     ];
   }
@@ -171,11 +131,11 @@ class CoordinateNoiseService {
    * Clear cache and force refresh
    */
   clearCache(): void {
-    this.coordinateNoise = {};
-    this.coordinateNoiseList = [];
+    this.curveTypes = [];
+    this.curveTypesList = [];
   }
 }
 
 // Export singleton instance
-export const coordinateNoiseService = new CoordinateNoiseService();
-export default coordinateNoiseService;
+export const curveTypesService = new CurveTypesService();
+export default curveTypesService;
