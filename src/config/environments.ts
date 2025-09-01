@@ -75,7 +75,7 @@ export const getEnvironmentConfig = (): EnvironmentConfig => {
       environment: 'development',
       // NOTE: Cloud-only API approach - CORS must be configured on server side for localhost:5173
       // If CORS errors occur, the Cloud Function needs to be updated to allow localhost origins
-      apiUrl: 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api-dev',
+      apiUrl: 'https://us-central1-cnidaria-dev.cloudfunctions.net/cnidaria-api',
       webUrl: isLocal ? window.location.origin : 'https://cnidaria-admin-curves-dev-824079132046.us-central1.run.app',
       appTitle: 'Cnidaria Admin Curves (Development)',
       isLocal: isLocal,

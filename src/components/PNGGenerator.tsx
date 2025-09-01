@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, useMemo } from 'react';
 import * as UPNG from 'upng-js';
 import { CONFIG, type Curve, type CoordinateNoise, type GenerationJob, type GenerationResult } from '../utils/mathPipeline';
 import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils/paletteUtils';
 import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 import { getGPUConfig } from '../utils/webgpuConfig';
+
+// Extend Window interface for resize timeout
+declare global {
+  interface Window {
+    resizeTimeout: number;
+  }
+}
 
 // Hard-coded configuration values
 const GENERATION_CONFIG = {
@@ -17,6 +24,8 @@ const GENERATION_CONFIG = {
 interface PNGGeneratorProps {
   curve: Curve;
   coordinateNoise: CoordinateNoise;
+  selectedPalette?: string;
+  imageSize?: '32' | '64' | '128' | '256' | '512' | '1024' | '1:1';
   onError?: (error: string) => void;
   onNoiseCalcChange?: (noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y') => void;
 }
@@ -36,18 +45,37 @@ interface WebGPUGenerationResult {
   stats: WebGPUServiceStats;
 }
 
-const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onError, onNoiseCalcChange }) => {
+const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGeneratorProps>(({ 
+  curve, 
+  coordinateNoise, 
+  selectedPalette: externalSelectedPalette = 'default',
+  imageSize: externalImageSize = '512',
+  onError, 
+  onNoiseCalcChange 
+}, ref) => {
+  // Debug logging for props
+  console.log('🔍 PNGGenerator render with props:', {
+    hasCurve: !!curve,
+    hasCoordinateNoise: !!coordinateNoise,
+    curveName: curve?.['curve-name'],
+    coordinateNoiseName: coordinateNoise?.name,
+    selectedPalette: externalSelectedPalette,
+    imageSize: externalImageSize
+  });
+
   // State management
-  const [selectedPalette, setSelectedPalette] = useState<string>('default');
+  const [selectedPalette, setSelectedPalette] = useState<string>(externalSelectedPalette);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress>({ done: 0, total: 0, percentage: 0 });
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [displaySize, setDisplaySize] = useState({ width: 512, height: 512 });
   const [lastGenerationParams, setLastGenerationParams] = useState<{
     curveId: string;
     noiseId: string;
     noiseCalc: string;
     palette: string;
+    imageSize: number;
   } | null>(null);
 
   // Refs
@@ -78,6 +106,101 @@ const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onE
 
     ensureWebGPU();
   }, [onError]);
+
+  // Sync external palette prop with internal state
+  useEffect(() => {
+    setSelectedPalette(externalSelectedPalette);
+  }, [externalSelectedPalette]);
+
+  // Get actual image size based on external prop with auto-fallback to 1:1 for oversized requests
+  const getImageSize = useCallback(() => {
+    if (externalImageSize === '1:1') {
+      // Get the canvas area size to ensure complete coverage
+      const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
+      if (canvasArea) {
+        const rect = canvasArea.getBoundingClientRect();
+        // Use the larger dimension to ensure the image fills the entire canvas area
+        const size = Math.max(rect.width, rect.height);
+        return Math.max(256, Math.min(2048, Math.floor(size))); // Clamp between 256 and 2048 for performance
+      }
+      return 512; // Fallback
+    }
+    
+    // Check if requested size is larger than available canvas space
+    const requestedSize = parseInt(externalImageSize);
+    const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
+    if (canvasArea) {
+      const rect = canvasArea.getBoundingClientRect();
+      const maxCanvasSize = Math.max(rect.width, rect.height);
+      
+      // If requested size is larger than canvas space, use 1:1 behavior
+      if (requestedSize > maxCanvasSize) {
+        console.log(`🔄 Requested size ${requestedSize}x${requestedSize} is larger than canvas area ${Math.floor(rect.width)}x${Math.floor(rect.height)}, switching to 1:1 mode`);
+        return Math.max(256, Math.min(2048, Math.floor(maxCanvasSize)));
+      }
+    }
+    
+    return requestedSize;
+  }, [externalImageSize]);
+
+  // Calculate display size based on canvas area
+  const getDisplaySize = useCallback(() => {
+    const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
+    if (canvasArea) {
+      const rect = canvasArea.getBoundingClientRect();
+      const canvasWidth = rect.width;
+      const canvasHeight = rect.height;
+      
+      // Use the larger dimension for a square that fills the canvas area
+      const displaySize = Math.max(canvasWidth, canvasHeight);
+      
+      return {
+        width: displaySize,
+        height: displaySize
+      };
+    }
+    
+    // Fallback if canvas area not found
+    return {
+      width: 512,
+      height: 512
+    };
+  }, []);
+
+  // Update display size when image size changes or image is generated
+  useEffect(() => {
+    setDisplaySize(getDisplaySize());
+  }, [getDisplaySize, generatedImage]);
+
+  // Add window resize listener - for "1:1" mode regenerate, for others update display size
+  useEffect(() => {
+    const handleResize = () => {
+      // Debounce resize events
+      clearTimeout(window.resizeTimeout);
+      window.resizeTimeout = setTimeout(() => {
+        if (externalImageSize === '1:1' && !isGenerating) {
+          console.log('🔄 Window resized - regenerating PNG to fit new size');
+          // Force regeneration by clearing last params for 1:1 mode
+          setLastGenerationParams(null);
+        } else {
+          // For fixed sizes, update display size to fill new viewport
+          console.log('🔄 Window resized - updating display size');
+          setDisplaySize(getDisplaySize());
+        }
+      }, 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(window.resizeTimeout);
+    };
+  }, [externalImageSize, isGenerating, getDisplaySize]);
+
+  // Expose startGeneration method via ref
+  useImperativeHandle(ref, () => ({
+    startGeneration
+  }), []);
 
   // Legacy Worker code (COMPLETELY REMOVED - using WebGPU now)
   /*
@@ -360,15 +483,17 @@ self.onmessage = (e) => {
     console.log('  Palette:', selectedPalette);
 
     try {
+      const imageSize = getImageSize();
       setIsGenerating(true);
-      setProgress({ done: 0, total: GENERATION_CONFIG.IMAGE_SIZE * GENERATION_CONFIG.IMAGE_SIZE, percentage: 0, stage: 'Initializing WebGPU...' });
+      setProgress({ done: 0, total: imageSize * imageSize, percentage: 0, stage: 'Initializing WebGPU...' });
       
       // Update last generation params
       setLastGenerationParams({
         curveId: curve['curve-name'],
         noiseId: coordinateNoise.name,
         noiseCalc: curve['noise-calc'] || 'radial',
-        palette: selectedPalette
+        palette: selectedPalette,
+        imageSize: imageSize
       });
 
       const palette = getPaletteByName(selectedPalette);
@@ -388,12 +513,12 @@ self.onmessage = (e) => {
         curveData,
         palette,
         coordinateNoise.gpuExpression,
-        GENERATION_CONFIG.IMAGE_SIZE,
-        GENERATION_CONFIG.IMAGE_SIZE,
+        imageSize,
+        imageSize,
         3.0, // 300% zoom scale
         0, 0,
         (stage: string, progressPercent: number) => {
-          const totalPixels = GENERATION_CONFIG.IMAGE_SIZE * GENERATION_CONFIG.IMAGE_SIZE;
+          const totalPixels = imageSize * imageSize;
           const done = Math.round((progressPercent / 100) * totalPixels);
           setProgress({ 
             done, 
@@ -485,10 +610,28 @@ self.onmessage = (e) => {
   }, [downloadUrl, curve, coordinateNoise, selectedPalette]);
 
   // Check if regeneration is needed
-  const needsRegeneration = lastGenerationParams === null ||
-    lastGenerationParams.curveId !== curve['curve-name'] ||
-    lastGenerationParams.noiseId !== coordinateNoise.name ||
-    lastGenerationParams.noiseCalc !== (curve['noise-calc'] || 'radial');
+  const needsRegeneration = useMemo(() => {
+    const result = lastGenerationParams === null ||
+      lastGenerationParams.curveId !== curve['curve-name'] ||
+      lastGenerationParams.noiseId !== coordinateNoise.name ||
+      lastGenerationParams.noiseCalc !== (curve['noise-calc'] || 'radial') ||
+      lastGenerationParams.palette !== selectedPalette ||
+      lastGenerationParams.imageSize !== getImageSize();
+    
+    console.log('🔍 Regeneration check:', {
+      result,
+      lastParams: lastGenerationParams,
+      currentParams: {
+        curveId: curve['curve-name'],
+        noiseId: coordinateNoise.name,
+        noiseCalc: curve['noise-calc'] || 'radial',
+        palette: selectedPalette,
+        imageSize: getImageSize()
+      }
+    });
+    
+    return result;
+  }, [lastGenerationParams, curve, coordinateNoise, selectedPalette, getImageSize]);
 
   // Test coordinate noise function
   const testCoordinateNoise = useCallback(() => {
@@ -792,122 +935,47 @@ self.onmessage = (e) => {
     setLastGenerationParams(null);
   }, [isGenerating, downloadUrl, onError]);
 
-  // Auto-generate when curve or noise changes
+  // Auto-generate when curve, noise, palette, or size changes
   useEffect(() => {
-    if (curve && coordinateNoise && needsRegeneration && !isGenerating) {
-      console.log('🔄 Auto-generating PNG due to curve/noise change');
-      
-      // Cancel any existing generation first
-      if (isGenerating) {
-        cancelAndReset();
-        // Small delay to ensure cancellation completes
-        setTimeout(() => {
-          startGeneration();
-        }, 100);
-      } else {
+    console.log('🔍 Auto-generation check:', {
+      hasCurve: !!curve,
+      hasCoordinateNoise: !!coordinateNoise,
+      isGenerating,
+      needsRegeneration,
+      hasGeneratedImage: !!generatedImage,
+      curveName: curve?.['curve-name'],
+      noiseName: coordinateNoise?.name
+    });
+
+    if (curve && coordinateNoise && !isGenerating) {
+      // Always generate if we have the required data and aren't currently generating
+      if (needsRegeneration || !generatedImage) {
+        console.log('🔄 Auto-generating PNG due to parameter change or missing image');
+        
+        // Start generation immediately
         startGeneration();
+      } else {
+        console.log('✅ Image already exists and no regeneration needed');
       }
+    } else {
+      console.log('❌ Missing requirements for auto-generation:', {
+        missingCurve: !curve,
+        missingNoise: !coordinateNoise,
+        currentlyGenerating: isGenerating
+      });
     }
-  }, [curve, coordinateNoise, needsRegeneration, isGenerating, startGeneration, cancelAndReset]);
+  }, [curve, coordinateNoise, selectedPalette, externalImageSize, needsRegeneration, isGenerating, startGeneration, generatedImage]);
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#000000' }}>
-      {/* Controls */}
-      <div style={{ padding: '16px', backgroundColor: '#1a1a1a', borderBottom: '1px solid #333' }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Palette Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap' }}>Palette:</label>
-            <select
-              value={selectedPalette}
-              onChange={(e) => handlePaletteChange(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                backgroundColor: '#2a2a2a',
-                color: '#fff',
-                fontSize: '14px'
-              }}
-            >
-              {paletteOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+      {/* Progress Bar (only when generating) */}
+      {isGenerating && (
+        <div style={{ padding: '8px 16px', backgroundColor: '#1a1a1a', borderBottom: '1px solid #333' }}>
+          <div style={{ color: '#fff', fontSize: '14px', textAlign: 'center' }}>
+            {progress.stage} - {progress.percentage}% ({progress.done.toLocaleString()}/{progress.total.toLocaleString()} pixels)
           </div>
-
-          {/* Noise Calculation Method */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap' }}>Noise Calc:</label>
-            <select
-              value={curve['noise-calc'] || 'radial'}
-              onChange={(e) => onNoiseCalcChange?.(e.target.value as 'radial' | 'cartesian-x' | 'cartesian-y')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                backgroundColor: '#2a2a2a',
-                color: '#fff',
-                fontSize: '14px'
-              }}
-            >
-              <option value="radial">Radial</option>
-              <option value="cartesian-x">Cartesian X</option>
-              <option value="cartesian-y">Cartesian Y</option>
-            </select>
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={startGeneration}
-            disabled={isGenerating}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: needsRegeneration ? '#007acc' : '#28a745',
-              color: '#fff',
-              fontSize: '14px',
-              cursor: isGenerating ? 'not-allowed' : 'pointer',
-              opacity: isGenerating ? 0.6 : 1
-            }}
-          >
-            {isGenerating ? 'Generating...' : 'Auto-Generate'}
-          </button>
-
-          {/* Download Button */}
-          {downloadUrl && (
-            <button
-              onClick={handleDownload}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                backgroundColor: '#2a2a2a',
-                color: '#fff',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              Download PNG
-            </button>
-          )}
-
-          {/* Progress */}
-          {isGenerating && (
-            <div style={{ color: '#fff', fontSize: '14px' }}>
-              {progress.stage} - {progress.percentage}% ({progress.done.toLocaleString()}/{progress.total.toLocaleString()} pixels)
-            </div>
-          )}
         </div>
-
-        {/* Info */}
-        <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
-          Curve: {curve['curve-name']} | Noise: {coordinateNoise.name} | Size: 512×512
-        </div>
-      </div>
+      )}
 
       {/* Canvas Display */}
       <div style={{ 
@@ -915,22 +983,25 @@ self.onmessage = (e) => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        padding: '16px',
-        overflow: 'hidden'
+        padding: '0',
+        overflow: 'hidden', // Keep image within canvas bounds
+        position: 'relative',
+        backgroundColor: '#000000' // Explicit black background
       }}>
         {generatedImage ? (
           <img
             src={generatedImage}
             alt="Generated curve visualization"
             style={{
-              width: '300%',
-              height: '300%',
+              // Fill canvas area with center-crop behavior
+              width: `${displaySize.width}px`,
+              height: `${displaySize.height}px`,
+              objectFit: 'cover', // Center-crop to fill the area
+              border: 'none',
+              borderRadius: '0',
+              imageRendering: 'pixelated', // Maintain pixelated appearance
               maxWidth: 'none',
-              maxHeight: 'none',
-              objectFit: 'none',
-              border: '1px solid #333',
-              borderRadius: '4px',
-              imageRendering: 'pixelated'
+              maxHeight: 'none'
             }}
           />
         ) : (
@@ -941,14 +1012,14 @@ self.onmessage = (e) => {
           }}>
             {isGenerating ? (
               <div>
-                <div>🚀 WebGPU Processing 512×512 PNG...</div>
+                <div>🚀 WebGPU Processing {getImageSize()}×{getImageSize()} PNG...</div>
                 <div style={{ marginTop: '8px', fontSize: '14px' }}>
                   {progress.stage} - {progress.percentage}% complete
                 </div>
               </div>
             ) : (
               <div>
-                <div>Click "Generate PNG" to create a 512×512 visualization</div>
+                <div>Ready to generate {getImageSize()}×{getImageSize()} PNG visualization</div>
                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#555' }}>
                   Using {coordinateNoise.name} coordinate noise with {curve['curve-name']}
                 </div>
@@ -965,6 +1036,6 @@ self.onmessage = (e) => {
       />
     </div>
   );
-};
+});
 
 export default PNGGenerator;

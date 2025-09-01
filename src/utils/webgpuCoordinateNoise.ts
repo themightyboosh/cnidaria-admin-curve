@@ -23,6 +23,10 @@ function generateCoordinateNoiseShader(
   // Validate and sanitize the GPU expression
   const sanitizedExpression = gpuExpression
     .replace(/Math\./g, '') // Remove Math. prefix if present
+    .replace(/\batan\([^,)]+,\s*[^)]+\)/g, (match) => {
+      // Convert atan(y, x) to atan2(y, x)
+      return match.replace(/\batan\b/, 'atan2');
+    })
     .replace(/\batan2\b/g, 'atan2') // Ensure atan2 is correct
     .replace(/\bpow\b/g, 'pow')
     .replace(/\bsqrt\b/g, 'sqrt')

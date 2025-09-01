@@ -2,6 +2,28 @@
  * Shared color spectrum configuration for both 2D and 3D views
  */
 
+/**
+ * Determines if a color is light or dark and returns appropriate text color
+ * @param hexColor - Hex color string (e.g., "#FF69B4")
+ * @returns "black" for light backgrounds, "white" for dark backgrounds
+ */
+export function getContrastingTextColor(hexColor: string): string {
+  // Remove # if present
+  const color = hexColor.replace('#', '');
+  
+  // Parse RGB values
+  const r = parseInt(color.substr(0, 2), 16);
+  const g = parseInt(color.substr(2, 2), 16);
+  const b = parseInt(color.substr(4, 2), 16);
+  
+  // Calculate luminance using relative luminance formula
+  // https://www.w3.org/WAI/GL/wiki/Relative_luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  
+  // Return black text for light backgrounds, white text for dark backgrounds
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
 export interface ColorSpectrumConfig {
   type: 'hsl' | 'rainbow' | 'terrain' | 'thermal' | 'custom'
   saturation: number
