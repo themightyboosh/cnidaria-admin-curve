@@ -410,14 +410,27 @@ function CurveBuilder() {
 
 
 
+  // Generate unique curve name
+  const generateUniqueCurveName = () => {
+    let counter = 1
+    let name = `New Curve ${counter}`
+    
+    while (curves.some(curve => curve["curve-name"] === name)) {
+      counter++
+      name = `New Curve ${counter}`
+    }
+    
+    return name
+  }
+
   // Create a new curve from scratch
   const createNewCurve = () => {
     const newCurve: Curve = {
       id: `curve-${Date.now()}`,
-      "curve-name": "New Curve",
+      "curve-name": generateUniqueCurveName(),
       "curve-description": "A new curve created from scratch",
       "curve-tags": [],
-      "curve-type": "linear",
+      "curve-type": "radial",
       "curve-width": 256,
       "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256)),
       "curve-index-scaling": 1.0,
@@ -592,9 +605,23 @@ function CurveBuilder() {
     }
   }
 
+  // Validate curve name uniqueness
+  const validateCurveName = (curveName: string, currentCurveId: string) => {
+    const existingCurve = curves.find(curve => 
+      curve["curve-name"] === curveName && curve.id !== currentCurveId
+    )
+    return !existingCurve
+  }
+
   // Save curve changes
   const saveCurveChanges = async () => {
     if (!editingCurve || !selectedCurve) return
+    
+    // Validate curve name uniqueness
+    if (!validateCurveName(editingCurve["curve-name"], selectedCurve.id)) {
+      setError(`A curve with name '${editingCurve["curve-name"]}' already exists. Please choose a different name.`)
+      return
+    }
     
     setIsSaving(true)
     setError(null)
@@ -637,9 +664,24 @@ function CurveBuilder() {
           setError('Failed to update curve: API returned error')
         }
       } else {
-        const errorText = await response.text()
-        console.error('API request failed:', response.status, response.statusText, errorText)
-        setError(`Failed to update curve: ${response.status} ${response.statusText}`)
+        const errorData = await response.json()
+        console.error('API request failed:', response.status, response.statusText, errorData)
+        
+        // Extract specific error message from API response
+        let errorMessage = `Failed to update curve: ${response.status} ${response.statusText}`
+        if (errorData.error && errorData.error.message) {
+          errorMessage = errorData.error.message
+          
+          // Add suggestion for name conflicts
+          if (errorData.error.code === 'CURVE_NAME_TAKEN' && editingCurve["curve-name"]) {
+            const suggestedName = generateUniqueCurveName()
+            errorMessage += `. Try using a different name like "${suggestedName}".`
+          }
+        } else if (errorData.error && errorData.error.code) {
+          errorMessage = `Error: ${errorData.error.code}`
+        }
+        
+        setError(errorMessage)
       }
     } catch (error) {
       console.error('Failed to update curve:', error)
@@ -935,11 +977,18 @@ function CurveBuilder() {
                         style={{
                           backgroundColor: '#2a2a2a',
                           color: '#ffffff',
-                          border: '1px solid #444',
+                          border: editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '') 
+                            ? '1px solid #ff6b6b' 
+                            : '1px solid #444',
                           borderRadius: '4px',
                           padding: '8px 12px'
                         }}
                       />
+                      {editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '') && (
+                        <div style={{ fontSize: '12px', color: '#ff6b6b', marginTop: '4px' }}>
+                          ⚠️ This name is already taken. Please choose a different name.
+                        </div>
+                      )}
                     </div>
 
                     {/* Curve Description */}
@@ -1036,20 +1085,27 @@ function CurveBuilder() {
                 <div className="save-section">
                   <button 
                     onClick={saveCurveChanges}
-                    disabled={isSaving}
+                    disabled={isSaving || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))}
                     style={{
-                      backgroundColor: '#007bff',
+                      backgroundColor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
+                        ? '#666666' 
+                        : '#007bff',
                       color: '#ffffff',
                       border: 'none',
                       borderRadius: '4px',
                       padding: '10px 16px',
                       fontSize: '14px',
-                      cursor: 'pointer',
+                      cursor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
+                        ? 'not-allowed' 
+                        : 'pointer',
                       fontWeight: '500',
                       width: '100%'
                     }}
                   >
-                    {isSaving ? 'Saving...' : 'Save Changes'}
+                    {isSaving ? 'Saving...' : 
+                     (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
+                       ? 'Name Conflict - Fix Name First' 
+                       : 'Save Changes'}
                   </button>
                 </div>
               )}
