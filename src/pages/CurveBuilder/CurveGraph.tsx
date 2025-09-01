@@ -35,8 +35,9 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
   const graphHeight = Math.min(255, maxHeight - (padding * 2))
   const actualHeight = graphHeight + (padding * 2)
   
-  // Use container width, but ensure minimum width for very small curves
-  const displayWidth = Math.max(100, curveWidth * 3) // Show 3x curve width to see seams
+  // Scale down to 90% of available width, then stretch 3 cycles to fill that width
+  const availableWidth = Math.max(300, window.innerWidth - 500) // Available width, minimum 300px
+  const displayWidth = availableWidth * 0.9 // 90% of available width
   const actualWidth = displayWidth + (padding * 2)
   
   // Calculate average value
@@ -55,16 +56,20 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
     return `linear-gradient(to bottom, ${stops})`
   }
 
-  // Generate SVG path for the curve (3x repeated to show seams)
+  // Generate SVG path for the curve (3 cycles stretched to 90% width)
   const generateCurvePath = () => {
     if (curveData.length === 0) return ''
     
     let allPoints = []
     
-    // Repeat the curve data 3 times
-    for (let repeat = 0; repeat < 3; repeat++) {
+    // Always show exactly 3 complete cycles, stretched to fill displayWidth
+    const repeats = 3
+    const cycleWidth = displayWidth / repeats // Each cycle gets 1/3 of the display width
+    
+    // Repeat the curve data exactly 3 times, stretched across the display width
+    for (let repeat = 0; repeat < repeats; repeat++) {
       const points = curveData.map((value, index) => {
-        const x = padding + (repeat * curveWidth) + (index / (curveData.length - 1)) * curveWidth
+        const x = padding + (repeat * cycleWidth) + (index / (curveData.length - 1)) * cycleWidth
         const y = padding + graphHeight - (value / 255) * graphHeight
         return `${x},${y}`
       })
@@ -83,6 +88,25 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
       justifyContent: 'center',
       backgroundColor: '#000000'
     }}>
+      <style>
+        {`
+          @keyframes growShrink {
+            0%, 100% { 
+              transform: scale(1); 
+              filter: blur(0px);
+            }
+            50% { 
+              transform: scale(2); 
+              filter: blur(1px);
+            }
+          }
+          
+          @keyframes sequentialPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(2); }
+          }
+        `}
+      </style>
       <svg 
         width="100%"
         height="auto"
@@ -100,6 +124,11 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
             <stop offset="50%" stopColor="#00ff00" />
             <stop offset="100%" stopColor="#0000ff" />
           </linearGradient>
+          
+          {/* Blur filter for red squares */}
+          <filter id="squareBlur">
+            <feGaussianBlur stdDeviation="2" />
+          </filter>
         </defs>
         
         {/* Background rectangle - black */}
@@ -160,7 +189,7 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           
           {/* X-axis labels */}
           <text x={padding + displayWidth / 2} y={actualHeight - 5}>
-            Curve Width: {curveWidth} (3x display to show seams)
+            Curve Width: {curveWidth} (3 complete cycles)
           </text>
           
           {/* Average value label */}
@@ -174,19 +203,13 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           </text>
         </g>
         
-        {/* Curve line */}
-        <path
-          d={generateCurvePath()}
-          stroke="#00ffff"
-          strokeWidth="2"
-          fill="none"
-        />
+
         
         {/* Average value line */}
         <line
           x1={padding}
           y1={padding + graphHeight - (averageValue / 255) * graphHeight}
-          x2={padding + displayWidth}
+          x2={padding + displayWidth + 20}
           y2={padding + graphHeight - (averageValue / 255) * graphHeight}
           stroke="#00ffff"
           strokeWidth="1"
@@ -194,25 +217,51 @@ const CurveGraph: React.FC<CurveGraphProps> = ({
           opacity="0.7"
         />
         
-        {/* Data points (3x repeated to show seams) */}
-        {Array.from({ length: 3 }, (_, repeat) => 
-          curveData.map((value, index) => {
-            const x = padding + (repeat * curveWidth) + (index / (curveData.length - 1)) * curveWidth
-            const y = padding + graphHeight - (value / 255) * graphHeight
+        {/* Data points with sequential animation - following stretched 3 cycles */}
+        {(() => {
+          const totalPoints = Math.floor(displayWidth / 3) // 3px spacing between points
+          const points = []
+          
+          for (let i = 0; i < totalPoints; i++) {
+            // Calculate position along stretched 3 cycles
+            const cycleWidth = displayWidth / 3 // Each cycle gets 1/3 of the display width
+            const totalCurveWidth = displayWidth
+            const progress = i / (totalPoints - 1)
+            const xAlongCurve = progress * totalCurveWidth
             
-                         return (
-               <circle
-                 key={`${repeat}-${index}`}
-                 cx={x}
-                 cy={y}
-                 r="2"
-                 fill="#00ffff"
-                 stroke="#00ffff"
-                 strokeWidth="1"
+            // Determine which repeat and position within that repeat
+            const repeatIndex = Math.floor(xAlongCurve / cycleWidth)
+            const positionInRepeat = (xAlongCurve % cycleWidth) / cycleWidth
+            const curveIndex = Math.floor(positionInRepeat * curveData.length)
+            
+                         const value = curveData[curveIndex]
+             const x = padding + xAlongCurve
+             const y = padding + graphHeight - (value / 255) * graphHeight
+             
+             // Calculate animation speed based on value: slower for lower values
+             const animationSpeed = 1 + ((255 - value) / 255) * 2 // Range: 1s (high values) to 3s (low values)
+             const animationDelay = (i / totalPoints) * 2 // 2 second total cycle
+            
+                         points.push(
+               <rect
+                 key={`point-${i}`}
+                 x={x - 1}
+                 y={y - 1}
+                 width="2"
+                 height="2"
+                 fill="#ff0000"
+                 stroke="none"
+                 style={{
+                   animation: `growShrink ${animationSpeed}s infinite`,
+                   animationDelay: `${animationDelay}s`,
+                   transformOrigin: `${x}px ${y}px`
+                 }}
                />
              )
-          })
-        )}
+          }
+          
+          return points
+        })()}
       </svg>
     </div>
   )

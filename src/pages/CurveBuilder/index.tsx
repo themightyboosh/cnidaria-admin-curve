@@ -839,13 +839,13 @@ function CurveBuilder() {
                   </button>
                   
                   {/* Save Button */}
-                  {selectedCurve && (
+                  {selectedCurve && hasUnsavedChanges && (
                     <button
                       type="button"
                       onClick={saveCurveChanges}
-                      disabled={isSaving || !hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))}
+                      disabled={isSaving || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))}
                       style={{
-                        backgroundColor: (!hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))) 
+                        backgroundColor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
                           ? '#666666' 
                           : '#007bff',
                         color: '#ffffff',
@@ -853,7 +853,7 @@ function CurveBuilder() {
                         borderRadius: '4px',
                         padding: '10px 16px',
                         fontSize: '14px',
-                        cursor: (!hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))) 
+                        cursor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
                           ? 'not-allowed' 
                           : 'pointer',
                         fontWeight: '500',
@@ -862,7 +862,6 @@ function CurveBuilder() {
                       title="Save changes to the current curve"
                     >
                       {isSaving ? 'Saving...' : 
-                       !hasUnsavedChanges ? 'No Changes' :
                        (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
                          ? 'Name Conflict' 
                          : 'Save'}
