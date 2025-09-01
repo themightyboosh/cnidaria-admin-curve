@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as UPNG from 'upng-js';
 import { CONFIG, type Curve, type CoordinateNoise, type GenerationJob, type GenerationResult } from '../utils/mathPipeline';
 import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils/paletteUtils';
+import { getWebGPUService, WebGPUServiceStats } from '../services/webgpuService';
+import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 
 // Hard-coded configuration values
 const GENERATION_CONFIG = {
@@ -22,19 +24,15 @@ interface GenerationProgress {
   done: number;
   total: number;
   percentage: number;
+  stage: string;
 }
 
-interface WorkerMessage {
-  type: 'progress' | 'done' | 'error';
-  jobId: string;
-  done?: number;
-  total?: number;
-  percentage?: number;
-  rgba?: Uint8Array;
-  valuePlane?: Uint8Array;
-  width?: number;
-  height?: number;
-  message?: string;
+interface WebGPUGenerationResult {
+  rgba: Uint8ClampedArray;
+  valuePlane: Float32Array;
+  width: number;
+  height: number;
+  stats: WebGPUServiceStats;
 }
 
 const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onError, onNoiseCalcChange }) => {
@@ -52,21 +50,32 @@ const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onE
   } | null>(null);
 
   // Refs
-  const workerRef = useRef<Worker | null>(null);
-  const jobIdRef = useRef<string>('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastResultRef = useRef<GenerationResult | null>(null);
 
   // Get palette options for dropdown
   const paletteOptions = getPaletteOptions();
 
-  // Initialize worker
+  // Check WebGPU availability on mount
   useEffect(() => {
-    const initWorker = () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
+    const checkWebGPU = async () => {
+      try {
+        const capabilities = await getWebGPUCapabilities();
+        if (!capabilities.supported) {
+          onError?.('WebGPU is required but not available');
+        }
+      } catch (error) {
+        console.error('WebGPU check failed:', error);
+        onError?.('WebGPU initialization failed');
       }
+    };
 
+    checkWebGPU();
+  }, [onError]);
+
+  // Legacy Worker code (DISABLED - using WebGPU now)
+  const initLegacyWorker = () => {
+    if (false) { // Disabled
       try {
         // Create worker with inline code to avoid Vite module loading issues
         const workerCode = `
@@ -318,12 +327,9 @@ self.onmessage = (e) => {
 
     initWorker();
 
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-      }
-    };
-  }, [onError]);
+      } // End disabled worker code
+    }
+  };
 
   // Handle generation completion
   const handleGenerationComplete = useCallback((result: GenerationResult) => {
@@ -383,40 +389,92 @@ self.onmessage = (e) => {
   };
 
   // Start generation
-  const startGeneration = useCallback(() => {
-    if (!workerRef.current || isGenerating) return;
+  const startGeneration = useCallback(async () => {
+    if (isGenerating) return;
 
-    const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    jobIdRef.current = jobId;
-
-    console.log('🚀 Starting PNG generation with:');
+    console.log('🚀 Starting WebGPU PNG generation with:');
     console.log('  Curve:', curve['curve-name'], 'coordinate-noise:', curve['coordinate-noise']);
     console.log('  Noise object:', coordinateNoise.name, 'expression:', coordinateNoise.gpuExpression);
     console.log('  Palette:', selectedPalette);
 
-    const palette = getPaletteByName(selectedPalette);
-    const generationJob: GenerationJob = {
-      jobId,
-      size: GENERATION_CONFIG.IMAGE_SIZE,
-      curve,
-      noise: coordinateNoise,
-      palette,
-      seed: curve['coordinate-noise-seed'] || 0
-    };
+    try {
+      setIsGenerating(true);
+      setProgress({ done: 0, total: GENERATION_CONFIG.IMAGE_SIZE * GENERATION_CONFIG.IMAGE_SIZE, percentage: 0, stage: 'Initializing WebGPU...' });
+      
+      // Update last generation params
+      setLastGenerationParams({
+        curveId: curve['curve-name'],
+        noiseId: coordinateNoise.name,
+        noiseCalc: curve['noise-calc'] || 'radial',
+        palette: selectedPalette
+      });
 
-    setIsGenerating(true);
-    setProgress({ done: 0, total: GENERATION_CONFIG.IMAGE_SIZE * GENERATION_CONFIG.IMAGE_SIZE, percentage: 0 });
-    
-    // Update last generation params
-    setLastGenerationParams({
-      curveId: curve['curve-name'],
-      noiseId: coordinateNoise.name,
-      noiseCalc: curve['noise-calc'] || 'radial',
-      palette: selectedPalette
-    });
+      const palette = getPaletteByName(selectedPalette);
+      const webgpuService = getWebGPUService();
+      
+      // Prepare curve data for WebGPU
+      const curveData = {
+        'curve-data': curve['curve-data'],
+        'curve-width': curve['curve-width'],
+        'curve-index-scaling': curve['curve-index-scaling'],
+        'coordinate-noise': curve['coordinate-noise'],
+        'noise-calc': (curve['noise-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
+      };
 
-    workerRef.current.postMessage(generationJob);
-  }, [curve, coordinateNoise, selectedPalette, isGenerating]);
+      // Process complete image with progress tracking
+      const result = await webgpuService.processCompleteImage(
+        curveData,
+        palette,
+        coordinateNoise.gpuExpression,
+        GENERATION_CONFIG.IMAGE_SIZE,
+        GENERATION_CONFIG.IMAGE_SIZE,
+        3.0, // 300% zoom scale
+        0, 0,
+        (stage: string, progressPercent: number) => {
+          const totalPixels = GENERATION_CONFIG.IMAGE_SIZE * GENERATION_CONFIG.IMAGE_SIZE;
+          const done = Math.round((progressPercent / 100) * totalPixels);
+          setProgress({ 
+            done, 
+            total: totalPixels, 
+            percentage: progressPercent,
+            stage 
+          });
+        }
+      );
+
+      console.log('✅ WebGPU generation complete:', result.stats);
+
+      // Create ImageData and generate PNG
+      const imageData = result.result.imageData;
+      const rgbaArray = new Uint8Array(result.result.rgbaData);
+      
+      // Generate PNG using UPNG
+      const png = UPNG.encode([rgbaArray.buffer], imageData.width, imageData.height, 0);
+      const blob = new Blob([png], { type: 'image/png' });
+      const pngUrl = URL.createObjectURL(blob);
+      
+      // Create canvas for display
+      const canvas = document.createElement('canvas');
+      canvas.width = imageData.width;
+      canvas.height = imageData.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.putImageData(imageData, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        setGeneratedImage(dataUrl);
+      }
+      
+      setDownloadUrl(pngUrl);
+      setProgress({ done: result.stats.pixelsProcessed, total: result.stats.pixelsProcessed, percentage: 100, stage: 'Complete!' });
+      
+    } catch (error) {
+      console.error('❌ WebGPU generation failed:', error);
+      onError?.(error instanceof Error ? error.message : 'WebGPU generation failed');
+      setProgress({ done: 0, total: 0, percentage: 0, stage: 'Error' });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [curve, coordinateNoise, selectedPalette, isGenerating, onError]);
 
   // Handle palette change (recolor only if we have a previous result)
   const handlePaletteChange = useCallback((newPalette: string) => {
@@ -510,11 +568,10 @@ self.onmessage = (e) => {
 
   // Cancel current generation and reset
   const cancelAndReset = useCallback(() => {
-    if (workerRef.current && isGenerating) {
-      console.log('🛑 Cancelling current generation and resetting');
-      workerRef.current.terminate();
+    if (isGenerating) {
+      console.log('🛑 Cancelling current WebGPU generation and resetting');
       
-      // Reinitialize worker
+      // Reset state
       const initWorker = () => {
         const workerCode = `
 // Worker code inline to avoid module loading issues
@@ -879,7 +936,7 @@ self.onmessage = (e) => {
           {/* Progress */}
           {isGenerating && (
             <div style={{ color: '#fff', fontSize: '14px' }}>
-              Progress: {progress.percentage}% ({progress.done.toLocaleString()}/{progress.total.toLocaleString()} pixels)
+              {progress.stage} - {progress.percentage}% ({progress.done.toLocaleString()}/{progress.total.toLocaleString()} pixels)
             </div>
           )}
         </div>
@@ -922,9 +979,9 @@ self.onmessage = (e) => {
           }}>
             {isGenerating ? (
               <div>
-                <div>Generating 512×512 PNG...</div>
+                <div>🚀 WebGPU Processing 512×512 PNG...</div>
                 <div style={{ marginTop: '8px', fontSize: '14px' }}>
-                  {progress.percentage}% complete
+                  {progress.stage} - {progress.percentage}% complete
                 </div>
               </div>
             ) : (
