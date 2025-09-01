@@ -19,8 +19,8 @@ const environments = {
   }
 };
 
-// Random curve types
-const curveTypes = ['Radial', 'Cartesian X', 'Cartesian Y'];
+// Random coordinate noise types
+const coordinateNoiseTypes = ['radial', 'cartesian-x', 'cartesian-y'];
 
 // Random tags for variety
 const possibleTags = [
@@ -31,7 +31,7 @@ const possibleTags = [
 
 // Generate random curve data
 function generateRandomCurve(index) {
-  const curveType = curveTypes[Math.floor(Math.random() * curveTypes.length)];
+  const coordinateNoise = coordinateNoiseTypes[Math.floor(Math.random() * coordinateNoiseTypes.length)];
   const width = Math.floor(Math.random() * 200) + 50; // 50-250
   
   // Generate random curve data points
@@ -56,9 +56,9 @@ function generateRandomCurve(index) {
   
   return {
     "curve-name": `Random Curve ${index + 1}`,
-    "curve-description": `Automatically generated test curve #${index + 1} for ${curveType} system`,
+    "curve-description": `Automatically generated test curve #${index + 1} for ${coordinateNoise} system`,
     "curve-tags": tags,
-    "curve-type": curveType,
+    "coordinate-noise": coordinateNoise,
     "curve-width": width,
     "curve-data": curveData,
     "curve-index-scaling": parseFloat(indexScaling.toFixed(2)),

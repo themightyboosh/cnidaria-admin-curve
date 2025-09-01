@@ -7,7 +7,7 @@ interface Curve {
   "curve-name": string
   "curve-description": string
   "curve-tags"?: string[]
-  "curve-type": string
+  "coordinate-noise": string
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
@@ -166,7 +166,7 @@ function WaveEditor() {
         <h2>Wave Editor</h2>
         <div className="curve-info">
           <span className="curve-name">{curve["curve-name"]}</span>
-          <span className="curve-type">({curve["curve-type"]})</span>
+          <span className="curve-type">({curve["coordinate-noise"]})</span>
         </div>
       </div>
 

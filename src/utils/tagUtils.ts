@@ -20,7 +20,7 @@ export interface Curve {
   'curve-tags': string[];  // Tag IDs for linked relationships
   'curve-width': number;
   'curve-height': number;
-  'curve-type': string;
+  'coordinate-noise': string;
   'curve-index-scaling': number;
   'curve-data': number[];
   'generator-noise-type'?: string;

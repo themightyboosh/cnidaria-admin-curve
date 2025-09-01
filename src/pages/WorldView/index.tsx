@@ -15,7 +15,7 @@ interface Curve {
   'random-seed': number
   'created_at': string
   'updated_at': string
-  'original-curve-type'?: string
+  'original-coordinate-noise'?: string
 }
 
 interface CoordinateNoise {

@@ -6,6 +6,9 @@ import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import CurveGraph from './CurveGraph'
+import PNGGenerator from '../../components/PNGGenerator'
+import { getPaletteOptions } from '../../utils/paletteUtils'
+import { getDefaultNoiseExpression, type CoordinateNoise } from '../../utils/mathPipeline'
 
 
 import './CurveBuilder.css'
@@ -26,7 +29,7 @@ interface Curve {
   "curve-name": string
   "curve-description": string
   "curve-tags"?: string[]  // Store document IDs
-  "curve-type": string
+  "coordinate-noise": string
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
@@ -45,8 +48,13 @@ function CurveBuilder() {
   const [cellSize, setCellSize] = useState(defaultCellSize)
   const [viewMode, setViewMode] = useState<'2D'>('2D')
   const [canvasViewMode, setCanvasViewMode] = useState<'curve-data' | 'mapped'>('curve-data')
+  const [curveDataMode, setCurveDataMode] = useState<'fractal' | 'sawtooth' | 'square' | 'sine' | 'ramp' | 'white-noise'>('sine')
+  const [valueRange, setValueRange] = useState({ min: 0, max: 255, mid: 127 })
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
   const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
+  const [selectedPalette, setSelectedPalette] = useState<string>('default')
+  const [coordinateNoise, setCoordinateNoise] = useState<CoordinateNoise | null>(null)
+  const [pngError, setPngError] = useState<string | null>(null)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
@@ -73,6 +81,9 @@ function CurveBuilder() {
   const [isLoadingCoordinateNoiseTypes, setIsLoadingCoordinateNoiseTypes] = useState(false)
 
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Fibonacci numbers for curve width options (max 1597)
+  const fibonacciNumbers = [8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597]
 
   // Helper function to get coordinate key
   const getCoordinateKey = (x: number, y: number) => `${x}_${y}`
@@ -113,6 +124,96 @@ function CurveBuilder() {
     }
   }
 
+  // Load coordinate noise by name
+  const loadCoordinateNoise = async (noiseName: string): Promise<CoordinateNoise | null> => {
+    try {
+      console.log('Loading coordinate noise:', noiseName)
+      const response = await fetch(`${apiUrl}/api/coordinate-noise/firebase`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Coordinate noise API response:', data)
+        
+        console.log('Coordinate noise API full response structure:', JSON.stringify(data, null, 2))
+        
+        // Handle different possible response formats
+        let noiseArray = null
+        if (data.success && data.data) {
+          // Check for the correct structure: data.data.noiseTypes (from the API reference)
+          if (data.data.noiseTypes && Array.isArray(data.data.noiseTypes)) {
+            noiseArray = data.data.noiseTypes
+          } else if (Array.isArray(data.data)) {
+            noiseArray = data.data
+          } else if (data.data.noise) {
+            noiseArray = data.data.noise
+          } else if (data.data.patterns) {
+            noiseArray = data.data.patterns
+          }
+        } else if (Array.isArray(data)) {
+          noiseArray = data
+        } else if (data.noise) {
+          noiseArray = data.noise
+        }
+        
+        console.log('Extracted noise array:', noiseArray?.length ? `${noiseArray.length} items` : 'null/empty')
+        console.log('Data.data structure:', data.data ? Object.keys(data.data) : 'no data.data')
+        
+        if (noiseArray && Array.isArray(noiseArray)) {
+          console.log('Available noise patterns:', noiseArray.map((n: any) => n.name))
+          
+          // Find the noise by name
+          const noise = noiseArray.find((n: CoordinateNoise) => n.name === noiseName)
+          if (noise) {
+            console.log('✅ Found coordinate noise:', noise.name, 'Expression:', noise.gpuExpression)
+            return noise
+          } else {
+            console.warn('❌ Coordinate noise not found:', noiseName, 'Available:', noiseArray.map((n: any) => n.name))
+            
+            // Try to find a close match (case-insensitive)
+            const closeMatch = noiseArray.find((n: CoordinateNoise) => 
+              n.name.toLowerCase() === noiseName.toLowerCase()
+            )
+            if (closeMatch) {
+              console.log('✅ Found close match:', closeMatch.name)
+              return closeMatch
+            }
+            
+            // Return default radial noise
+            return {
+              name: 'radial',
+              category: 'default',
+              description: 'Default radial distance function',
+              cpuLoadLevel: 1,
+              gpuDescription: 'Radial distance from center',
+              gpuExpression: getDefaultNoiseExpression('radial'),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          }
+        } else {
+          console.error('❌ No valid noise array found in API response. Response keys:', Object.keys(data))
+        }
+      } else {
+        console.error('Coordinate noise API request failed:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Failed to load coordinate noise:', error)
+    }
+    
+    // Fallback to default radial noise
+    console.log('Using fallback radial noise')
+    return {
+      name: 'radial',
+      category: 'default', 
+      description: 'Default radial distance function',
+      cpuLoadLevel: 1,
+      gpuDescription: 'Radial distance from center',
+      gpuExpression: getDefaultNoiseExpression('radial'),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  }
+
   // Load curves from API
   const loadCurves = async () => {
     setIsLoadingCurves(true)
@@ -131,15 +232,32 @@ function CurveBuilder() {
           const curvesData = data.data?.curves || data.curves || []
           console.log('Raw curves from API:', curvesData)
           
-          // Process curve data to ensure curve-tags contains only IDs
-          const processedCurves = curvesData.map((curve: Curve) => {
+          // Process curve data to ensure curve-tags contains only IDs and handle coordinate-noise migration
+          const processedCurves = curvesData.map((curve: any) => {
+            console.log('🔍 Processing curve:', curve["curve-name"], 'Fields:', Object.keys(curve))
+            console.log('  curve-type:', curve["curve-type"])
+            console.log('  coordinate-noise:', curve["coordinate-noise"])
+            
             if (curve["curve-tags"]) {
               // Ensure curve-tags is an array of strings (IDs), not objects
-              curve["curve-tags"] = curve["curve-tags"].map(tag => 
+              curve["curve-tags"] = curve["curve-tags"].map((tag: any) => 
                 typeof tag === 'string' ? tag : tag.id || tag
               )
             }
-            return curve
+            
+            // Handle coordinate-noise migration: curve-type -> coordinate-noise
+            if (curve["curve-type"] && !curve["coordinate-noise"]) {
+              curve["coordinate-noise"] = curve["curve-type"]
+              console.log('✅ Migrated curve-type to coordinate-noise for curve:', curve["curve-name"], 'from:', curve["curve-type"], 'to:', curve["coordinate-noise"])
+            } else if (!curve["coordinate-noise"]) {
+              // If no coordinate-noise field at all, default to radial
+              curve["coordinate-noise"] = "radial"
+              console.log('⚠️ No coordinate-noise found for curve:', curve["curve-name"], 'defaulting to radial')
+            } else {
+              console.log('✅ Curve already has coordinate-noise:', curve["curve-name"], '=', curve["coordinate-noise"])
+            }
+            
+            return curve as Curve
           })
           
           console.log('Setting processed curves:', processedCurves)
@@ -298,112 +416,7 @@ function CurveBuilder() {
 
 
 
-  // Process coordinates for a curve with caching
-  const processCurveCoordinates = async (curve: Curve, forceColorMode?: 'value' | 'index') => {
-    const currentColorMode = forceColorMode || colorMode
-    if (!curve) return
-    
-    setIsProcessingCoordinates(true)
-    setError(null)
-    setProcessingProgress({ current: 0, total: 0 })
-    
-    // Use fixed coordinates for now
-    const topLeft = [-50, -50]
-    const bottomRight = [50, 50]
-    
-    try {
-      console.log(`Processing coordinates for curve: ${curve["curve-name"]}`)
-      console.log(`Grid bounds: (${topLeft[0]}, ${topLeft[1]}) to (${bottomRight[0]}, ${bottomRight[1]})`)
-      
-      // Determine which coordinates need processing (not cached)
-      const uncachedCoordinates: [number, number][] = []
-      for (let x = topLeft[0]; x <= bottomRight[0]; x++) {
-        for (let y = topLeft[1]; y <= bottomRight[1]; y++) {
-          if (!isCoordinateCached(x, y)) {
-            uncachedCoordinates.push([x, y])
-          }
-        }
-      }
-      
-      console.log(`Found ${uncachedCoordinates.length} uncached coordinates out of ${(bottomRight[0] - topLeft[0] + 1) * (bottomRight[1] - topLeft[1] + 1)} total`)
-      
-      if (uncachedCoordinates.length === 0) {
-        // All coordinates are cached, just update colors from cache
-        console.log('All coordinates cached, updating colors from cache')
-        updateColorsFromCache(currentColorMode)
-        setIsProcessingCoordinates(false)
-        return
-      }
-      
-      // Call API only for uncached coordinates
-      const response = await fetch(
-        `${apiUrl}/api/curves/${curve.id}/process?x=${topLeft[0]}&y=${topLeft[1]}&x2=${bottomRight[0]}&y2=${bottomRight[1]}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept-Encoding': 'gzip, deflate'
-          }
-        }
-      )
-      
-      if (response.ok) {
-        const data = await response.json()
-        console.log('API Response:', data)
-        
-        // The API returns data in format: {"curve-name": [results]}
-        const curveName = Object.keys(data)[0]
-        const results = data[curveName]
-        
-        if (results && Array.isArray(results)) {
-          console.log(`Processing ${results.length} coordinate results`)
-          
-          // Update cache with new results
-          const newCoordinateCache = new Map(coordinateCache)
-          const newCellColors = new Map(cellColors)
-          
-          results.forEach((result: ProcessCoordinateResponse, index: number) => {
-            const [x, y] = result["cell-coordinates"]
-            const coordKey = getCoordinateKey(x, y)
-            
-            // Cache the raw coordinate data
-            newCoordinateCache.set(coordKey, result)
-            
-            // Update colors
-            const indexPosition = result["index-position"]
-            const curveWidth = selectedCurve?.["curve-width"] || 1
-            const color = indexToColorString(result["index-value"], currentColorMode, indexPosition, curveWidth)
-            newCellColors.set(coordKey, color)
-            
-            // Debug logging for first few results
-            if (index < 3) {
-              console.log(`2D Debug [${index}]: colorMode=${currentColorMode}, indexValue=${result["index-value"]}, indexPosition=${indexPosition}, curveWidth=${curveWidth}, color=${color}`)
-            }
-            
-            // Update progress
-            setProcessingProgress({ current: index + 1, total: results.length })
-          })
-          
-          // Update both cache and colors
-          setCoordinateCache(newCoordinateCache)
-          setCellColors(newCellColors)
-          console.log(`Successfully processed and cached ${results.length} coordinates`)
-        } else {
-          setError('Invalid response format from API')
-        }
-      } else {
-        const errorText = await response.text()
-        console.error('API request failed:', response.status, response.statusText, errorText)
-        setError(`API request failed: ${response.status} ${response.statusText}`)
-      }
-    } catch (error) {
-      console.error('Failed to process curve coordinates:', error)
-      setError('Failed to process coordinates: Network error')
-    } finally {
-      setIsProcessingCoordinates(false)
-      setProcessingProgress({ current: 0, total: 0 })
-    }
-  }
+  // Note: Server-side coordinate processing removed - all processing now happens client-side in PNG generation
 
   // Update colors from cache when color mode changes
   const updateColorsFromCache = (currentColorMode: 'value' | 'index') => {
@@ -421,6 +434,139 @@ function CurveBuilder() {
   }
 
 
+
+  // Generate curve data based on selected mode
+  const generateCurveData = (mode: 'fractal' | 'sawtooth' | 'square' | 'sine' | 'ramp' | 'white-noise', width: number, min: number, max: number, mid: number, noiseSeed: number = 0) => {
+    const data: number[] = []
+    const range = max - min
+    
+    switch (mode) {
+      case 'fractal':
+        // Enhanced fractal noise with true randomization
+        for (let i = 0; i < width; i++) {
+          const t = (i / width) * Math.PI * 2
+          
+          // Multiple frequency layers with true random phases and amplitudes
+          const layer1 = Math.sin(t + Math.random() * Math.PI * 2) * (0.3 + Math.random() * 0.2)
+          const layer2 = Math.sin(t * (1.5 + Math.random() * 2) + Math.random() * Math.PI * 2) * (0.15 + Math.random() * 0.2)
+          const layer3 = Math.sin(t * (3 + Math.random() * 4) + Math.random() * Math.PI * 2) * (0.1 + Math.random() * 0.15)
+          const layer4 = Math.sin(t * (6 + Math.random() * 6) + Math.random() * Math.PI * 2) * (0.05 + Math.random() * 0.1)
+          const layer5 = Math.sin(t * (10 + Math.random() * 10) + Math.random() * Math.PI * 2) * (0.02 + Math.random() * 0.08)
+          
+          // Add significant random noise
+          const noise = (Math.random() - 0.5) * 0.3
+          
+          // Combine all layers with noise
+          const value = layer1 + layer2 + layer3 + layer4 + layer5 + noise
+          
+          data.push(Math.floor(((value + 1) / 2) * range + min))
+        }
+        break
+        
+      case 'sawtooth':
+        for (let i = 0; i < width; i++) {
+          const t = (i / width) * 2
+          const value = (t - Math.floor(t)) * 2 - 1
+          data.push(Math.floor(((value + 1) / 2) * range + min))
+        }
+        break
+        
+      case 'square':
+        for (let i = 0; i < width; i++) {
+          const t = (i / width) * 2
+          const value = Math.sin(t * Math.PI) > 0 ? 1 : -1
+          data.push(Math.floor(((value + 1) / 2) * range + min))
+        }
+        break
+        
+      case 'ramp':
+        // Linear ramp from min to max
+        for (let i = 0; i < width; i++) {
+          const progress = i / (width - 1)
+          const value = min + (progress * range)
+          data.push(Math.floor(value))
+        }
+        break
+        
+      case 'white-noise':
+        // True white noise with complete randomization
+        for (let i = 0; i < width; i++) {
+          // Pure random value between -1 and 1
+          const randomValue = (Math.random() - 0.5) * 2
+          const value = min + ((randomValue + 1) / 2) * range
+          data.push(Math.floor(value))
+        }
+        break
+        
+      case 'sine':
+      default:
+        for (let i = 0; i < width; i++) {
+          const t = (i / width) * Math.PI * 2
+          const value = Math.sin(t)
+          data.push(Math.floor(((value + 1) / 2) * range + min))
+        }
+        break
+    }
+    
+    return data
+  }
+
+
+
+  // Stretch values to fit the min/max range
+  const stretchValues = () => {
+    if (!editingCurve) return
+    
+    const data = editingCurve["curve-data"]
+    if (data.length === 0) return
+    
+    const min = Math.min(...data)
+    const max = Math.max(...data)
+    const range = max - min
+    
+    if (range === 0) return // All values are the same
+    
+    const stretchedData = data.map(value => 
+      Math.floor(((value - min) / range) * (valueRange.max - valueRange.min) + valueRange.min)
+    )
+    
+    handleFieldChange("curve-data", stretchedData)
+  }
+
+
+
+  // Handle click on graph data point
+  const handleDataPointClick = (index: number, value: number) => {
+    if (!editingCurve) return
+    
+    const newData = [...editingCurve["curve-data"]]
+    newData[index] = value
+    
+    // Update the curve data
+    handleFieldChange("curve-data", newData)
+  }
+
+  // Interpolate data when curve width changes
+  const interpolateData = (oldWidth: number, newWidth: number, oldData: number[]) => {
+    if (oldWidth === newWidth || oldData.length === 0) return oldData
+    
+    const newData: number[] = []
+    
+    for (let i = 0; i < newWidth; i++) {
+      const oldIndex = (i / newWidth) * oldWidth
+      const index1 = Math.floor(oldIndex)
+      const index2 = Math.min(index1 + 1, oldWidth - 1)
+      const fraction = oldIndex - index1
+      
+      const value1 = oldData[index1] || 0
+      const value2 = oldData[index2] || 0
+      const interpolatedValue = value1 + (value2 - value1) * fraction
+      
+      newData.push(Math.floor(interpolatedValue))
+    }
+    
+    return newData
+  }
 
   // Generate unique curve name
   const generateUniqueCurveName = () => {
@@ -442,7 +588,7 @@ function CurveBuilder() {
       "curve-name": generateUniqueCurveName(),
       "curve-description": "A new curve created from scratch",
       "curve-tags": [],
-      "curve-type": "radial",
+      "coordinate-noise": "radial",
       "curve-width": 256,
       "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256)),
       "curve-index-scaling": 1.0,
@@ -464,11 +610,30 @@ function CurveBuilder() {
   }
 
   // Handle curve selection
-  const handleCurveSelect = (curve: Curve) => {
+  const handleCurveSelect = async (curve: Curve) => {
     setSelectedCurve(curve)
     setEditingCurve({ ...curve }) // Create a copy for editing
     setHasUnsavedChanges(false)
     setError(null)
+    
+    // Reset value range sliders based on curve data
+    if (curve["curve-data"] && curve["curve-data"].length > 0) {
+      const data = curve["curve-data"]
+      const min = Math.min(...data)
+      const max = Math.max(...data)
+      const avg = Math.floor(data.reduce((sum, val) => sum + val, 0) / data.length)
+      setValueRange({ min, max, mid: avg })
+    } else {
+      // Default values if no curve data
+      setValueRange({ min: 0, max: 255, mid: 127 })
+    }
+
+    // Load coordinate noise for mapped view
+    const noiseName = curve['coordinate-noise'] || 'radial'
+    console.log('Loading coordinate noise for curve:', curve['curve-name'], 'noise type:', noiseName)
+    const noise = await loadCoordinateNoise(noiseName)
+    setCoordinateNoise(noise)
+    
     // Clear cache and colors for new curve
     setCoordinateCache(new Map())
     setCellColors(new Map())
@@ -489,6 +654,20 @@ function CurveBuilder() {
       
       setEditingCurve(prev => {
         if (!prev) return prev
+        
+        // Handle curve width interpolation
+        if (field === "curve-width" && prev["curve-data"] && prev["curve-data"].length > 0) {
+          const oldWidth = prev["curve-width"]
+          const newWidth = value
+          const interpolatedData = interpolateData(oldWidth, newWidth, prev["curve-data"])
+          
+          return {
+            ...prev,
+            [field]: value,
+            "curve-data": interpolatedData
+          }
+        }
+        
         return {
           ...prev,
           [field]: value
@@ -496,8 +675,14 @@ function CurveBuilder() {
       })
       setHasUnsavedChanges(true)
       
-      // Auto-save when curve type changes to update the math immediately
-      if (field === "curve-type") {
+      // Auto-save when coordinate noise changes and reload noise data for PNG generation
+      if (field === "coordinate-noise") {
+        // Load the new coordinate noise for PNG generation
+        loadCoordinateNoise(value as string).then(noise => {
+          setCoordinateNoise(noise)
+          console.log('🔄 Coordinate noise updated for PNG generation:', value, '→', noise?.name)
+        })
+        
         // Use a small delay to ensure the state is updated first
         setTimeout(() => {
           saveCurveChanges()
@@ -694,10 +879,13 @@ function CurveBuilder() {
     setError(null)
     
     try {
+      // Check if this is a new curve (temporary ID) or existing curve
+      const isNewCurve = selectedCurve.id.startsWith('curve-') && selectedCurve.id.includes('-')
+      
       const response = await fetch(
-        `${apiUrl}/api/curves/${selectedCurve.id}`,
+        isNewCurve ? `${apiUrl}/api/curves` : `${apiUrl}/api/curves/${selectedCurve.id}`,
         {
-          method: 'PUT',
+          method: isNewCurve ? 'POST' : 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -708,25 +896,42 @@ function CurveBuilder() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
+          // For new curves, update the ID from the API response
+          if (isNewCurve && data.id) {
+            editingCurve.id = data.id
+            selectedCurve.id = data.id
+            console.log('✅ New curve created with ID:', data.id)
+          }
+          
           // Update the selected curve with new data
           setSelectedCurve(editingCurve)
           setHasUnsavedChanges(false)
           
           // Update the curves list to reflect the changes in the dropdown
-          setCurves(prevCurves => 
-            prevCurves.map(curve => 
-              curve.id === editingCurve.id ? editingCurve : curve
+          if (isNewCurve) {
+            // Add new curve to the list
+            setCurves(prevCurves => [...prevCurves, editingCurve])
+          } else {
+            // Update existing curve in the list
+            setCurves(prevCurves => 
+              prevCurves.map(curve => 
+                curve.id === editingCurve.id ? editingCurve : curve
+              )
             )
-          )
+          }
           
           // Clear cache and redraw grid since settings changed
           setCoordinateCache(new Map())
           setCellColors(new Map())
-          // if (editingCurve) {
-          //   processCurveCoordinates(editingCurve)
-          // } // Disabled - using new visible rectangles service
           
-          console.log('Curve updated successfully - dropdown refreshed')
+          // Load coordinate noise and refresh PNG generation after save
+          const noiseName = editingCurve['coordinate-noise'] || 'radial'
+          console.log('🔄 Reloading coordinate noise after save:', noiseName)
+          const noise = await loadCoordinateNoise(noiseName)
+          setCoordinateNoise(noise)
+          console.log('✅ Coordinate noise reloaded for PNG refresh:', noise?.name)
+          
+          console.log('Curve updated successfully - dropdown refreshed and PNG will auto-refresh')
         } else {
           setError('Failed to update curve: API returned error')
         }
@@ -758,26 +963,7 @@ function CurveBuilder() {
     }
   }
 
-  // Handle new visible cells (when scrolling/resizing) with debounced delay
-  useEffect(() => {
-    if (selectedCurve) {
-      // Clear any existing timeout
-      if (processingTimeoutRef.current) {
-        clearTimeout(processingTimeoutRef.current)
-      }
-      
-      // Set new timeout for processing coordinates
-      // processingTimeoutRef.current = setTimeout(() => {
-      //   processCurveCoordinates(selectedCurve)
-      // }, 500) // 500ms debounce delay - Disabled - using new visible rectangles service
-    }
-    
-    return () => {
-      if (processingTimeoutRef.current) {
-        clearTimeout(processingTimeoutRef.current)
-      }
-    }
-  }, [selectedCurve])
+  // Note: Old coordinate processing logic removed - all processing now client-side
 
   return (
     <div className="app">
@@ -921,98 +1107,194 @@ function CurveBuilder() {
                       </select>
                     </div>
 
-                    {/* Color Spectrum and Color Mode - only show when Mapped mode is selected */}
+                    {/* Curve Data Generation Controls - only show when Curve Data mode is selected */}
+                    {canvasViewMode === 'curve-data' && (
+                      <>
+                        <div className="form-group">
+                          <label>Curve Width:</label>
+                          <select
+                            value={editingCurve["curve-width"]}
+                            onChange={(e) => {
+                              const newWidth = parseInt(e.target.value)
+                              handleFieldChange("curve-width", newWidth)
+                            }}
+                            title="Choose the curve width (Fibonacci numbers)"
+                          >
+                            {fibonacciNumbers.map(num => (
+                              <option key={num} value={num}>
+                                {num}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Data Generation:</label>
+                          <select
+                            value={curveDataMode}
+                            onChange={(e) => {
+                              const newMode = e.target.value as 'fractal' | 'sawtooth' | 'square' | 'sine' | 'ramp' | 'white-noise'
+                              setCurveDataMode(newMode)
+                              if (editingCurve) {
+                                const newData = generateCurveData(
+                                  newMode,
+                                  editingCurve["curve-width"],
+                                  valueRange.min,
+                                  valueRange.max,
+                                  valueRange.mid,
+                                  editingCurve["coordinate-noise-seed"]
+                                )
+                                handleFieldChange("curve-data", newData)
+                              }
+                            }}
+                            onFocus={(e) => {
+                              // Re-run generation when same option is selected
+                              if (editingCurve) {
+                                const newData = generateCurveData(
+                                  curveDataMode,
+                                  editingCurve["curve-width"],
+                                  valueRange.min,
+                                  valueRange.max,
+                                  valueRange.mid,
+                                  editingCurve["coordinate-noise-seed"]
+                                )
+                                handleFieldChange("curve-data", newData)
+                              }
+                            }}
+                            title="Choose the type of curve data to generate"
+                          >
+                            <option value="sine">Sine Wave</option>
+                            <option value="sawtooth">Sawtooth</option>
+                            <option value="square">Square Wave</option>
+                            <option value="fractal">Fractal Noise</option>
+                            <option value="ramp">Ramp</option>
+                            <option value="white-noise">White Noise</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Value Range:</label>
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', width: '100%' }}>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '12px', color: '#ccc' }}>Min: {valueRange.min}</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="255"
+                                  value={valueRange.min}
+                                  onChange={(e) => {
+                                    const newMin = parseInt(e.target.value)
+                                    setValueRange(prev => ({ ...prev, min: newMin }))
+                                    if (editingCurve && newMin < valueRange.max) {
+                                      const newData = generateCurveData(
+                                        curveDataMode,
+                                        editingCurve["curve-width"],
+                                        newMin,
+                                        valueRange.max,
+                                        valueRange.mid,
+                                        editingCurve["coordinate-noise-seed"]
+                                      )
+                                      handleFieldChange("curve-data", newData)
+                                    }
+                                  }}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '12px', color: '#ccc' }}>Max: {valueRange.max}</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="255"
+                                  value={valueRange.max}
+                                  onChange={(e) => {
+                                    const newMax = parseInt(e.target.value)
+                                    setValueRange(prev => ({ ...prev, max: newMax }))
+                                    if (editingCurve && valueRange.min < newMax) {
+                                      const newData = generateCurveData(
+                                        curveDataMode,
+                                        editingCurve["curve-width"],
+                                        valueRange.min,
+                                        newMax,
+                                        valueRange.mid,
+                                        editingCurve["coordinate-noise-seed"]
+                                      )
+                                      handleFieldChange("curve-data", newData)
+                                    }
+                                  }}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                            </div>
+                            <div style={{ width: '100%' }}>
+                              <label style={{ fontSize: '12px', color: '#ccc' }}>Mid: {valueRange.mid}</label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="255"
+                                value={valueRange.mid}
+                                onChange={(e) => {
+                                  const newMid = parseInt(e.target.value)
+                                  setValueRange(prev => ({ ...prev, mid: newMid }))
+                                  // Update curve data when mid value changes
+                                  if (editingCurve) {
+                                    const data = editingCurve["curve-data"]
+                                    if (data.length > 0) {
+                                      const currentAvg = data.reduce((sum, val) => sum + val, 0) / data.length
+                                      const offset = newMid - currentAvg
+                                      const adjustedData = data.map(value => 
+                                        Math.max(0, Math.min(255, Math.floor(value + offset)))
+                                      )
+                                      handleFieldChange("curve-data", adjustedData)
+                                    }
+                                  }
+                                }}
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <button
+                            type="button"
+                            onClick={stretchValues}
+                            style={{
+                              backgroundColor: '#17a2b8',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '8px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              width: '100%'
+                            }}
+                            title="Fit values to use the min/max range"
+                          >
+                            Fit Values
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Palette Selector - only show when Mapped mode is selected */}
                     {canvasViewMode === 'mapped' && (
                       <>
                         <div className="form-group">
-                          <label>Color Spectrum:</label>
-                      <select
-                        onChange={(e) => {
-                          setActiveSpectrumPreset(e.target.value)
-                          setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                          // Update colors from cache if available, otherwise process new coordinates
-                          if (coordinateCache.size > 0) {
-                            updateColorsFromCache(colorMode)
-                          } else if (selectedCurve) {
-                            processCurveCoordinates(selectedCurve)
-                          }
-                        }}
-                        title="Choose color spectrum for visualizing data values"
-                      >
-                        {Object.keys(SPECTRUM_PRESETS).map(presetName => (
-                          <option key={presetName} value={presetName}>
-                            {presetName.charAt(0).toUpperCase() + presetName.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Color Mode:</label>
-                      <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
-                          <input
-                            type="radio"
-                            name="colorMode"
-                            value="value"
-                            checked={colorMode === 'value'}
-                            onChange={(e) => {
-                              console.log('=== SWITCHING TO VALUE MODE ===')
-                              setColorMode('value')
-                              setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                              // Update colors from cache if available, otherwise process new coordinates
-                              if (coordinateCache.size > 0) {
-                                updateColorsFromCache('value')
-                              }
-                              // else if (selectedCurve) {
-                              //   processCurveCoordinates(selectedCurve, 'value')
-                              // } // Disabled - using new visible rectangles service
-                            }}
-                          />
-                          Value
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
-                          <input
-                            type="radio"
-                            name="colorMode"
-                            value="index"
-                            checked={colorMode === 'index'}
-                            onChange={(e) => {
-                              console.log('=== SWITCHING TO INDEX MODE ===')
-                              setColorMode('index')
-                              setSpectrumKey(prev => prev + 1) // Force 3D view refresh
-                              // Update colors from cache if available, otherwise process new coordinates
-                              if (coordinateCache.size > 0) {
-                                updateColorsFromCache('index')
-                              }
-                              // else if (selectedCurve) {
-                              //   processCurveCoordinates(selectedCurve, 'index')
-                              // } // Disabled - using new visible rectangles service
-                            }}
-                          />
-                          <span style={{ whiteSpace: 'nowrap' }}>
-                            Index ({selectedCurve["curve-width"] || 'N/A'})
-                          </span>
-                        </label>
-                      </div>
-                      
-                      {/* Cache Status Indicator */}
-                      {coordinateCache.size > 0 && (
-                        <div style={{ 
-                          marginTop: '8px', 
-                          fontSize: '12px', 
-                          color: '#00d4ff',
-                          fontStyle: 'italic'
-                        }}>
-                          📦 Cache: {coordinateCache.size} coordinates cached
-                          {isProcessingCoordinates && (
-                            <span style={{ color: '#ffaa00', marginLeft: '8px' }}>
-                              🔄 Processing new cells...
-                            </span>
-                          )}
+                          <label>PNG Palette:</label>
+                          <select
+                            value={selectedPalette}
+                            onChange={(e) => setSelectedPalette(e.target.value)}
+                            title="Choose color palette for PNG generation"
+                          >
+                            {getPaletteOptions().map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
-                    </div>
                     </>
                     )}
                     
@@ -1150,8 +1432,8 @@ function CurveBuilder() {
                     <div className="form-group">
                       <label>Coordinate Noise:</label>
                       <select
-                        value={editingCurve["curve-type"] || "radial"}
-                        onChange={(e) => handleFieldChange("curve-type", e.target.value)}
+                        value={editingCurve["coordinate-noise"] || "radial"}
+                        onChange={(e) => handleFieldChange("coordinate-noise", e.target.value)}
                         title="Select the coordinate noise pattern for this curve"
                         disabled={isLoadingCoordinateNoiseTypes || isSaving}
                       >
@@ -1233,25 +1515,48 @@ function CurveBuilder() {
         <div className="canvas-area">
           {canvasViewMode === 'curve-data' ? (
             <CurveGraph 
-              curveData={selectedCurve?.["curve-data"] || []}
-              curveWidth={selectedCurve?.["curve-width"] || 256}
+              curveData={editingCurve?.["curve-data"] || selectedCurve?.["curve-data"] || []}
+              curveWidth={editingCurve?.["curve-width"] || selectedCurve?.["curve-width"] || 256}
               spectrum={255}
               colorMode={colorMode}
+              minValue={valueRange.min}
+              maxValue={valueRange.max}
+              onDataPointClick={handleDataPointClick}
             />
           ) : (
-            <div style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#000000',
-              color: '#ffffff',
-              fontSize: '18px',
-              border: '1px solid #333'
-            }}>
-              Mapped View - Component Coming Soon
-            </div>
+            selectedCurve && coordinateNoise ? (
+              <PNGGenerator
+                curve={selectedCurve}
+                coordinateNoise={coordinateNoise}
+                onError={(error) => setPngError(error)}
+              />
+            ) : (
+              <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                fontSize: '18px',
+                border: '1px solid #333',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                <div>Select a curve to generate 1024×1024 PNG</div>
+                {pngError && (
+                  <div style={{ 
+                    color: '#ff6b6b', 
+                    fontSize: '14px',
+                    textAlign: 'center',
+                    maxWidth: '80%'
+                  }}>
+                    Error: {pngError}
+                  </div>
+                )}
+              </div>
+            )
           )}
         </div>
       </div>
