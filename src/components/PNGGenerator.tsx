@@ -73,7 +73,8 @@ const PNGGenerator: React.FC<PNGGeneratorProps> = ({ curve, coordinateNoise, onE
     checkWebGPU();
   }, [onError]);
 
-  // Legacy Worker code (DISABLED - using WebGPU now)
+  // Legacy Worker code (COMPLETELY REMOVED - using WebGPU now)
+  /*
   const initLegacyWorker = () => {
     if (false) { // Disabled
       try {
@@ -283,53 +284,8 @@ self.onmessage = (e) => {
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         workerRef.current = new Worker(URL.createObjectURL(blob));
 
-        workerRef.current.onmessage = (e: MessageEvent<WorkerMessage>) => {
-          const { type, jobId, done, total, percentage, rgba, valuePlane, width, height, message } = e.data;
-
-          // Ignore messages from old jobs
-          if (jobId !== jobIdRef.current) return;
-
-          switch (type) {
-            case 'progress':
-              if (done !== undefined && total !== undefined && percentage !== undefined) {
-                setProgress({ done, total, percentage });
-              }
-              break;
-
-            case 'done':
-              if (rgba && valuePlane && width && height) {
-                const result: GenerationResult = { rgba, valuePlane, width, height };
-                lastResultRef.current = result;
-                handleGenerationComplete(result);
-              }
-              setIsGenerating(false);
-              break;
-
-            case 'error':
-              console.error('Worker error:', message);
-              onError?.(message || 'Unknown generation error');
-              setIsGenerating(false);
-              break;
-          }
-        };
-
-        workerRef.current.onerror = (error) => {
-          console.error('Worker error:', error);
-          onError?.('Worker initialization failed');
-          setIsGenerating(false);
-        };
-
-      } catch (error) {
-        console.error('Failed to create worker:', error);
-        onError?.('Failed to initialize image generator');
-      }
-    };
-
-    initWorker();
-
-      } // End disabled worker code
-    }
-  };
+  // Legacy worker message handler completely removed - using WebGPU now
+  */
 
   // Handle generation completion
   const handleGenerationComplete = useCallback((result: GenerationResult) => {
