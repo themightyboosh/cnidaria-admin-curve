@@ -44,6 +44,7 @@ function CurveBuilder() {
   const defaultCellSize = 30
   const [cellSize, setCellSize] = useState(defaultCellSize)
   const [viewMode, setViewMode] = useState<'2D'>('2D')
+  const [canvasViewMode, setCanvasViewMode] = useState<'curve-data' | 'mapped'>('curve-data')
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
   const [spectrumKey, setSpectrumKey] = useState(0) // Force refresh when spectrum changes
   const [isOptionPressed, setIsOptionPressed] = useState(false)
@@ -907,9 +908,24 @@ function CurveBuilder() {
                 {expandedSections.view && (
                   <div className="section-content">
 
-                    
+                    {/* View Mode Dropdown */}
                     <div className="form-group">
-                      <label>Color Spectrum:</label>
+                      <label>View Mode:</label>
+                      <select
+                        value={canvasViewMode}
+                        onChange={(e) => setCanvasViewMode(e.target.value as 'curve-data' | 'mapped')}
+                        title="Choose the visualization mode for the canvas area"
+                      >
+                        <option value="curve-data">Curve Data</option>
+                        <option value="mapped">Mapped</option>
+                      </select>
+                    </div>
+
+                    {/* Color Spectrum and Color Mode - only show when Mapped mode is selected */}
+                    {canvasViewMode === 'mapped' && (
+                      <>
+                        <div className="form-group">
+                          <label>Color Spectrum:</label>
                       <select
                         onChange={(e) => {
                           setActiveSpectrumPreset(e.target.value)
@@ -997,8 +1013,8 @@ function CurveBuilder() {
                         </div>
                       )}
                     </div>
-                    
-
+                    </>
+                    )}
                     
                   </div>
                 )}
@@ -1215,12 +1231,28 @@ function CurveBuilder() {
         
                 {/* Canvas Area */}
         <div className="canvas-area">
-          <CurveGraph 
-            curveData={selectedCurve?.["curve-data"] || []}
-            curveWidth={selectedCurve?.["curve-width"] || 256}
-            spectrum={255}
-            colorMode={colorMode}
-          />
+          {canvasViewMode === 'curve-data' ? (
+            <CurveGraph 
+              curveData={selectedCurve?.["curve-data"] || []}
+              curveWidth={selectedCurve?.["curve-width"] || 256}
+              spectrum={255}
+              colorMode={colorMode}
+            />
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              fontSize: '18px',
+              border: '1px solid #333'
+            }}>
+              Mapped View - Component Coming Soon
+            </div>
+          )}
         </div>
       </div>
 
