@@ -42,6 +42,10 @@ function generateImageGenerationShader(
   // Sanitize GPU expression
   const sanitizedExpression = gpuExpression
     .replace(/Math\./g, '')
+    .replace(/\batan\([^,)]+,\s*[^)]+\)/g, (match) => {
+      // Convert atan(y, x) to atan2(y, x)
+      return match.replace(/\batan\b/, 'atan2');
+    })
     .replace(/\batan2\b/g, 'atan2')
     .replace(/\bpow\b/g, 'pow')
     .replace(/\bsqrt\b/g, 'sqrt')

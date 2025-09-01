@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { apiUrl } from '../../config/environments'
+import { getContrastingTextColor } from '../../utils/colorSpectrum'
 import './TagManager.css'
 
 interface Tag {
   id: string
-  'tag-name': string
-  'tag-description': string
-  'tag-color': string
-  'created-at': string
-  'updated-at': string
-  'tag-usage': Record<string, string[]> // Map of object-type to array of document IDs
+  name: string
+  description: string
+  color: string
+  createdAt: string
+  updatedAt: string
+  usage: {
+    total: number
+    byCollection: Record<string, number>
+  }
 }
 
 interface EditingTag {
@@ -44,8 +48,8 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
         if (data.success) {
           // Sort tags by creation date (newest first)
           const sortedTags = (data.data?.tags || []).sort((a: Tag, b: Tag) => {
-            const dateA = new Date(a['created-at']).getTime()
-            const dateB = new Date(b['created-at']).getTime()
+            const dateA = new Date(a.createdAt).getTime()
+            const dateB = new Date(b.createdAt).getTime()
             return dateB - dateA // Descending order (newest first)
           })
           setTags(sortedTags)
@@ -57,9 +61,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
             if (tag) {
               newEditing.set(tagId, {
                 id: tagId,
-                name: tag['tag-name'],
-                description: tag['tag-description'] || '',
-                color: tag['tag-color']
+                name: tag.name,
+                description: tag.description || '',
+                color: tag.color
               })
             }
           })
@@ -101,9 +105,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
         const newEditing = new Map(editingTags)
         newEditing.set(tagId, {
           id: tagId,
-          name: tag['tag-name'],
-          description: tag['tag-description'] || '',
-          color: tag['tag-color']
+          name: tag.name,
+          description: tag.description || '',
+          color: tag.color
         })
         setEditingTags(newEditing)
       } else {
@@ -151,9 +155,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
     if (!tag || !editing) return false
     
     return (
-      editing.name !== tag['tag-name'] ||
-      editing.description !== (tag['tag-description'] || '') ||
-      editing.color !== tag['tag-color']
+      editing.name !== tag.name ||
+      editing.description !== (tag.description || '') ||
+      editing.color !== tag.color
     )
   }
 
@@ -179,9 +183,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
     }
 
     const updateData = {
-      'tag-name': editing.name,
-      'tag-description': editing.description,
-      'tag-color': editing.color
+      name: editing.name,
+      description: editing.description,
+      color: editing.color
     }
     
     console.log('Updating tag with data:', updateData) // Debug log
@@ -236,7 +240,7 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
     let tagName = `${baseName}-${counter}`
     
     // Check if name already exists and increment counter
-    while (tags.some(tag => tag['tag-name'] === tagName)) {
+    while (tags.some(tag => tag.name === tagName)) {
       counter++
       tagName = `${baseName}-${counter}`
     }
@@ -260,9 +264,9 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          'tag-name': newTag.name,
-          'tag-description': newTag.description,
-          'tag-color': newTag.color
+          name: newTag.name,
+          description: newTag.description,
+          color: newTag.color
         })
       })
 
@@ -303,10 +307,10 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
   // Delete tag
   const deleteTag = async (tagId: string) => {
     const tag = tags.find(t => t.id === tagId)
-    const tagName = tag ? tag['tag-name'] : 'this tag'
+    const tagName = tag ? tag.name : 'this tag'
     
     // Count how many curves use this tag
-    const usageCount = tag ? Object.values(tag['tag-usage'] || {}).reduce((total, docIds) => total + docIds.length, 0) : 0
+    const usageCount = tag ? tag.usage.total : 0
     
     const confirmMessage = `Are you sure you want to delete "${tagName}"? This will remove it from ${usageCount} curve${usageCount !== 1 ? 's' : ''}.`
     
@@ -394,14 +398,14 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
                       </span>
                     </span>
                     <span className="tag-col-name">
-                      <span className="tag-name-text">{tag['tag-name']}</span>
+                      <span className="tag-name-text">{tag.name}</span>
                       <div 
                         className="color-circle" 
-                        style={{ backgroundColor: tag['tag-color'] }}
+                        style={{ backgroundColor: tag.color }}
                       ></div>
                     </span>
                     <span className="tag-col-usage">
-                      {Object.values(tag['tag-usage'] || {}).reduce((total, docIds) => total + docIds.length, 0)}
+                      {tag.usage.total}
                     </span>
                   </div>
 
@@ -448,14 +452,18 @@ const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChange
                         <div className="edit-field">
                           <label>Usage:</label>
                           <div className="tag-usage-info">
-                            {tag['tag-usage'] && Object.keys(tag['tag-usage']).length > 0 ? (
+                            {tag.usage && tag.usage.total > 0 ? (
                               <div className="usage-breakdown">
-                                {Object.entries(tag['tag-usage']).map(([objectType, docIds]) => (
-                                  <div key={objectType} className="usage-item">
-                                    <span className="usage-type">{objectType}:</span>
-                                    <span className="usage-count">{docIds.length} items</span>
+                                {Object.entries(tag.usage.byCollection).map(([collectionType, count]) => (
+                                  <div key={collectionType} className="usage-item">
+                                    <span className="usage-type">{collectionType}:</span>
+                                    <span className="usage-count">{count} items</span>
                                   </div>
                                 ))}
+                                <div className="usage-item total">
+                                  <span className="usage-type">Total:</span>
+                                  <span className="usage-count">{tag.usage.total} items</span>
+                                </div>
                               </div>
                             ) : (
                               <span className="no-usage">Not used by any objects</span>

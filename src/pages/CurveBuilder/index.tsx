@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiUrl } from '../../config/environments'
-import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS } from '../../utils/colorSpectrum'
+import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS, getContrastingTextColor } from '../../utils/colorSpectrum'
 import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
@@ -58,8 +58,10 @@ function CurveBuilder() {
   const [coordinateNoise, setCoordinateNoise] = useState<CoordinateNoise | null>(null)
   const [pngError, setPngError] = useState<string | null>(null)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
+  const [imageSize, setImageSize] = useState<'32' | '64' | '128' | '256' | '512' | '1024' | '1:1'>('512')
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
+  const pngGeneratorRef = useRef<any>(null)
   const [cellColors, setCellColors] = useState<Map<string, string>>(new Map())
   const [coordinateCache, setCoordinateCache] = useState<Map<string, ProcessCoordinateResponse>>(new Map())
   const [isLoadingCurves, setIsLoadingCurves] = useState(false)
@@ -180,14 +182,15 @@ function CurveBuilder() {
               return closeMatch
             }
             
-            // Return default radial noise
+            // Return default radial noise with hardcoded expression
+            console.log('🔧 Using hardcoded radial fallback for missing noise:', noiseName)
             return {
               name: 'radial',
               category: 'default',
-              description: 'Default radial distance function',
+              description: 'Default radial distance function (fallback)',
               cpuLoadLevel: 1,
               gpuDescription: 'Radial distance from center',
-              gpuExpression: getDefaultNoiseExpression('radial'),
+              gpuExpression: 'sqrt(x * x + y * y)', // Hardcoded radial expression
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             }
@@ -203,14 +206,14 @@ function CurveBuilder() {
     }
     
     // Fallback to default radial noise
-    console.log('Using fallback radial noise')
+    console.log('🔧 Using final fallback radial noise')
     return {
       name: 'radial',
       category: 'default', 
-      description: 'Default radial distance function',
+      description: 'Default radial distance function (final fallback)',
       cpuLoadLevel: 1,
       gpuDescription: 'Radial distance from center',
-      gpuExpression: getDefaultNoiseExpression('radial'),
+      gpuExpression: 'sqrt(x * x + y * y)', // Hardcoded radial expression
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -348,26 +351,34 @@ function CurveBuilder() {
     }
   }
 
-  // Load tags for the current curve using new tag-usage system
+  // Load tags for the current curve using new tags-links system
   const loadTagsForCurve = async (curveId: string) => {
     console.log('🔄 Loading tags for curve:', curveId)
     setIsLoadingTags(true)
     try {
-      // Load assigned tags (tags currently on this curve)
-      const assignedResponse = await fetch(`${apiUrl}/api/tags/by-usage/curve/${curveId}`)
-      const assignedData = await assignedResponse.json()
+      // Load linked tags (tags currently linked to this curve)
+      const linkedResponse = await fetch(`${apiUrl}/api/tags/linked/curves/${curveId}`)
+      const linkedData = await linkedResponse.json()
       
-      // Load available tags (tags NOT on this curve)
-      const availableResponse = await fetch(`${apiUrl}/api/tags/not-used/curve/${curveId}`)
-      const availableData = await availableResponse.json()
+      // Load all available tags
+      const allTagsResponse = await fetch(`${apiUrl}/tags`)
+      const allTagsData = await allTagsResponse.json()
       
-      if (assignedData.success && availableData.success) {
-        console.log('🔄 Setting assigned tags:', assignedData.data.tags)
-        console.log('🔄 Setting available tags:', availableData.data.tags)
-        setAssignedTags(assignedData.data.tags)
-        setAvailableTags(availableData.data.tags)
+      if (linkedData.success && allTagsData.success) {
+        // Extract tag data from linkedTags response (each has a nested 'tag' object)
+        const linkedTags = (linkedData.data?.linkedTags || []).map(link => link.tag)
+        const allTags = allTagsData.data?.tags || []
+        
+        // Filter out linked tags from available tags
+        const linkedTagIds = new Set(linkedTags.map(tag => tag.id))
+        const availableTags = allTags.filter(tag => !linkedTagIds.has(tag.id))
+        
+        console.log('🔄 Setting assigned tags:', linkedTags)
+        console.log('🔄 Setting available tags:', availableTags)
+        setAssignedTags(linkedTags)
+        setAvailableTags(availableTags)
       } else {
-        console.error('❌ Tags API returned success: false:', assignedData, availableData)
+        console.error('❌ Tags API returned success: false:', linkedData, allTagsData)
       }
     } catch (error) {
       console.error('❌ Tags API request failed:', error)
@@ -430,19 +441,19 @@ function CurveBuilder() {
   // Helper function to get tag name from tag ID
   const getTagName = (tagId: string): string => {
     const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
-    return tag ? tag['tag-name'] : tagId // Fallback to ID if not found
+    return tag ? tag.name : tagId // Fallback to ID if not found
   }
 
   // Helper function to get tag color from tag ID
   const getTagColor = (tagId: string): string => {
     const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
-    return tag ? tag['tag-color'] : '#666666' // Fallback color
+    return tag ? tag.color : '#666666' // Fallback color
   }
 
   // Helper function to get tag description from tag ID
   const getTagDescription = (tagId: string): string => {
     const tag = [...availableTags, ...assignedTags].find(t => t.id === tagId)
-    return tag ? tag['tag-description'] || 'No description available' : 'No description available'
+    return tag ? tag.description || 'No description available' : 'No description available'
   }
 
   // Handle keyboard events for Option key
@@ -770,89 +781,65 @@ function CurveBuilder() {
     }))
   }
 
-  // Add tag to curve using new tag-usage system
+  // Add tag to curve using new tags-links system
   const addTagToCurve = async (tagId: string) => {
     if (!editingCurve) return
     
     try {
-      const response = await fetch(`${apiUrl}/api/tags/add-to-object`, {
+      const response = await fetch(`${apiUrl}/api/tags/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tagId: tagId,
-          objectType: 'curve',
-          documentId: editingCurve.id
+          collectionId: 'curves',
+          docId: editingCurve.id
         })
       })
       
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
+        console.log('🔄 Tag linked successfully:', data)
+        
           // Refresh tags for this curve
           await loadTagsForCurve(editingCurve.id)
-          
-          // Update local curve state to reflect the change
-          const currentTags = editingCurve["curve-tags"] || []
-          const updatedTags = [...currentTags, tagId]
-          setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
-          
-          // Update the main curves array
-          setCurves(prev => prev.map(curve => 
-            curve.id === editingCurve.id 
-              ? { ...curve, "curve-tags": updatedTags }
-              : curve
-          ))
         } else {
-          console.error('Failed to add tag:', data.error)
-        }
-      } else {
-        console.error('Failed to add tag:', response.statusText)
+        console.error('❌ Failed to link tag:', response.statusText)
+        const errorData = await response.json()
+        console.error('❌ Error details:', errorData)
       }
     } catch (error) {
-      console.error('Error adding tag:', error)
+      console.error('Error linking tag:', error)
     }
   }
 
-  // Remove tag from curve using new tag-usage system
+  // Remove tag from curve using new tags-links system
   const removeTagFromCurve = async (tagId: string) => {
     if (!editingCurve) return
     
     try {
-      const response = await fetch(`${apiUrl}/api/tags/remove-from-object`, {
+      const response = await fetch(`${apiUrl}/api/tags/unlink`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tagId: tagId,
-          objectType: 'curve',
-          documentId: editingCurve.id
+          collectionId: 'curves',
+          docId: editingCurve.id
         })
       })
       
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
+        console.log('🔄 Tag unlinked successfully:', data)
+        
           // Refresh tags for this curve
           await loadTagsForCurve(editingCurve.id)
-          
-          // Update local curve state to reflect the change
-          const currentTags = editingCurve["curve-tags"] || []
-          const updatedTags = currentTags.filter(tag => tag !== tagId)
-          setEditingCurve(prev => prev ? { ...prev, "curve-tags": updatedTags } : prev)
-          
-          // Update the main curves array
-          setCurves(prev => prev.map(curve => 
-            curve.id === editingCurve.id 
-              ? { ...curve, "curve-tags": updatedTags }
-              : curve
-          ))
         } else {
-          console.error('Failed to remove tag:', data.error)
-        }
-      } else {
-        console.error('Failed to remove tag:', response.statusText)
+        console.error('❌ Failed to unlink tag:', response.statusText)
+        const errorData = await response.json()
+        console.error('❌ Error details:', errorData)
       }
     } catch (error) {
-      console.error('Error removing tag:', error)
+      console.error('Error unlinking tag:', error)
     }
   }
 
@@ -1032,6 +1019,34 @@ function CurveBuilder() {
     }
   }
 
+  // Helper function to save a single curve field
+  const saveCurveField = async (field: string, value: any) => {
+    if (!selectedCurve) return
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      })
+      
+      if (response.ok) {
+        console.log(`✅ Auto-saved ${field}:`, value)
+      } else {
+        console.error(`❌ Failed to auto-save ${field}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error auto-saving ${field}:`, error)
+    }
+  }
+
+  // Function to trigger PNG generation and download
+  const triggerPNGDownload = () => {
+    if (pngGeneratorRef.current && pngGeneratorRef.current.startGeneration) {
+      pngGeneratorRef.current.startGeneration();
+    }
+  }
+
   // Note: Old coordinate processing logic removed - all processing now client-side
 
   return (
@@ -1176,6 +1191,87 @@ function CurveBuilder() {
                         <option value="mapped">Mapped</option>
                       </select>
                     </div>
+
+                    {/* Mapped Mode Controls */}
+                    {canvasViewMode === 'mapped' && (
+                      <>
+                        {/* Palette Dropdown */}
+                    <div className="form-group">
+                          <label>Palette:</label>
+                      <select
+                            value={selectedPalette}
+                            onChange={(e) => setSelectedPalette(e.target.value)}
+                            title="Choose the color palette for visualization"
+                          >
+                            {getPaletteOptions().map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Noise Calc Dropdown */}
+                        <div className="form-group">
+                          <label>Noise Calc:</label>
+                          <select
+                            value={selectedCurve?.['noise-calc'] || 'radial'}
+                        onChange={(e) => {
+                              if (selectedCurve) {
+                                const updatedCurve = { ...selectedCurve, 'noise-calc': e.target.value };
+                                setSelectedCurve(updatedCurve);
+                                // Auto-save the change
+                                saveCurveField('noise-calc', e.target.value);
+                              }
+                            }}
+                            title="Choose the noise calculation method"
+                          >
+                            <option value="radial">Radial</option>
+                            <option value="cartesian-x">Cartesian X</option>
+                            <option value="cartesian-y">Cartesian Y</option>
+                          </select>
+                        </div>
+
+                        {/* Size Dropdown */}
+                        <div className="form-group">
+                          <label>Size:</label>
+                          <select
+                            value={imageSize}
+                            onChange={(e) => setImageSize(e.target.value as '32' | '64' | '128' | '256' | '512' | '1024' | '1:1')}
+                            title="Choose the output image size"
+                          >
+                            <option value="32">32×32</option>
+                            <option value="64">64×64</option>
+                            <option value="128">128×128</option>
+                            <option value="256">256×256</option>
+                            <option value="512">512×512</option>
+                            <option value="1024">1024×1024</option>
+                            <option value="1:1">1:1</option>
+                          </select>
+                        </div>
+
+                        {/* Download PNG Button */}
+                        <div className="form-group">
+                          <button
+                            onClick={triggerPNGDownload}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              backgroundColor: '#007acc',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                            title="Generate and download PNG image"
+                          >
+                            Download PNG
+                          </button>
+                        </div>
+                      </>
+                    )}
 
                     {/* Curve Data Generation Controls - only show when Curve Data mode is selected */}
                     {canvasViewMode === 'curve-data' && (
@@ -1369,15 +1465,19 @@ function CurveBuilder() {
                           <span 
                             key={`current-tag-${tag.id}-${index}`}
                             className="tag-pill" 
-                            style={{ backgroundColor: tag['tag-color'] }}
-                            title={tag['tag-description'] || 'No description'}
+                            style={{ 
+                              backgroundColor: tag.color,
+                              color: getContrastingTextColor(tag.color)
+                            }}
+                            title={tag.description || 'No description'}
                           >
-                            {tag['tag-name']}
+                            {tag.name}
                             <button
                               type="button"
                               className="remove-tag"
                               onClick={() => removeTagFromCurve(tag.id)}
-                              title={`Remove tag: ${tag['tag-name']}`}
+                              title={`Remove tag: ${tag.name}`}
+                              style={{ color: getContrastingTextColor(tag.color) }}
                             >
                               ×
                             </button>
@@ -1408,7 +1508,7 @@ function CurveBuilder() {
                             <option value="">Add a tag...</option>
                             {availableTags.map(tag => (
                               <option key={tag.id} value={tag.id}>
-                                {tag['tag-name']}
+                                {tag.name}
                               </option>
                             ))}
                           </select>
@@ -1591,8 +1691,11 @@ function CurveBuilder() {
           ) : (
             selectedCurve && coordinateNoise ? (
               <PNGGenerator
+                ref={pngGeneratorRef}
                 curve={selectedCurve}
                 coordinateNoise={coordinateNoise}
+                selectedPalette={selectedPalette}
+                imageSize={imageSize}
                 onError={(error) => setPngError(error)}
                 onNoiseCalcChange={async (noiseCalc) => {
                   if (editingCurve) {
