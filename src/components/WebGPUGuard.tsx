@@ -4,7 +4,7 @@ import {
   checkWebGPURequirements, 
   getWebGPUStatusMessage, 
   getBrowserInfo,
-  WebGPUCapabilities 
+  type WebGPUCapabilities 
 } from '../utils/webgpuDetection';
 import './WebGPUGuard.css';
 
