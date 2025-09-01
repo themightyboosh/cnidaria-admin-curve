@@ -1,4 +1,5 @@
 import React from 'react'
+import WebGPUCompatibilityBadge from './WebGPUCompatibilityBadge'
 import './Header.css'
 
 interface HeaderProps {
@@ -22,6 +23,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
         
         <div className="header-actions">
+          <WebGPUCompatibilityBadge className="compact" showControls={false} />
           <div className="current-page-indicator">
             <span className="page-badge">{currentPage}</span>
           </div>

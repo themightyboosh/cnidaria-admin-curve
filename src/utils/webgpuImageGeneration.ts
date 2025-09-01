@@ -4,7 +4,7 @@
  * Processes 512x512 images at 300% zoom using compute shaders
  */
 
-import { getWebGPUCapabilities } from './webgpuDetection';
+import { getGPUConfig, getShaderConstants, calculateDispatchGroups } from './webgpuConfig';
 
 export interface WebGPUImageGenerationParams {
   curve: {
@@ -68,7 +68,13 @@ function generateImageGenerationShader(
   }
 
   return `
-// WebGPU Image Generation Compute Shader
+// WebGPU Image Generation Compute Shader - Compatible with ≤256 invocations
+enable f16;
+
+override WORKGROUP_X: u32 = 16;
+override WORKGROUP_Y: u32 = 16;
+override WORKGROUP_Z: u32 = 1;
+
 @group(0) @binding(0) var<storage, read_write> rgba_output: array<u32>;
 @group(0) @binding(1) var<storage, read_write> value_plane: array<f32>;
 @group(0) @binding(2) var<storage, read_write> coordinates_output: array<vec2<f32>>;
@@ -87,7 +93,7 @@ struct ImageParams {
   warp_strength: f32,
 }
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(WORKGROUP_X, WORKGROUP_Y, WORKGROUP_Z)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let x = global_id.x;
   let y = global_id.y;
@@ -239,7 +245,8 @@ export class WebGPUImageGenerator {
       layout: pipelineLayout,
       compute: {
         module: shaderModule,
-        entryPoint: 'main'
+        entryPoint: 'main',
+        constants: getShaderConstants()
       }
     });
 
@@ -352,10 +359,9 @@ export class WebGPUImageGenerator {
     computePass.setPipeline(this.computePipeline);
     computePass.setBindGroup(0, bindGroup);
 
-    // Dispatch with 16x16 workgroups
-    const workgroupsX = Math.ceil(width / 16);
-    const workgroupsY = Math.ceil(height / 16);
-    computePass.dispatchWorkgroups(workgroupsX, workgroupsY);
+    // Dispatch with configured workgroup size
+    const groups = calculateDispatchGroups(width, height);
+    computePass.dispatchWorkgroups(groups.x, groups.y, groups.z);
     computePass.end();
 
     // Create staging buffers for reading results
@@ -457,13 +463,13 @@ export async function createWebGPUImageGenerator(
   gpuExpression: string,
   noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y' = 'radial'
 ): Promise<WebGPUImageGenerator> {
-  const capabilities = await getWebGPUCapabilities();
+  const config = getGPUConfig();
   
-  if (!capabilities.supported || !capabilities.device) {
-    throw new Error('WebGPU is not available or not initialized');
+  if (!config.device) {
+    throw new Error('WebGPU device is not available or not initialized');
   }
 
-  const generator = new WebGPUImageGenerator(capabilities.device);
+  const generator = new WebGPUImageGenerator(config.device);
   await generator.initializePipeline(gpuExpression, noiseCalc);
   
   return generator;

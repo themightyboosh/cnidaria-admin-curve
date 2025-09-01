@@ -7,6 +7,7 @@ import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import CurveGraph from './CurveGraph'
 import PNGGenerator from '../../components/PNGGenerator'
+import WebGPUCompatibilityBadge from '../../components/WebGPUCompatibilityBadge'
 import { getPaletteOptions } from '../../utils/paletteUtils'
 import { getDefaultNoiseExpression, type CoordinateNoise } from '../../utils/mathPipeline'
 
@@ -1037,6 +1038,11 @@ function CurveBuilder() {
     <div className="app">
       <Header title="Cnidaria" currentPage="Curve Builder" />
       <div className="main-content">
+        {/* WebGPU Compatibility Status */}
+        <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 1000 }}>
+          <WebGPUCompatibilityBadge />
+        </div>
+        
         {/* Left Pane */}
         <div className="left-pane">
           {/* Curve Selection */}

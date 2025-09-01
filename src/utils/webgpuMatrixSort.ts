@@ -224,7 +224,8 @@ export class WebGPUMatrixSort {
       }),
       compute: {
         module: sortShaderModule,
-        entryPoint: 'main'
+        entryPoint: 'main',
+        constants: getShaderConstants()
       }
     });
 
@@ -235,7 +236,8 @@ export class WebGPUMatrixSort {
       }),
       compute: {
         module: distanceShaderModule,
-        entryPoint: 'main'
+        entryPoint: 'main',
+        constants: getShaderConstants()
       }
     });
 
@@ -329,7 +331,8 @@ export class WebGPUMatrixSort {
 
     computePass.setPipeline(this.distancePipeline);
     computePass.setBindGroup(0, distanceBindGroup);
-    computePass.dispatchWorkgroups(Math.ceil(paddedLength / 256));
+    const groups = calculateDispatchGroups(paddedLength, 1);
+    computePass.dispatchWorkgroups(groups.x, groups.y, groups.z);
     computePass.end();
 
     // Step 2: Bitonic sort
@@ -368,7 +371,8 @@ export class WebGPUMatrixSort {
 
         computePass.setPipeline(this.sortPipeline);
         computePass.setBindGroup(0, sortBindGroup);
-        computePass.dispatchWorkgroups(Math.ceil(paddedLength / 256));
+        const groups = calculateDispatchGroups(paddedLength, 1);
+    computePass.dispatchWorkgroups(groups.x, groups.y, groups.z);
         computePass.end();
 
         // Clean up temporary buffer
@@ -516,7 +520,8 @@ export class WebGPUMatrixSort {
 
         computePass.setPipeline(this.sortPipeline);
         computePass.setBindGroup(0, sortBindGroup);
-        computePass.dispatchWorkgroups(Math.ceil(paddedLength / 256));
+        const groups = calculateDispatchGroups(paddedLength, 1);
+    computePass.dispatchWorkgroups(groups.x, groups.y, groups.z);
         computePass.end();
 
         sortParamsBuffer.destroy();
@@ -593,13 +598,13 @@ export class WebGPUMatrixSort {
  * Factory function to create WebGPU matrix sorter
  */
 export async function createWebGPUMatrixSort(): Promise<WebGPUMatrixSort> {
-  const capabilities = await getWebGPUCapabilities();
+  const config = getGPUConfig();
   
-  if (!capabilities.supported || !capabilities.device) {
-    throw new Error('WebGPU is not available or not initialized');
+  if (!config.device) {
+    throw new Error('WebGPU device is not available or not initialized');
   }
 
-  const sorter = new WebGPUMatrixSort(capabilities.device);
+  const sorter = new WebGPUMatrixSort(config.device);
   await sorter.initializePipelines();
   
   return sorter;
