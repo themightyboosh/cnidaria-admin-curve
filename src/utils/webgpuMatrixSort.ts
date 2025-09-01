@@ -20,7 +20,6 @@ export interface GPUMatrixSortResult {
 function generateBitonicSortShader(): string {
   return `
 // WebGPU Bitonic Sort Compute Shader - Compatible with ≤256 invocations
-enable f16;
 
 override WORKGROUP_X: u32 = 16;
 override WORKGROUP_Y: u32 = 16;
@@ -63,11 +62,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ascending = ((index / stage_size) % 2u) == (params.ascending % 2u);
   
   // Compare and swap if necessary
-  let should_swap = if (ascending) {
-    values[index] > values[partner]
+  var should_swap: bool;
+  if (ascending) {
+    should_swap = values[index] > values[partner];
   } else {
-    values[index] < values[partner]
-  };
+    should_swap = values[index] < values[partner];
+  }
   
   if (should_swap) {
     // Swap values
@@ -90,7 +90,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 function generateDistanceCalculationShader(): string {
   return `
 // WebGPU Distance Calculation Compute Shader - Compatible with ≤256 invocations
-enable f16;
 
 override WORKGROUP_X: u32 = 16;
 override WORKGROUP_Y: u32 = 16;

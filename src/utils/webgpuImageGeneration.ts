@@ -69,7 +69,6 @@ function generateImageGenerationShader(
 
   return `
 // WebGPU Image Generation Compute Shader - Compatible with ≤256 invocations
-enable f16;
 
 override WORKGROUP_X: u32 = 16;
 override WORKGROUP_Y: u32 = 16;

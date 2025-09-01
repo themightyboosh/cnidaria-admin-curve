@@ -51,7 +51,6 @@ function generateCoordinateNoiseShader(
   return `
 // WebGPU Compute Shader for Coordinate Noise Processing
 // Compatible with ≤256 invocations per workgroup
-enable f16;
 
 override WORKGROUP_X: u32 = 16;
 override WORKGROUP_Y: u32 = 16;
