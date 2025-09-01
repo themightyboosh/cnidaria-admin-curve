@@ -6,7 +6,7 @@ import { useHeader } from '../../contexts/HeaderContext'
 import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import CurveGraph from './CurveGraph'
-import curveTypesService from '../../services/curveTypes'
+
 
 import './CurveBuilder.css'
 
@@ -68,8 +68,8 @@ function CurveBuilder() {
   const [assignedTags, setAssignedTags] = useState<Tag[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
-  const [curveTypesList, setCurveTypesList] = useState<Array<{id: string, name: string, cpuLoad: string, displayName: string}>>([])
-  const [isLoadingCurveTypes, setIsLoadingCurveTypes] = useState(false)
+  const [coordinateNoiseTypesList, setCoordinateNoiseTypesList] = useState<Array<{id: string, name: string, cpuLoadLevel: number, displayName: string}>>([])
+  const [isLoadingCoordinateNoiseTypes, setIsLoadingCoordinateNoiseTypes] = useState(false)
 
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -86,18 +86,29 @@ function CurveBuilder() {
     return coordinateCache.get(getCoordinateKey(x, y))
   }
 
-  // Load curve types from API
-  const loadCurveTypes = async () => {
-    setIsLoadingCurveTypes(true)
+  // Load coordinate noise types from API
+  const loadCoordinateNoiseTypes = async () => {
+    setIsLoadingCoordinateNoiseTypes(true)
     try {
-      const typesList = await curveTypesService.getCurveTypesList()
-      setCurveTypesList(typesList)
-      console.log(`📊 Loaded ${typesList.length} curve types for dropdown`)
+      const response = await fetch(`${apiUrl}/api/coordinate-noise/firebase`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          const noiseTypes = data.data.noiseTypes.map((noise: any) => ({
+            id: noise.id,
+            name: noise.name,
+            cpuLoadLevel: noise.cpuLoadLevel,
+            displayName: `${noise.name} (${noise.cpuLoadLevel} cpu)`
+          }))
+          setCoordinateNoiseTypesList(noiseTypes)
+          console.log(`📊 Loaded ${noiseTypes.length} coordinate noise types for dropdown`)
+        }
+      }
     } catch (error) {
-      console.error('Failed to load curve types:', error)
-      setError('Failed to load curve types')
+      console.error('Failed to load coordinate noise types:', error)
+      setError('Failed to load coordinate noise types')
     } finally {
-      setIsLoadingCurveTypes(false)
+      setIsLoadingCoordinateNoiseTypes(false)
     }
   }
 
@@ -213,7 +224,7 @@ function CurveBuilder() {
 
   // Load curves and tags on component mount
   useEffect(() => {
-    loadCurveTypes()
+    loadCoordinateNoiseTypes()
     loadCurves()
     loadAllTags()
   }, [])
@@ -613,6 +624,61 @@ function CurveBuilder() {
     return !existingCurve
   }
 
+  // Delete curve
+  const deleteCurve = async () => {
+    if (!selectedCurve) return
+    
+    if (!window.confirm(`Are you sure you want to delete the curve "${selectedCurve["curve-name"]}"? This action cannot be undone.`)) {
+      return
+    }
+    
+    setIsSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/curves/${selectedCurve.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      )
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Remove curve from local state
+          setCurves(prevCurves => prevCurves.filter(curve => curve.id !== selectedCurve.id))
+          setSelectedCurve(null)
+          setEditingCurve(null)
+          setHasUnsavedChanges(false)
+          setError(null)
+          
+          console.log('Curve deleted successfully')
+        } else {
+          setError('Failed to delete curve: API returned error')
+        }
+      } else {
+        const errorData = await response.json()
+        console.error('Delete API request failed:', response.status, response.statusText, errorData)
+        
+        let errorMessage = `Failed to delete curve: ${response.status} ${response.statusText}`
+        if (errorData.error && errorData.error.message) {
+          errorMessage = errorData.error.message
+        }
+        
+        setError(errorMessage)
+      }
+    } catch (error) {
+      console.error('Failed to delete curve:', error)
+      setError('Failed to delete curve: Network error')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   // Save curve changes
   const saveCurveChanges = async () => {
     if (!editingCurve || !selectedCurve) return
@@ -750,8 +816,9 @@ function CurveBuilder() {
                   </div>
                 )}
                 
-                {/* Create New Curve Button */}
-                <div className="form-group">
+                {/* Action Buttons */}
+                <div className="form-group" style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  {/* Create Button */}
                   <button
                     type="button"
                     onClick={createNewCurve}
@@ -764,12 +831,66 @@ function CurveBuilder() {
                       fontSize: '14px',
                       cursor: 'pointer',
                       fontWeight: '500',
-                      marginTop: '10px'
+                      flex: '1'
                     }}
                     title="Create a new curve from scratch"
                   >
-                    Create New Curve
+                    Create
                   </button>
+                  
+                  {/* Save Button */}
+                  {selectedCurve && (
+                    <button
+                      type="button"
+                      onClick={saveCurveChanges}
+                      disabled={isSaving || !hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))}
+                      style={{
+                        backgroundColor: (!hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))) 
+                          ? '#666666' 
+                          : '#007bff',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '10px 16px',
+                        fontSize: '14px',
+                        cursor: (!hasUnsavedChanges || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))) 
+                          ? 'not-allowed' 
+                          : 'pointer',
+                        fontWeight: '500',
+                        flex: '1'
+                      }}
+                      title="Save changes to the current curve"
+                    >
+                      {isSaving ? 'Saving...' : 
+                       !hasUnsavedChanges ? 'No Changes' :
+                       (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
+                         ? 'Name Conflict' 
+                         : 'Save'}
+                    </button>
+                  )}
+                  
+                  {/* Delete Button */}
+                  {selectedCurve && (
+                    <button
+                      type="button"
+                      onClick={deleteCurve}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: '#dc3545',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '10px 16px',
+                        fontSize: '14px',
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
+                        fontWeight: '500',
+                        flex: '1'
+                      }}
+                      title="Delete the current curve"
+                    >
+                      {isSaving ? 'Deleting...' : 'Delete'}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1012,28 +1133,28 @@ function CurveBuilder() {
                     </div>
 
                     <div className="form-group">
-                      <label>Curve Type:</label>
+                      <label>Coordinate Noise:</label>
                       <select
-                        value={editingCurve["curve-type"] || "radial-lm"}
+                        value={editingCurve["curve-type"] || "radial"}
                         onChange={(e) => handleFieldChange("curve-type", e.target.value)}
-                        title="Select the coordinate system for this curve"
-                        disabled={isLoadingCurveTypes || isSaving}
+                        title="Select the coordinate noise pattern for this curve"
+                        disabled={isLoadingCoordinateNoiseTypes || isSaving}
                       >
-                        {isLoadingCurveTypes ? (
-                          <option value="">Loading curve types...</option>
+                        {isLoadingCoordinateNoiseTypes ? (
+                          <option value="">Loading coordinate noise types...</option>
                         ) : isSaving ? (
                           <option value="">Saving changes...</option>
                         ) : (
-                          curveTypesList.map((curveType) => (
-                            <option key={curveType.id} value={curveType.id}>
-                              {curveType.displayName}
+                          coordinateNoiseTypesList.map((noiseType) => (
+                            <option key={noiseType.id} value={noiseType.id}>
+                              {noiseType.displayName}
                             </option>
                           ))
                         )}
                       </select>
                       {isSaving && (
                         <div style={{ fontSize: '12px', color: '#ff6b6b', marginTop: '4px' }}>
-                          ⚡ Auto-saving curve type changes...
+                          ⚡ Auto-saving coordinate noise changes...
                         </div>
                       )}
                     </div>
@@ -1080,35 +1201,7 @@ function CurveBuilder() {
                 )}
               </div>
 
-              {/* Save Button */}
-              {hasUnsavedChanges && (
-                <div className="save-section">
-                  <button 
-                    onClick={saveCurveChanges}
-                    disabled={isSaving || (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || ''))}
-                    style={{
-                      backgroundColor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
-                        ? '#666666' 
-                        : '#007bff',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      padding: '10px 16px',
-                      fontSize: '14px',
-                      cursor: (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
-                        ? 'not-allowed' 
-                        : 'pointer',
-                      fontWeight: '500',
-                      width: '100%'
-                    }}
-                  >
-                    {isSaving ? 'Saving...' : 
-                     (editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '')) 
-                       ? 'Name Conflict - Fix Name First' 
-                       : 'Save Changes'}
-                  </button>
-                </div>
-              )}
+
             </>
           )}
           
