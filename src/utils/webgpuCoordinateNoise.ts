@@ -3,7 +3,7 @@
  * GPU-accelerated coordinate noise calculations using compute shaders
  */
 
-import { getWebGPUCapabilities } from './webgpuDetection';
+import { getGPUConfig, getShaderConstants, calculateDispatchGroups } from './webgpuConfig';
 
 export interface GPUCoordinateNoiseResult {
   coordinates: Float32Array;
@@ -50,6 +50,13 @@ function generateCoordinateNoiseShader(
 
   return `
 // WebGPU Compute Shader for Coordinate Noise Processing
+// Compatible with ≤256 invocations per workgroup
+enable f16;
+
+override WORKGROUP_X: u32 = 16;
+override WORKGROUP_Y: u32 = 16;
+override WORKGROUP_Z: u32 = 1;
+
 @group(0) @binding(0) var<storage, read_write> coordinates: array<vec2<f32>>;
 @group(0) @binding(1) var<storage, read_write> values: array<f32>;
 @group(0) @binding(2) var<uniform> params: CoordinateParams;
@@ -67,7 +74,7 @@ struct CoordinateParams {
 
 @group(0) @binding(3) var<storage, read> curve_data: array<f32>;
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(WORKGROUP_X, WORKGROUP_Y, WORKGROUP_Z)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let x = global_id.x;
   let y = global_id.y;
@@ -192,7 +199,8 @@ export class WebGPUCoordinateNoise {
       layout: pipelineLayout,
       compute: {
         module: shaderModule,
-        entryPoint: 'main'
+        entryPoint: 'main',
+        constants: getShaderConstants()
       }
     });
 
@@ -285,10 +293,9 @@ export class WebGPUCoordinateNoise {
     computePass.setPipeline(this.computePipeline);
     computePass.setBindGroup(0, bindGroup);
 
-    // Dispatch with appropriate workgroup size
-    const workgroupsX = Math.ceil(width / 16);
-    const workgroupsY = Math.ceil(height / 16);
-    computePass.dispatchWorkgroups(workgroupsX, workgroupsY);
+    // Dispatch with configured workgroup size
+    const groups = calculateDispatchGroups(width, height);
+    computePass.dispatchWorkgroups(groups.x, groups.y, groups.z);
     computePass.end();
 
     // Create staging buffers for reading results
@@ -362,13 +369,13 @@ export async function createWebGPUCoordinateNoise(
   gpuExpression: string,
   noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y' = 'radial'
 ): Promise<WebGPUCoordinateNoise> {
-  const capabilities = await getWebGPUCapabilities();
+  const config = getGPUConfig();
   
-  if (!capabilities.supported || !capabilities.device) {
-    throw new Error('WebGPU is not available or not initialized');
+  if (!config.device) {
+    throw new Error('WebGPU device is not available or not initialized');
   }
 
-  const processor = new WebGPUCoordinateNoise(capabilities.device);
+  const processor = new WebGPUCoordinateNoise(config.device);
   await processor.initializePipeline(gpuExpression, noiseCalc);
   
   return processor;

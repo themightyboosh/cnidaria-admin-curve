@@ -4,7 +4,7 @@
  * Uses bitonic sort algorithm optimized for GPU parallel processing
  */
 
-import { getWebGPUCapabilities } from './webgpuDetection';
+import { getGPUConfig, getShaderConstants, calculateDispatchGroups } from './webgpuConfig';
 
 export interface GPUMatrixSortResult {
   sortedValues: Float32Array;
@@ -19,7 +19,13 @@ export interface GPUMatrixSortResult {
  */
 function generateBitonicSortShader(): string {
   return `
-// WebGPU Bitonic Sort Compute Shader
+// WebGPU Bitonic Sort Compute Shader - Compatible with ≤256 invocations
+enable f16;
+
+override WORKGROUP_X: u32 = 16;
+override WORKGROUP_Y: u32 = 16;
+override WORKGROUP_Z: u32 = 1;
+
 @group(0) @binding(0) var<storage, read_write> values: array<f32>;
 @group(0) @binding(1) var<storage, read_write> indices: array<u32>;
 @group(0) @binding(2) var<uniform> params: SortParams;
@@ -31,7 +37,7 @@ struct SortParams {
   ascending: u32, // 1 for ascending (nearest to farthest), 0 for descending
 }
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(WORKGROUP_X, WORKGROUP_Y, WORKGROUP_Z)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let index = global_id.x;
   
@@ -83,7 +89,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
  */
 function generateDistanceCalculationShader(): string {
   return `
-// WebGPU Distance Calculation Compute Shader
+// WebGPU Distance Calculation Compute Shader - Compatible with ≤256 invocations
+enable f16;
+
+override WORKGROUP_X: u32 = 16;
+override WORKGROUP_Y: u32 = 16;
+override WORKGROUP_Z: u32 = 1;
+
 @group(0) @binding(0) var<storage, read_write> distances: array<f32>;
 @group(0) @binding(1) var<storage, read_write> indices: array<u32>;
 @group(0) @binding(2) var<storage, read> coordinates: array<vec2<f32>>;
@@ -96,7 +108,7 @@ struct DistanceParams {
   padding: u32, // Ensure 16-byte alignment
 }
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(WORKGROUP_X, WORKGROUP_Y, WORKGROUP_Z)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let index = global_id.x;
   

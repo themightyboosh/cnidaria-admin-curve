@@ -44,6 +44,7 @@ export function getBrowserInfo() {
 
 /**
  * Initialize WebGPU and get device capabilities
+ * Now uses the new GPU configuration system for compatibility
  */
 export async function initializeWebGPU(): Promise<WebGPUCapabilities> {
   if (webgpuCapabilities) {
@@ -68,49 +69,31 @@ export async function initializeWebGPU(): Promise<WebGPUCapabilities> {
   }
 
   try {
-    // Request adapter
-    const adapter = await navigator.gpu.requestAdapter({
-      powerPreference: 'high-performance'
-    });
-
-    if (!adapter) {
-      console.warn('WebGPU adapter could not be requested');
-      webgpuCapabilities = capabilities;
-      return capabilities;
-    }
-
-    // Request device
-    const device = await adapter.requestDevice({
-      requiredFeatures: [],
-      requiredLimits: {}
-    });
-
-    if (!device) {
-      console.warn('WebGPU device could not be requested');
-      webgpuCapabilities = capabilities;
-      return capabilities;
-    }
-
-    // Get device limits
-    const limits = device.limits;
+    // Import the new configuration system
+    const { initializeGPUConfig } = await import('./webgpuConfig');
+    
+    // Initialize GPU configuration with compatibility detection
+    const config = await initializeGPUConfig();
     
     capabilities.supported = true;
-    capabilities.adapter = adapter;
-    capabilities.device = device;
-    capabilities.maxComputeWorkgroupSizeX = limits.maxComputeWorkgroupSizeX;
-    capabilities.maxComputeWorkgroupSizeY = limits.maxComputeWorkgroupSizeY;
-    capabilities.maxComputeWorkgroupSizeZ = limits.maxComputeWorkgroupSizeZ;
-    capabilities.maxStorageBufferBindingSize = limits.maxStorageBufferBindingSize;
-    capabilities.maxComputeInvocationsPerWorkgroup = limits.maxComputeInvocationsPerWorkgroup;
+    capabilities.adapter = config.adapter;
+    capabilities.device = config.device;
+    capabilities.maxComputeWorkgroupSizeX = config.limits.maxComputeWorkgroupSizeX;
+    capabilities.maxComputeWorkgroupSizeY = config.limits.maxComputeWorkgroupSizeY;
+    capabilities.maxComputeWorkgroupSizeZ = config.limits.maxComputeWorkgroupSizeZ;
+    capabilities.maxStorageBufferBindingSize = config.limits.maxStorageBufferBindingSize;
+    capabilities.maxComputeInvocationsPerWorkgroup = config.limits.maxComputeInvocationsPerWorkgroup;
 
-    console.log('WebGPU initialized successfully:', {
-      adapter: adapter.info,
+    console.log('WebGPU initialized successfully with configuration:', {
+      adapter: config.adapter.info,
+      profile: config.profile.type,
+      workgroup: config.profile.workgroup,
       limits: {
-        maxComputeWorkgroupSizeX: limits.maxComputeWorkgroupSizeX,
-        maxComputeWorkgroupSizeY: limits.maxComputeWorkgroupSizeY,
-        maxComputeWorkgroupSizeZ: limits.maxComputeWorkgroupSizeZ,
-        maxStorageBufferBindingSize: limits.maxStorageBufferBindingSize,
-        maxComputeInvocationsPerWorkgroup: limits.maxComputeInvocationsPerWorkgroup
+        maxComputeWorkgroupSizeX: config.limits.maxComputeWorkgroupSizeX,
+        maxComputeWorkgroupSizeY: config.limits.maxComputeWorkgroupSizeY,
+        maxComputeWorkgroupSizeZ: config.limits.maxComputeWorkgroupSizeZ,
+        maxStorageBufferBindingSize: config.limits.maxStorageBufferBindingSize,
+        maxComputeInvocationsPerWorkgroup: config.limits.maxComputeInvocationsPerWorkgroup
       }
     });
 
