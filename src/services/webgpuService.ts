@@ -6,45 +6,37 @@
 
 import { 
   WebGPUCoordinateNoise, 
-  createWebGPUCoordinateNoise,
-  GPUCoordinateNoiseResult 
+  createWebGPUCoordinateNoise
 } from '../utils/webgpuCoordinateNoise';
 import { 
   WebGPUMatrixSort, 
-  createWebGPUMatrixSort,
-  GPUMatrixSortResult 
+  createWebGPUMatrixSort
 } from '../utils/webgpuMatrixSort';
 import { 
   WebGPUImageGenerator, 
-  createWebGPUImageGenerator,
-  WebGPUImageGenerationParams,
-  WebGPUImageResult 
+  createWebGPUImageGenerator
 } from '../utils/webgpuImageGeneration';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
+import {
+  GPUCoordinateNoiseResult,
+  GPUMatrixSortResult,
+  WebGPUImageGenerationParams,
+  WebGPUImageResult,
+  WebGPUServiceStats,
+  CurveData,
+  PaletteColor
+} from '../utils/webgpuTypes';
 
-export interface CurveData {
-  'curve-data': number[];
-  'curve-width': number;
-  'curve-index-scaling': number;
-  'coordinate-noise': string;
-  'noise-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
-}
-
-export interface PaletteColor {
-  r: number;
-  g: number;
-  b: number;
-  a?: number;
-}
-
-export interface WebGPUServiceStats {
-  coordinateNoiseTime: number;
-  matrixSortTime: number;
-  imageGenerationTime: number;
-  totalTime: number;
-  pixelsProcessed: number;
-  gpuMemoryUsed: number;
-}
+// Re-export types for external use
+export type { 
+  GPUCoordinateNoiseResult,
+  GPUMatrixSortResult,
+  WebGPUImageGenerationParams,
+  WebGPUImageResult,
+  WebGPUServiceStats,
+  CurveData,
+  PaletteColor
+} from '../utils/webgpuTypes';
 
 /**
  * WebGPU Service for coordinating all GPU operations

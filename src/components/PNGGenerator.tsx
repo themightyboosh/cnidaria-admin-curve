@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as UPNG from 'upng-js';
 import { CONFIG, type Curve, type CoordinateNoise, type GenerationJob, type GenerationResult } from '../utils/mathPipeline';
 import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils/paletteUtils';
-import { getWebGPUService, WebGPUServiceStats } from '../services/webgpuService';
+import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 
 // Hard-coded configuration values
