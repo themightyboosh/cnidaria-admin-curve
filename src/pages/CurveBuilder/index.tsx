@@ -47,7 +47,7 @@ function CurveBuilder() {
   const defaultCellSize = 30
   const [cellSize, setCellSize] = useState(defaultCellSize)
   const [viewMode, setViewMode] = useState<'2D'>('2D')
-  const [canvasViewMode, setCanvasViewMode] = useState<'curve-data' | 'mapped'>('curve-data')
+  const [canvasViewMode, setCanvasViewMode] = useState<'curve-data' | 'mapped'>('mapped')
   const [curveDataMode, setCurveDataMode] = useState<'fractal' | 'sawtooth' | 'square' | 'sine' | 'ramp' | 'white-noise'>('sine')
   const [valueRange, setValueRange] = useState({ min: 0, max: 255, mid: 127 })
   const [colorMode, setColorMode] = useState<'value' | 'index'>('value')
@@ -215,10 +215,10 @@ function CurveBuilder() {
   }
 
   // Load curves from API
-  const loadCurves = async () => {
+  const loadCurves = async (retryCount = 0) => {
     setIsLoadingCurves(true)
     setError(null)
-    console.log('Loading curves from API...')
+    console.log(`Loading curves from API... (attempt ${retryCount + 1})`)
     try {
       const response = await fetch(`${apiUrl}/curves`)
       console.log('API Response status:', response.status)
@@ -262,6 +262,22 @@ function CurveBuilder() {
           
           console.log('Setting processed curves:', processedCurves)
           setCurves(processedCurves)
+          
+          // Auto-load the most recently modified curve
+          if (processedCurves.length > 0) {
+            // Sort curves by updated-at or created-at timestamp (most recent first)
+            const sortedCurves = [...processedCurves].sort((a, b) => {
+              const aTime = new Date(a['updated-at'] || a['created-at'] || 0).getTime()
+              const bTime = new Date(b['updated-at'] || b['created-at'] || 0).getTime()
+              return bTime - aTime // Most recent first
+            })
+            
+            const mostRecentCurve = sortedCurves[0]
+            console.log('🔄 Auto-loading most recent curve:', mostRecentCurve['curve-name'])
+            
+            // Load the most recent curve
+            await handleCurveSelect(mostRecentCurve)
+          }
         } else {
           console.error('API returned success: false:', data)
           setError('Failed to load curves: API returned error')
@@ -272,9 +288,23 @@ function CurveBuilder() {
       }
     } catch (error) {
       console.error('Failed to load curves:', error)
-      setError('Failed to load curves: Network error')
+      
+      // Retry logic for network errors
+      if (retryCount < 5) {
+        const delay = Math.min((retryCount + 1) * 3000, 15000) // 3s, 6s, 9s, 12s, 15s max
+        console.log(`Retrying in ${delay / 1000} seconds...`)
+        setError(`API connection failed. Retrying in ${delay / 1000} seconds... (attempt ${retryCount + 1}/5)`)
+        setTimeout(() => {
+          loadCurves(retryCount + 1)
+        }, delay)
+        return
+      }
+      
+      setError(`API temporarily unavailable. Please wait for deployment to complete and try again.`)
     } finally {
-      setIsLoadingCurves(false)
+      if (retryCount >= 5) {
+        setIsLoadingCurves(false)
+      }
       console.log('Finished loading curves')
     }
   }
@@ -913,11 +943,11 @@ function CurveBuilder() {
             setCurves(prevCurves => [...prevCurves, editingCurve])
           } else {
             // Update existing curve in the list
-            setCurves(prevCurves => 
-              prevCurves.map(curve => 
-                curve.id === editingCurve.id ? editingCurve : curve
-              )
+          setCurves(prevCurves => 
+            prevCurves.map(curve => 
+              curve.id === editingCurve.id ? editingCurve : curve
             )
+          )
           }
           
           // Clear cache and redraw grid since settings changed
@@ -1110,11 +1140,11 @@ function CurveBuilder() {
                     {/* Curve Data Generation Controls - only show when Curve Data mode is selected */}
                     {canvasViewMode === 'curve-data' && (
                       <>
-                        <div className="form-group">
+                    <div className="form-group">
                           <label>Curve Width:</label>
-                          <select
+                      <select
                             value={editingCurve["curve-width"]}
-                            onChange={(e) => {
+                        onChange={(e) => {
                               const newWidth = parseInt(e.target.value)
                               handleFieldChange("curve-width", newWidth)
                             }}
@@ -1123,12 +1153,12 @@ function CurveBuilder() {
                             {fibonacciNumbers.map(num => (
                               <option key={num} value={num}>
                                 {num}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="form-group">
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="form-group">
                           <label>Data Generation:</label>
                           <select
                             value={curveDataMode}
@@ -1178,12 +1208,12 @@ function CurveBuilder() {
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', width: '100%' }}>
                               <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '12px', color: '#ccc' }}>Min: {valueRange.min}</label>
-                                <input
+                          <input
                                   type="range"
                                   min="0"
                                   max="255"
                                   value={valueRange.min}
-                                  onChange={(e) => {
+                            onChange={(e) => {
                                     const newMin = parseInt(e.target.value)
                                     setValueRange(prev => ({ ...prev, min: newMin }))
                                     if (editingCurve && newMin < valueRange.max) {
@@ -1203,12 +1233,12 @@ function CurveBuilder() {
                               </div>
                               <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '12px', color: '#ccc' }}>Max: {valueRange.max}</label>
-                                <input
+                          <input
                                   type="range"
                                   min="0"
                                   max="255"
                                   value={valueRange.max}
-                                  onChange={(e) => {
+                            onChange={(e) => {
                                     const newMax = parseInt(e.target.value)
                                     setValueRange(prev => ({ ...prev, max: newMax }))
                                     if (editingCurve && valueRange.min < newMax) {
@@ -1254,8 +1284,8 @@ function CurveBuilder() {
                               />
                             </div>
                           </div>
-                        </div>
-
+                      </div>
+                      
                         <div className="form-group">
                           <button
                             type="button"
@@ -1266,7 +1296,7 @@ function CurveBuilder() {
                               border: 'none',
                               borderRadius: '4px',
                               padding: '8px 12px',
-                              fontSize: '12px',
+                          fontSize: '12px', 
                               cursor: 'pointer',
                               width: '100%'
                             }}
@@ -1276,27 +1306,9 @@ function CurveBuilder() {
                           </button>
                         </div>
                       </>
-                    )}
-
-                    {/* Palette Selector - only show when Mapped mode is selected */}
-                    {canvasViewMode === 'mapped' && (
-                      <>
-                        <div className="form-group">
-                          <label>PNG Palette:</label>
-                          <select
-                            value={selectedPalette}
-                            onChange={(e) => setSelectedPalette(e.target.value)}
-                            title="Choose color palette for PNG generation"
-                          >
-                            {getPaletteOptions().map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                    </>
-                    )}
+                      )}
+                    
+                                        {/* Palette selector removed - available in mapped view top area */}
                     
                   </div>
                 )}
@@ -1506,7 +1518,20 @@ function CurveBuilder() {
             <div className="error-message">
               <h3>Error</h3>
               <p>{error}</p>
-              <button onClick={() => setError(null)}>Dismiss</button>
+              <div>
+                {error.includes('API temporarily unavailable') && (
+                  <button 
+                    onClick={() => {
+                      setError(null)
+                      loadCurves(0)
+                    }}
+                    style={{ marginRight: '10px' }}
+                  >
+                    Retry Now
+                  </button>
+                )}
+                <button onClick={() => setError(null)}>Dismiss</button>
+              </div>
             </div>
           )}
         </div>
@@ -1514,11 +1539,11 @@ function CurveBuilder() {
                 {/* Canvas Area */}
         <div className="canvas-area">
           {canvasViewMode === 'curve-data' ? (
-            <CurveGraph 
+          <CurveGraph 
               curveData={editingCurve?.["curve-data"] || selectedCurve?.["curve-data"] || []}
               curveWidth={editingCurve?.["curve-width"] || selectedCurve?.["curve-width"] || 256}
-              spectrum={255}
-              colorMode={colorMode}
+            spectrum={255}
+            colorMode={colorMode}
               minValue={valueRange.min}
               maxValue={valueRange.max}
               onDataPointClick={handleDataPointClick}
