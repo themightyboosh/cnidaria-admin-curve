@@ -31,7 +31,7 @@ interface Curve {
   "curve-description": string
   "curve-tags"?: string[]  // Store document IDs
   "coordinate-noise": string
-  "noise-calc"?: "radial" | "cartesian-x" | "cartesian-y" // Optional until migrated
+  "curve-distance-calc"?: "radial" | "cartesian-x" | "cartesian-y" // Distance calculation method
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
@@ -58,7 +58,8 @@ function CurveBuilder() {
   const [coordinateNoise, setCoordinateNoise] = useState<CoordinateNoise | null>(null)
   const [pngError, setPngError] = useState<string | null>(null)
   const [isOptionPressed, setIsOptionPressed] = useState(false)
-  const [imageSize, setImageSize] = useState<'32' | '64' | '128' | '256' | '512' | '1024' | '1:1'>('512')
+  const [imageSize, setImageSize] = useState<'32' | '64' | '128' | '256' | '512' | '1024'>('128')
+  const [bypassCoordinateNoise, setBypassCoordinateNoise] = useState(false)
   const [curves, setCurves] = useState<Curve[]>([])
   const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
   const pngGeneratorRef = useRef<any>(null)
@@ -244,7 +245,7 @@ function CurveBuilder() {
               console.log('🔍 Processing curve:', curve["curve-name"], 'Fields:', Object.keys(curve))
               console.log('  curve-type:', curve["curve-type"])
               console.log('  coordinate-noise:', curve["coordinate-noise"])
-              console.log('  noise-calc:', curve["noise-calc"])
+              console.log('  curve-distance-calc:', curve["curve-distance-calc"])
               
             if (curve["curve-tags"]) {
               // Ensure curve-tags is an array of strings (IDs), not objects
@@ -265,13 +266,13 @@ function CurveBuilder() {
                 console.log('✅ Curve already has coordinate-noise:', curve["curve-name"], '=', curve["coordinate-noise"])
               }
               
-              // Handle noise-calc migration: add default if missing
-              if (!curve["noise-calc"]) {
+              // Handle curve-distance-calc migration: add default if missing
+              if (!curve["curve-distance-calc"]) {
                 // Default to radial for existing curves
-                curve["noise-calc"] = "radial"
-                console.log('✅ Added default noise-calc to curve:', curve["curve-name"], '=', curve["noise-calc"])
+                curve["curve-distance-calc"] = "radial"
+                console.log('✅ Added default curve-distance-calc to curve:', curve["curve-name"], '=', curve["curve-distance-calc"])
               } else {
-                console.log('✅ Curve already has noise-calc:', curve["curve-name"], '=', curve["noise-calc"])
+                console.log('✅ Curve already has curve-distance-calc:', curve["curve-name"], '=', curve["curve-distance-calc"])
               }
               
               // Ensure all required fields are present for curve processing
@@ -290,7 +291,7 @@ function CurveBuilder() {
               return {
                 ...curve,
                 'coordinate-noise': curve['coordinate-noise'] || 'radial',
-                'noise-calc': curve['noise-calc'] || 'radial'
+                'curve-distance-calc': curve['curve-distance-calc'] || 'radial'
               } as Curve
             }
           }).filter(curve => curve !== null) // Remove any null curves from processing errors
@@ -1211,24 +1212,24 @@ function CurveBuilder() {
                           </select>
                         </div>
 
-                        {/* Noise Calc Dropdown */}
+                        {/* Curve Distance Calc Dropdown */}
                         <div className="form-group">
-                          <label>Noise Calc:</label>
+                          <label>Distance Calc:</label>
                           <select
-                            value={selectedCurve?.['noise-calc'] || 'radial'}
+                            value={selectedCurve?.['curve-distance-calc'] || 'radial'}
                         onChange={(e) => {
                               if (selectedCurve) {
-                                const updatedCurve = { ...selectedCurve, 'noise-calc': e.target.value };
+                                const updatedCurve = { ...selectedCurve, 'curve-distance-calc': e.target.value };
                                 setSelectedCurve(updatedCurve);
                                 // Auto-save the change
-                                saveCurveField('noise-calc', e.target.value);
+                                saveCurveField('curve-distance-calc', e.target.value);
                               }
                             }}
-                            title="Choose the noise calculation method"
+                            title="Choose how to calculate distance from coordinates"
                           >
-                            <option value="radial">Radial</option>
-                            <option value="cartesian-x">Cartesian X</option>
-                            <option value="cartesian-y">Cartesian Y</option>
+                            <option value="radial">Radial (√(x²+y²))</option>
+                            <option value="cartesian-x">Cartesian X (|x|)</option>
+                            <option value="cartesian-y">Cartesian Y (|y|)</option>
                           </select>
                         </div>
 
@@ -1237,7 +1238,7 @@ function CurveBuilder() {
                           <label>Size:</label>
                           <select
                             value={imageSize}
-                            onChange={(e) => setImageSize(e.target.value as '32' | '64' | '128' | '256' | '512' | '1024' | '1:1')}
+                            onChange={(e) => setImageSize(e.target.value as '32' | '64' | '128' | '256' | '512' | '1024')}
                             title="Choose the output image size"
                           >
                             <option value="32">32×32</option>
@@ -1246,7 +1247,6 @@ function CurveBuilder() {
                             <option value="256">256×256</option>
                             <option value="512">512×512</option>
                             <option value="1024">1024×1024</option>
-                            <option value="1:1">1:1</option>
                           </select>
                         </div>
 
@@ -1639,6 +1639,24 @@ function CurveBuilder() {
                       />
                     </div>
 
+                    {/* Bypass Coordinate Noise Checkbox */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={bypassCoordinateNoise}
+                          onChange={(e) => setBypassCoordinateNoise(e.target.checked)}
+                          title="Bypass coordinate noise transformation (use raw coordinates)"
+                        />
+                        <span>Bypass</span>
+                      </label>
+                      {bypassCoordinateNoise && (
+                        <div style={{ fontSize: '12px', color: '#ffa500', marginTop: '4px' }}>
+                          ⚠️ Using raw coordinates (no transformation)
+                        </div>
+                      )}
+                    </div>
+
                     {/* Debug Values - Simple */}
                     <div className="form-group" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '6px' }}>
                       <label style={{ color: '#ff6b6b', fontWeight: 'bold' }}>🔍 Debug: Current Values</label>
@@ -1693,14 +1711,14 @@ function CurveBuilder() {
               <PNGGenerator
                 ref={pngGeneratorRef}
                 curve={selectedCurve}
-                coordinateNoise={coordinateNoise}
+                coordinateNoise={bypassCoordinateNoise ? null : coordinateNoise}
                 selectedPalette={selectedPalette}
                 imageSize={imageSize}
                 onError={(error) => setPngError(error)}
-                onNoiseCalcChange={async (noiseCalc) => {
+                onCurveDistanceCalcChange={async (distanceCalc) => {
                   if (editingCurve) {
                     // Update the editing curve
-                    const updatedCurve = { ...editingCurve, 'noise-calc': noiseCalc }
+                    const updatedCurve = { ...editingCurve, 'curve-distance-calc': distanceCalc }
                     setEditingCurve(updatedCurve)
                     setHasUnsavedChanges(true)
                     
@@ -1715,12 +1733,17 @@ function CurveBuilder() {
                       if (response.ok) {
                         setSelectedCurve(updatedCurve)
                         setHasUnsavedChanges(false)
-                        console.log('✅ Noise-calc auto-saved:', noiseCalc)
+                        console.log('✅ Curve-distance-calc auto-saved:', distanceCalc)
+                        
+                        // Refresh the infinite world streamer
+                        if (pngGeneratorRef.current?.regenerateAllTiles) {
+                          pngGeneratorRef.current.regenerateAllTiles();
+                        }
                       } else {
-                        console.error('❌ Failed to auto-save noise-calc')
+                        console.error('❌ Failed to auto-save curve-distance-calc')
                       }
                     } catch (error) {
-                      console.error('❌ Error auto-saving noise-calc:', error)
+                      console.error('❌ Error auto-saving curve-distance-calc:', error)
                     }
                   }
                 }}

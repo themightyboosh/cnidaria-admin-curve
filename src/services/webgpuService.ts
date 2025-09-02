@@ -28,7 +28,7 @@ export interface CurveData {
   'curve-width': number;
   'curve-index-scaling': number;
   'coordinate-noise': string;
-  'noise-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
+  'curve-distance-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
 }
 
 export interface PaletteColor {
@@ -224,7 +224,7 @@ export class WebGPUService {
     console.log('🚀 Starting complete WebGPU image processing pipeline...');
     
     // Ensure service is initialized for this pattern
-    await this.initialize(gpuExpression, curve['noise-calc']);
+    await this.initialize(gpuExpression, curve['curve-distance-calc']);
     
     onProgress?.('Initializing GPU processing...', 0);
 

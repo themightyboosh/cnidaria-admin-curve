@@ -37,18 +37,18 @@ function generateCoordinateNoiseShader(
     .replace(/\bmax\b/g, 'max')
     .replace(/\bmin\b/g, 'min');
 
-  // Generate noise calculation based on type
-  let noiseCalculation: string;
+  // Generate distance calculation based on noise-calc type (this is the DISTANCE calculation)
+  let distanceCalculation: string;
   switch (noiseCalc) {
     case 'cartesian-x':
-      noiseCalculation = 'let noise_result = abs(transformed_coord.x);';
+      distanceCalculation = 'let distance = abs(coord.x);';
       break;
     case 'cartesian-y':
-      noiseCalculation = 'let noise_result = abs(transformed_coord.y);';
+      distanceCalculation = 'let distance = abs(coord.y);';
       break;
     case 'radial':
     default:
-      noiseCalculation = 'let noise_result = sqrt(transformed_coord.x * transformed_coord.x + transformed_coord.y * transformed_coord.y);';
+      distanceCalculation = 'let distance = sqrt(coord.x * coord.x + coord.y * coord.y);';
       break;
   }
 
@@ -92,15 +92,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let world_x = (f32(x) - f32(params.width) * 0.5) * params.scale + params.center_x;
   let world_y = (f32(y) - f32(params.height) * 0.5) * params.scale + params.center_y;
   
-  // Apply coordinate noise transformation
+  // Step 1: Calculate initial distance using noise-calc (distance calculation)
   let coord = vec2<f32>(world_x, world_y);
-  let transformed_coord = coordinate_noise_transform(coord);
+  ${distanceCalculation}
   
-  // Calculate noise-based value
-  ${noiseCalculation}
+  // Step 2: Apply coordinate noise transformation (with distance available)
+  let transformed_result = coordinate_noise_transform(coord, distance);
+  let transformed_coord = transformed_result.coord;
+  let final_distance = transformed_result.distance;
   
-  // Apply curve index scaling and sample curve data
-  let scaled_distance = noise_result * params.curve_index_scaling;
+  // Apply curve index scaling using final distance and sample curve data
+  let scaled_distance = final_distance * params.curve_index_scaling;
   let curve_index = u32(scaled_distance) % params.curve_width;
   let curve_value = curve_data[curve_index];
   
@@ -109,20 +111,32 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   values[index] = curve_value;
 }
 
-// Coordinate noise transformation function
-fn coordinate_noise_transform(coord: vec2<f32>) -> vec2<f32> {
+// Result structure for coordinate transformation
+struct CoordinateTransformResult {
+  coord: vec2<f32>,
+  distance: f32,
+}
+
+// Coordinate noise transformation function with distance input
+fn coordinate_noise_transform(coord: vec2<f32>, distance: f32) -> CoordinateTransformResult {
   let x = coord.x;
   let y = coord.y;
   
-  // Apply the GPU expression to get noise value
+  // Apply the coordinate noise expression (can use x, y, and distance)
   let noise_value = ${sanitizedExpression};
   
-  // Transform coordinates based on noise (warp effect)
-  let warp_strength = 0.1; // Adjustable warp strength
-  let warped_x = x + noise_value * warp_strength * cos(noise_value);
-  let warped_y = y + noise_value * warp_strength * sin(noise_value);
+  // For 'none' pattern, just return original coordinates and distance
+  if (noise_value == x) { // 'none' pattern returns x
+    return CoordinateTransformResult(coord, distance);
+  }
   
-  return vec2<f32>(warped_x, warped_y);
+  // For other patterns, the noise_value IS the new distance
+  // Calculate new coordinates that would produce this distance
+  let angle = atan2(y, x);
+  let new_x = noise_value * cos(angle);
+  let new_y = noise_value * sin(angle);
+  
+  return CoordinateTransformResult(vec2<f32>(new_x, new_y), noise_value);
 }
 `;
 }

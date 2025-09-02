@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 import { getWebGPUService } from '../services/webgpuService';
 import { getPaletteByName } from '../utils/paletteUtils';
@@ -10,12 +10,18 @@ interface LiquidViewportProps {
   onError?: (error: string) => void;
 }
 
-const LiquidViewport: React.FC<LiquidViewportProps> = ({ 
+// Expose methods for external control
+export interface LiquidViewportHandle {
+  regenerateAllTiles: () => void;
+  setResolution: (resolution: number) => void;
+}
+
+const LiquidViewport = React.forwardRef<LiquidViewportHandle, LiquidViewportProps>(({ 
   textureDataUrl,
   curve,
   coordinateNoise, 
   onError 
-}) => {
+}, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -24,7 +30,8 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
     planes: THREE.Mesh[];
     centerPlane: THREE.Mesh;
     textureLoader: THREE.TextureLoader;
-    globalPosition: { x: number; y: number };
+    globalPosition: { x: number; y: number }; // Smooth floating point position
+    tilePosition: { x: number; y: number }; // Integer tile coordinates for matrix generation
     currentResolution: number;
     isOptionPressed: boolean;
     startTime: number;
@@ -93,7 +100,8 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
       planes,
       centerPlane,
       textureLoader,
-      globalPosition: { x: 0, y: 0 }, // Start at world origin
+      globalPosition: { x: 0, y: 0 }, // Smooth floating point position
+      tilePosition: { x: 0, y: 0 }, // Integer tile coordinates  
       currentResolution: 64, // Default resolution
       isOptionPressed: false,
       startTime: Date.now()
@@ -105,51 +113,55 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
     console.log('🎮 Liquid viewport initialized with Three.js WebGL');
   }, []);
 
-  // Generate tile texture using WebGPU with matrix shifting
-  const generateTile = useCallback(async (tileX: number, tileY: number, resolution: number) => {
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    regenerateAllTiles,
+    setResolution: (resolution: number) => {
+      if (sceneRef.current) {
+        sceneRef.current.currentResolution = resolution;
+        regenerateAllTiles();
+      }
+    }
+  }), [regenerateAllTiles]);
+
+  // Generate complete PNG for a tile at specific coordinates  
+  const generateTileAsPNG = useCallback(async (tileX: number, tileY: number, resolution: number) => {
     if (!curve || !coordinateNoise) {
       console.warn('⚠️ Missing curve or coordinate noise data for tile generation');
       return null;
     }
 
     try {
-      console.log(`🎨 Generating tile at (${tileX}, ${tileY}) with ${resolution}×${resolution} resolution`);
+      console.log(`🎨 Generating PNG tile at (${tileX}, ${tileY}) with ${resolution}×${resolution}`);
       
+      // Create a modified curve that represents this tile's coordinate space
+      // The curve data stays the same, but we offset where we sample from it
+      const tileSpecificCurve = {
+        ...curve,
+        // Add tile offset information for the generation pipeline
+        'tile-offset-x': tileX * resolution,
+        'tile-offset-y': tileY * resolution
+      };
+
+      // For now, just generate a standard PNG at the resolution
+      // TODO: Modify WebGPU pipeline to handle tile offsets
       const webgpuService = getWebGPUService();
       const palette = getPaletteByName('default');
       
-      // Prepare curve data with matrix offset
-      const curveData = {
-        'curve-data': curve['curve-data'],
-        'curve-width': curve['curve-width'],
-        'curve-index-scaling': curve['curve-index-scaling'],
-        'coordinate-noise': curve['coordinate-noise'],
-        'noise-calc': (curve['noise-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
-      };
-
-      // Matrix shifting: offset the generation by tile coordinates
-      const offsetX = tileX * resolution;
-      const offsetY = tileY * resolution;
-      
-      console.log(`📐 Matrix offset: (${offsetX}, ${offsetY})`);
-
-      // Generate texture using WebGPU with offset coordinates
       const result = await webgpuService.processCompleteImage(
-        curveData,
+        curve, // Use original curve for now
         palette,
         coordinateNoise.gpuExpression,
         resolution,
         resolution,
         1.0, // Scale
-        offsetX, // Center X offset for matrix shifting
-        offsetY, // Center Y offset for matrix shifting
+        0, 0, // No offset for now - will add tile offset logic later
         (stage: string, progressPercent: number) => {
-          // Progress callback - could show loading indicators per tile
           console.log(`🔄 Tile (${tileX}, ${tileY}): ${stage} ${progressPercent}%`);
         }
       );
 
-      // Convert to data URL for Three.js texture
+      // Convert to data URL
       const canvas = document.createElement('canvas');
       canvas.width = resolution;
       canvas.height = resolution;
@@ -160,49 +172,78 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
         ctx.putImageData(imageData, 0, 0);
         const dataUrl = canvas.toDataURL('image/png');
         
-        console.log(`✅ Tile (${tileX}, ${tileY}) generated successfully`);
+        console.log(`✅ PNG tile (${tileX}, ${tileY}) generated successfully`);
         return dataUrl;
       }
 
       return null;
     } catch (error) {
-      console.error(`❌ Failed to generate tile (${tileX}, ${tileY}):`, error);
+      console.error(`❌ Failed to generate PNG tile (${tileX}, ${tileY}):`, error);
       onError?.(`Failed to generate tile at (${tileX}, ${tileY})`);
       return null;
     }
   }, [curve, coordinateNoise, onError]);
 
+  // Update tile positions to follow mouse smoothly (floating point movement)
+  const updateTilePositions = useCallback(() => {
+    if (!sceneRef.current) return;
+
+    const { globalPosition, planes } = sceneRef.current;
+    
+    // Calculate the fractional offset within the current tile
+    const fractionalX = globalPosition.x - Math.floor(globalPosition.x);
+    const fractionalY = globalPosition.y - Math.floor(globalPosition.y);
+    
+    // Move all planes smoothly based on fractional position
+    // Each plane represents a 2-unit square in world space
+    const offsetX = -fractionalX * 2; // Negative for opposite movement
+    const offsetY = fractionalY * 2;  // World Y up
+    
+    // Update all plane positions to follow mouse smoothly
+    let planeIndex = 0;
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        const plane = planes[planeIndex];
+        
+        // Base grid position + smooth offset
+        plane.position.set(
+          (x * 2) + offsetX,
+          (y * 2) + offsetY,
+          0
+        );
+        
+        planeIndex++;
+      }
+    }
+  }, []);
+
   // Check if we need to stream new tiles based on global position
   const checkTileStreaming = useCallback(() => {
     if (!sceneRef.current || !curve || !coordinateNoise) return;
 
-    const { globalPosition, planes, currentResolution } = sceneRef.current;
+    const { tilePosition, planes, currentResolution } = sceneRef.current;
     
-    // Convert global position to tile coordinates
-    const centerTileX = Math.floor(globalPosition.x);
-    const centerTileY = Math.floor(globalPosition.y);
-    
-    // Update plane positions and generate tiles for 3x3 grid
+    // Generate tiles for 3x3 grid around current tile position
     let planeIndex = 0;
     for (let x = -1; x <= 1; x++) {
       for (let y = -1; y <= 1; y++) {
-        const tileX = centerTileX + x;
-        const tileY = centerTileY + y;
+        const tileX = tilePosition.x + x;
+        const tileY = tilePosition.y + y;
         const plane = planes[planeIndex];
         
-        // Check if this plane needs a new tile
+        // Check if this plane needs a new PNG tile
         const currentGlobalX = plane.userData.globalX;
         const currentGlobalY = plane.userData.globalY;
         
         if (currentGlobalX !== tileX || currentGlobalY !== tileY) {
-          console.log(`🔄 Streaming new tile for plane ${planeIndex}: (${currentGlobalX}, ${currentGlobalY}) → (${tileX}, ${tileY})`);
+          console.log(`🖼️ Need new PNG for plane ${planeIndex}: (${currentGlobalX}, ${currentGlobalY}) → (${tileX}, ${tileY})`);
           
-          // Update plane's global coordinates
+          // Update plane's tile coordinates
           plane.userData.globalX = tileX;
           plane.userData.globalY = tileY;
           
-          // Generate new tile (async - won't block)
-          generateTile(tileX, tileY, currentResolution).then((dataUrl) => {
+          // Generate complete PNG for this tile (async - won't block)
+          generateTileAsPNG(tileX, tileY, currentResolution).then((dataUrl) => {
             if (dataUrl) {
               applyTextureToPlane(plane, dataUrl);
             }
@@ -212,7 +253,7 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
         planeIndex++;
       }
     }
-  }, [curve, coordinateNoise, generateTile]);
+  }, [curve, coordinateNoise, generateTileAsPNG]);
 
   // Apply texture to a specific plane
   const applyTextureToPlane = useCallback((plane: THREE.Mesh, dataUrl: string) => {
@@ -476,14 +517,23 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
       const worldDeltaX = -deltaX * 0.01; // Scale factor for sensitivity
       const worldDeltaY = deltaY * 0.01;  // Positive Y up in world space
 
-      // Update global position
+      // Update smooth floating point global position
       sceneRef.current.globalPosition.x += worldDeltaX;
       sceneRef.current.globalPosition.y += worldDeltaY;
 
-      console.log('🌍 Global position:', sceneRef.current.globalPosition);
+      // Update tile positions to follow mouse smoothly
+      updateTilePositions();
 
-      // Check if we need to stream new tiles
-      checkTileStreaming();
+      // Check if we crossed into a new integer tile boundary for matrix generation
+      const newTileX = Math.floor(sceneRef.current.globalPosition.x);
+      const newTileY = Math.floor(sceneRef.current.globalPosition.y);
+      
+      if (newTileX !== sceneRef.current.tilePosition.x || newTileY !== sceneRef.current.tilePosition.y) {
+        sceneRef.current.tilePosition.x = newTileX;
+        sceneRef.current.tilePosition.y = newTileY;
+        console.log('🌍 Crossed tile boundary - new tile position:', sceneRef.current.tilePosition);
+        checkTileStreaming();
+      }
 
       lastMousePos = { x: event.clientX, y: event.clientY };
     };
@@ -568,6 +618,8 @@ const LiquidViewport: React.FC<LiquidViewportProps> = ({
       }}
     />
   );
-};
+});
+
+LiquidViewport.displayName = 'LiquidViewport';
 
 export default LiquidViewport;

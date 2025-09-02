@@ -27,7 +27,7 @@ export interface WebGPUImageGenerationParams {
     'curve-width': number;
     'curve-index-scaling': number;
     'coordinate-noise': string;
-    'noise-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
+    'curve-distance-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
   };
   palette: Array<{ r: number; g: number; b: number; a?: number }>;
   width: number;
@@ -61,7 +61,7 @@ export interface CurveData {
   'curve-width': number;
   'curve-index-scaling': number;
   'coordinate-noise': string;
-  'noise-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
+  'curve-distance-calc': 'radial' | 'cartesian-x' | 'cartesian-y';
 }
 
 export interface PaletteColor {

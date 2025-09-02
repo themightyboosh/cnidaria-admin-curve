@@ -5,7 +5,7 @@ import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils
 import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 import { getGPUConfig } from '../utils/webgpuConfig';
-import LiquidViewport from './LiquidViewport';
+import InfiniteWorldStreamer from './InfiniteWorldStreamer';
 
 // Extend Window interface for resize timeout
 declare global {
@@ -26,9 +26,9 @@ interface PNGGeneratorProps {
   curve: Curve;
   coordinateNoise: CoordinateNoise;
   selectedPalette?: string;
-  imageSize?: '32' | '64' | '128' | '256' | '512' | '1024' | '1:1';
+  imageSize?: '32' | '64' | '128' | '256' | '512' | '1024';
   onError?: (error: string) => void;
-  onNoiseCalcChange?: (noiseCalc: 'radial' | 'cartesian-x' | 'cartesian-y') => void;
+  onCurveDistanceCalcChange?: (distanceCalc: 'radial' | 'cartesian-x' | 'cartesian-y') => void;
 }
 
 interface GenerationProgress {
@@ -50,9 +50,9 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
   curve, 
   coordinateNoise, 
   selectedPalette: externalSelectedPalette = 'default',
-  imageSize: externalImageSize = '512',
+  imageSize: externalImageSize = '128',
   onError, 
-  onNoiseCalcChange 
+  onCurveDistanceCalcChange 
 }, ref) => {
   // Debug logging for props
   console.log('🔍 PNGGenerator render with props:', {
@@ -78,6 +78,9 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
     palette: string;
     imageSize: number;
   } | null>(null);
+  
+  // Ref to the LiquidViewport for triggering tile regeneration
+  const liquidViewportRef = useRef<any>(null);
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -115,9 +118,6 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
 
   // Simple image size - just return what was requested
   const getImageSize = useCallback(() => {
-    if (externalImageSize === '1:1') {
-      return 512; // Default size for 1:1 mode
-    }
     return parseInt(externalImageSize);
   }, [externalImageSize]);
 
@@ -468,7 +468,7 @@ self.onmessage = (e) => {
         'curve-width': curve['curve-width'],
         'curve-index-scaling': curve['curve-index-scaling'],
         'coordinate-noise': curve['coordinate-noise'],
-        'noise-calc': (curve['noise-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
+        'curve-distance-calc': (curve['curve-distance-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
       };
 
       // Process complete image with progress tracking
@@ -946,10 +946,10 @@ self.onmessage = (e) => {
         position: 'relative',
         backgroundColor: '#000000' // Fallback background
       }}>
-        <LiquidViewport 
-          textureDataUrl={generatedImage}
+        <InfiniteWorldStreamer 
           curve={curve}
           coordinateNoise={coordinateNoise}
+          selectedResolution={parseInt(externalImageSize)}
           onError={(error) => onError?.(error)}
         />
         
