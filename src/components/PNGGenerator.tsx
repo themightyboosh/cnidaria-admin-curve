@@ -5,6 +5,7 @@ import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils
 import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 import { getGPUConfig } from '../utils/webgpuConfig';
+import LiquidViewport from './LiquidViewport';
 
 // Extend Window interface for resize timeout
 declare global {
@@ -112,60 +113,22 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
     setSelectedPalette(externalSelectedPalette);
   }, [externalSelectedPalette]);
 
-  // Get actual image size based on external prop with auto-fallback to 1:1 for oversized requests
+  // Simple image size - just return what was requested
   const getImageSize = useCallback(() => {
     if (externalImageSize === '1:1') {
-      // Get the canvas area size to ensure complete coverage
-      const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
-      if (canvasArea) {
-        const rect = canvasArea.getBoundingClientRect();
-        // Use the larger dimension to ensure the image fills the entire canvas area
-        const size = Math.max(rect.width, rect.height);
-        return Math.max(256, Math.min(2048, Math.floor(size))); // Clamp between 256 and 2048 for performance
-      }
-      return 512; // Fallback
+      return 512; // Default size for 1:1 mode
     }
-    
-    // Check if requested size is larger than available canvas space
-    const requestedSize = parseInt(externalImageSize);
-    const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
-    if (canvasArea) {
-      const rect = canvasArea.getBoundingClientRect();
-      const maxCanvasSize = Math.max(rect.width, rect.height);
-      
-      // If requested size is larger than canvas space, use 1:1 behavior
-      if (requestedSize > maxCanvasSize) {
-        console.log(`🔄 Requested size ${requestedSize}x${requestedSize} is larger than canvas area ${Math.floor(rect.width)}x${Math.floor(rect.height)}, switching to 1:1 mode`);
-        return Math.max(256, Math.min(2048, Math.floor(maxCanvasSize)));
-      }
-    }
-    
-    return requestedSize;
+    return parseInt(externalImageSize);
   }, [externalImageSize]);
 
-  // Calculate display size based on canvas area
+  // Simple display size - just use the actual generated image size
   const getDisplaySize = useCallback(() => {
-    const canvasArea = document.querySelector('.canvas-area') as HTMLElement;
-    if (canvasArea) {
-      const rect = canvasArea.getBoundingClientRect();
-      const canvasWidth = rect.width;
-      const canvasHeight = rect.height;
-      
-      // Use the larger dimension for a square that fills the canvas area
-      const displaySize = Math.max(canvasWidth, canvasHeight);
-      
-      return {
-        width: displaySize,
-        height: displaySize
-      };
-    }
-    
-    // Fallback if canvas area not found
+    const imageSize = getImageSize();
     return {
-      width: 512,
-      height: 512
+      width: imageSize,
+      height: imageSize
     };
-  }, []);
+  }, [getImageSize]);
 
   // Update display size when image size changes or image is generated
   useEffect(() => {
@@ -977,38 +940,33 @@ self.onmessage = (e) => {
         </div>
       )}
 
-      {/* Canvas Display */}
+      {/* Liquid Viewport Display */}
       <div style={{ 
         flex: 1, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        padding: '0',
-        overflow: 'hidden', // Keep image within canvas bounds
         position: 'relative',
-        backgroundColor: '#000000' // Explicit black background
+        backgroundColor: '#000000' // Fallback background
       }}>
-        {generatedImage ? (
-          <img
-            src={generatedImage}
-            alt="Generated curve visualization"
-            style={{
-              // Fill canvas area with center-crop behavior
-              width: `${displaySize.width}px`,
-              height: `${displaySize.height}px`,
-              objectFit: 'cover', // Center-crop to fill the area
-              border: 'none',
-              borderRadius: '0',
-              imageRendering: 'pixelated', // Maintain pixelated appearance
-              maxWidth: 'none',
-              maxHeight: 'none'
-            }}
-          />
-        ) : (
+        <LiquidViewport 
+          textureDataUrl={generatedImage}
+          onError={(error) => onError?.(error)}
+        />
+        
+        {/* Overlay status when generating or no image */}
+        {(!generatedImage || isGenerating) && (
           <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
             color: '#666',
             fontSize: '16px',
-            textAlign: 'center'
+            textAlign: 'center',
+            zIndex: 10
           }}>
             {isGenerating ? (
               <div>
