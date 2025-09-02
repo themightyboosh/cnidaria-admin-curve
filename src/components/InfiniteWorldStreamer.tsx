@@ -28,12 +28,13 @@ const STREAMING_CONFIG = {
   // Debug mode
   ENABLE_TEST_MODE: false,       // Disable coordinate grid test mode
   TEST_GRID_SIZE: 16,            // Grid lines per tile for coordinate debugging
-  ENABLE_DEBUG_OVERLAY: true     // Show debug info overlay
+  ENABLE_DEBUG_OVERLAY: false    // Show debug info overlay (disabled)
 } as const;
 
 interface InfiniteWorldStreamerProps {
   curve?: any;
   coordinateNoise?: any;
+  selectedPalette?: string;
   selectedResolution: number; // Resolution from Size dropdown - impacts matrix calculation
   onError?: (error: string) => void;
 }
@@ -58,6 +59,7 @@ interface TileData {
 const InfiniteWorldStreamer = React.forwardRef<InfiniteWorldStreamerHandle, InfiniteWorldStreamerProps>(({ 
   curve,
   coordinateNoise,
+  selectedPalette = 'default',
   selectedResolution,
   onError 
 }, ref) => {
@@ -331,7 +333,7 @@ const InfiniteWorldStreamer = React.forwardRef<InfiniteWorldStreamerHandle, Infi
       sceneRef.current.tiles.set(tileId, tileData);
 
       const webgpuService = getWebGPUService();
-      const palette = getPaletteByName('default');
+      const palette = getPaletteByName(selectedPalette);
       
       // Generate complete PNG for this tile
       // TODO: Add coordinate offset logic for different tile positions
@@ -385,7 +387,7 @@ const InfiniteWorldStreamer = React.forwardRef<InfiniteWorldStreamerHandle, Infi
         sceneRef.current.generatingCount--;
       }
     }
-  }, [curve, coordinateNoise, onError, getTileId]);
+  }, [curve, coordinateNoise, onError, getTileId, selectedPalette]);
 
   // Get distance from center for zone classification
   const getTileZone = useCallback((tileX: number, tileY: number, centerX: number, centerY: number) => {
@@ -669,7 +671,7 @@ const InfiniteWorldStreamer = React.forwardRef<InfiniteWorldStreamerHandle, Infi
       console.log(`🌍 Generating contiguous matrix tile ${tileId} (panel: ${panelSize}×${panelSize}, total matrix: ${totalMatrixSize}×${totalMatrixSize})`);
       
       const webgpuService = getWebGPUService();
-      const palette = getPaletteByName('default');
+      const palette = getPaletteByName(selectedPalette);
       
       // Calculate the starting coordinates for this tile to ensure contiguous generation
       // Each tile represents a section of the infinite coordinate space
@@ -732,7 +734,7 @@ const InfiniteWorldStreamer = React.forwardRef<InfiniteWorldStreamerHandle, Infi
       onError?.(`Failed to generate tile ${tileId}`);
       return null;
     }
-  }, [curve, coordinateNoise, onError, getTileId]);
+  }, [curve, coordinateNoise, onError, getTileId, selectedPalette]);
 
   // Update debug information for real-time display
   const updateDebugInfo = useCallback(() => {

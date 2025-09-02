@@ -111,9 +111,13 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
     ensureWebGPU();
   }, [onError]);
 
-  // Sync external palette prop with internal state
+  // Sync external palette prop with internal state and recolor if possible
   useEffect(() => {
     setSelectedPalette(externalSelectedPalette);
+    // Try to recolor existing image without full regeneration
+    if (externalSelectedPalette) {
+      handlePaletteChange(externalSelectedPalette);
+    }
   }, [externalSelectedPalette]);
 
   // Simple image size - just return what was requested
@@ -473,8 +477,9 @@ self.onmessage = (e) => {
         'curve-distance-calc': (curve['curve-distance-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
       };
 
-      // Use default expression for bypass mode or actual expression
-      const gpuExpression = coordinateNoise?.gpuExpression || 'sqrt(x * x + y * y)'; // Default radial for bypass
+      // Use passthrough expression for bypass mode so steps 3-5 are skipped
+      // Shader treats noise_value == x as a no-op and returns original coord/distance
+      const gpuExpression = coordinateNoise?.gpuExpression || 'x';
       
       // Process complete image with progress tracking
       const result = await webgpuService.processCompleteImage(
@@ -561,6 +566,11 @@ self.onmessage = (e) => {
       const newResult = { ...result, rgba: newRgba };
       lastResultRef.current = newResult;
       handleGenerationComplete(newResult);
+
+      // Update last generation params to reflect new palette to prevent forced regen
+      if (lastGenerationParams) {
+        setLastGenerationParams({ ...lastGenerationParams, palette: newPalette });
+      }
     }
   }, [curve, coordinateNoise, lastGenerationParams, handleGenerationComplete]);
 
@@ -964,6 +974,7 @@ self.onmessage = (e) => {
         <InfiniteWorldStreamer 
           curve={curve}
           coordinateNoise={coordinateNoise}
+          selectedPalette={selectedPalette}
           selectedResolution={parseInt(externalImageSize)}
           onError={(error) => onError?.(error)}
         />

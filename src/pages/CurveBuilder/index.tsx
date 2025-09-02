@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiUrl } from '../../config/environments'
 import { indexToColorString, setActiveSpectrumPreset, SPECTRUM_PRESETS, getContrastingTextColor } from '../../utils/colorSpectrum'
@@ -85,11 +85,13 @@ function CurveBuilder() {
   const [showTagManager, setShowTagManager] = useState(false)
   const [coordinateNoiseTypesList, setCoordinateNoiseTypesList] = useState<Array<{id: string, name: string, cpuLoadLevel: number, displayName: string}>>([])
   const [isLoadingCoordinateNoiseTypes, setIsLoadingCoordinateNoiseTypes] = useState(false)
+  const [renderVersion, setRenderVersion] = useState(0)
+  const [isReloading, setIsReloading] = useState(false)
 
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Fibonacci numbers for curve width options (max 1597)
-  const fibonacciNumbers = [8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597]
+  // Standard bit-width options for curve width
+  const curveWidthOptions = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
   // Helper function to get coordinate key
   const getCoordinateKey = (x: number, y: number) => `${x}_${y}`
@@ -97,6 +99,48 @@ function CurveBuilder() {
   // Helper function to check if coordinate is cached
   const isCoordinateCached = (x: number, y: number) => {
     return coordinateCache.has(getCoordinateKey(x, y))
+  }
+
+  // Reload a curve from API and refresh canvases via renderVersion bump
+  const reloadCurve = async (curveId: string) => {
+    try {
+      setIsReloading(true)
+      const response = await fetch(`${apiUrl}/curves/${curveId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const curveData = (data && data.data) ? data.data : data
+        if (curveData) {
+          // Ensure required defaults/migrations
+          if (!curveData["coordinate-noise"]) curveData["coordinate-noise"] = "radial"
+          if (!curveData["curve-distance-calc"]) curveData["curve-distance-calc"] = "radial"
+          if (!Array.isArray(curveData["curve-data"])) curveData["curve-data"] = []
+
+          setSelectedCurve(curveData as Curve)
+          setEditingCurve({ ...(curveData as Curve) })
+          setHasUnsavedChanges(false)
+
+          // Reload coordinate noise for mapped view
+          const noiseName = (curveData as Curve)["coordinate-noise"] || 'radial'
+          const noise = await loadCoordinateNoise(noiseName)
+          setCoordinateNoise(noise)
+
+          // Purge caches and colors
+          setCoordinateCache(new Map())
+          setCellColors(new Map())
+
+          // Bump render version to force canvases to remount
+          setRenderVersion(prev => prev + 1)
+        }
+      } else {
+        console.error('❌ Failed to reload curve:', response.status, response.statusText)
+        setError(`Failed to reload curve: ${response.status} ${response.statusText}`)
+      }
+    } catch (err) {
+      console.error('❌ Error reloading curve:', err)
+      setError('Error reloading curve')
+    } finally {
+      setIsReloading(false)
+    }
   }
 
   // Helper function to get cached coordinate data
@@ -721,6 +765,8 @@ function CurveBuilder() {
     // Clear cache and colors for new curve
     setCoordinateCache(new Map())
     setCellColors(new Map())
+    // Force canvases to remount on selection
+    setRenderVersion(prev => prev + 1)
     // Close all sections except selection when loading a curve
     setExpandedSections({
       selection: true,
@@ -956,42 +1002,12 @@ function CurveBuilder() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          // For new curves, update the ID from the API response
-          if (isNewCurve && data.id) {
-            editingCurve.id = data.id
-            selectedCurve.id = data.id
-            console.log('✅ New curve created with ID:', data.id)
-          }
-          
-          // Update the selected curve with new data
-          setSelectedCurve(editingCurve)
-          setHasUnsavedChanges(false)
-          
-          // Update the curves list to reflect the changes in the dropdown
-          if (isNewCurve) {
-            // Add new curve to the list
-            setCurves(prevCurves => [...prevCurves, editingCurve])
-          } else {
-            // Update existing curve in the list
-          setCurves(prevCurves => 
-            prevCurves.map(curve => 
-              curve.id === editingCurve.id ? editingCurve : curve
-            )
-          )
-          }
-          
-          // Clear cache and redraw grid since settings changed
-          setCoordinateCache(new Map())
-          setCellColors(new Map())
-          
-          // Load coordinate noise and refresh PNG generation after save
-          const noiseName = editingCurve['coordinate-noise'] || 'radial'
-          console.log('🔄 Reloading coordinate noise after save:', noiseName)
-          const noise = await loadCoordinateNoise(noiseName)
-          setCoordinateNoise(noise)
-          console.log('✅ Coordinate noise reloaded for PNG refresh:', noise?.name)
-          
-          console.log('Curve updated successfully - dropdown refreshed and PNG will auto-refresh')
+          // For new curves, prefer a full reload to get server ID and normalized fields
+          const idToReload = (isNewCurve && data.id) ? data.id : selectedCurve.id
+          await reloadCurve(idToReload)
+          // Also refresh curves dropdown list
+          loadCurves()
+          console.log('✅ Curve saved and reloaded; canvases refreshed')
         } else {
           setError('Failed to update curve: API returned error')
         }
@@ -1024,23 +1040,34 @@ function CurveBuilder() {
   }
 
   // Helper function to save a single curve field
-  const saveCurveField = async (field: string, value: any) => {
-    if (!selectedCurve) return
-    
+  const saveCurveField = async (field: string, value: any): Promise<boolean> => {
+    if (!selectedCurve) return false
     try {
       const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value })
       })
-      
       if (response.ok) {
         console.log(`✅ Auto-saved ${field}:`, value)
+        // Keep local state coherent so dropdown selection remains stable
+        setSelectedCurve(prev => prev ? { ...prev, [field]: value } as Curve : prev)
+        setEditingCurve(prev => prev ? { ...prev, [field]: value } as Curve : prev)
+        setCurves(prevCurves => prevCurves.map(c => c.id === selectedCurve.id ? ({ ...c, [field]: value } as Curve) : c))
+
+        // For key runtime fields, reload from API and force full redraw
+        if (field === 'curve-distance-calc' || field === 'distance-modulus' || field === 'coordinate-noise') {
+          await reloadCurve(selectedCurve.id)
+          setRenderVersion(prev => prev + 1)
+        }
+        return true
       } else {
         console.error(`❌ Failed to auto-save ${field}`)
+        return false
       }
     } catch (error) {
       console.error(`❌ Error auto-saving ${field}:`, error)
+      return false
     }
   }
 
@@ -1204,7 +1231,11 @@ function CurveBuilder() {
                           <label>Palette:</label>
                       <select
                             value={selectedPalette}
-                            onChange={(e) => setSelectedPalette(e.target.value)}
+                            onChange={(e) => {
+                              setSelectedPalette(e.target.value)
+                              // Force full redraw across canvases
+                              setRenderVersion(prev => prev + 1)
+                            }}
                             title="Choose the color palette for visualization"
                           >
                             {getPaletteOptions().map(option => (
@@ -1220,13 +1251,13 @@ function CurveBuilder() {
                           <label>Distance Calc:</label>
                           <select
                             value={selectedCurve?.['curve-distance-calc'] || 'radial'}
-                        onChange={(e) => {
-                              if (selectedCurve) {
-                                const updatedCurve = { ...selectedCurve, 'curve-distance-calc': e.target.value };
-                                setSelectedCurve(updatedCurve);
-                                // Auto-save the change
-                                saveCurveField('curve-distance-calc', e.target.value);
-                              }
+                            onChange={async (e) => {
+                              if (!selectedCurve) return;
+                              const newVal = e.target.value;
+                              // Optimistically update local state to prevent dropdown flicker/empty state
+                              setSelectedCurve(prev => prev ? ({ ...prev, 'curve-distance-calc': newVal } as Curve) : prev);
+                              setEditingCurve(prev => prev ? ({ ...prev, 'curve-distance-calc': newVal } as Curve) : prev);
+                              await saveCurveField('curve-distance-calc', newVal);
                             }}
                             title="Choose how to calculate distance from coordinates"
                           >
@@ -1305,9 +1336,9 @@ function CurveBuilder() {
                               const newWidth = parseInt(e.target.value)
                               handleFieldChange("curve-width", newWidth)
                             }}
-                            title="Choose the curve width (Fibonacci numbers)"
+                            title="Choose the curve width (bit-width options)"
                           >
-                            {fibonacciNumbers.map(num => (
+                            {curveWidthOptions.map(num => (
                               <option key={num} value={num}>
                                 {num}
                           </option>
@@ -1650,18 +1681,18 @@ function CurveBuilder() {
                     {/* Distance Modulus */}
                     <div className="form-group">
                       <label>Distance Modulus:</label>
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
+                      <select
                         value={Number(editingCurve["distance-modulus"]) || 0}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          handleFieldChange("distance-modulus", isNaN(val) ? 0 : Math.max(0, val));
+                          const val = parseInt(e.target.value)
+                          handleFieldChange("distance-modulus", isNaN(val) ? 0 : Math.max(0, val))
                         }}
                         title="Apply modulus to distance calculations (0 = no modulus, ignored)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
+                      >
+                        {[0, ...curveWidthOptions].map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
                       {(editingCurve["distance-modulus"] || 0) > 0 && (
                         <div style={{ fontSize: '12px', color: '#4CAF50', marginTop: '4px' }}>
                           ✅ Distance will repeat every {editingCurve["distance-modulus"]} units
@@ -1730,6 +1761,7 @@ function CurveBuilder() {
         <div className="canvas-area">
           {canvasViewMode === 'curve-data' ? (
           <CurveGraph 
+              key={`graph-${renderVersion}-${selectedCurve?.id || 'none'}`}
               curveData={editingCurve?.["curve-data"] || selectedCurve?.["curve-data"] || []}
               curveWidth={editingCurve?.["curve-width"] || selectedCurve?.["curve-width"] || 256}
             spectrum={255}
@@ -1741,6 +1773,7 @@ function CurveBuilder() {
           ) : (
             selectedCurve && coordinateNoise ? (
               <PNGGenerator
+                key={`png-${renderVersion}-${selectedCurve.id}`}
                 ref={pngGeneratorRef}
                 curve={selectedCurve}
                 coordinateNoise={bypassCoordinateNoise ? null : coordinateNoise}
@@ -1763,14 +1796,9 @@ function CurveBuilder() {
                       })
                       
                       if (response.ok) {
-                        setSelectedCurve(updatedCurve)
-                        setHasUnsavedChanges(false)
                         console.log('✅ Curve-distance-calc auto-saved:', distanceCalc)
-                        
-                        // Refresh the infinite world streamer
-                        if (pngGeneratorRef.current?.regenerateAllTiles) {
-                          pngGeneratorRef.current.regenerateAllTiles();
-                        }
+                        // Perform uniform save -> reload -> refresh behavior
+                        await reloadCurve(selectedCurve.id)
                       } else {
                         console.error('❌ Failed to auto-save curve-distance-calc')
                       }

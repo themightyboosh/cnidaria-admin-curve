@@ -97,9 +97,25 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   ${distanceCalculation}
   
   // Step 2: Apply coordinate noise transformation (with distance available)
+  // Current implementation keeps coordinates unchanged in shader
+  // and computes final distance strictly per selected distance calc
+  // (bypass mode uses noise expression "x" which is detected in transform)
   let transformed_result = coordinate_noise_transform(coord, distance);
   let transformed_coord = transformed_result.coord;
-  let final_distance = transformed_result.distance;
+  
+  // Compute new distance from (0,0) using selected distance calc (no implicit radialization)
+  var final_distance: f32;
+  switch ${noiseCalc === 'cartesian-x' ? '1' : noiseCalc === 'cartesian-y' ? '2' : '0'} {
+    default {
+      final_distance = sqrt(transformed_coord.x * transformed_coord.x + transformed_coord.y * transformed_coord.y);
+    }
+    case 1 {
+      final_distance = abs(transformed_coord.x);
+    }
+    case 2 {
+      final_distance = abs(transformed_coord.y);
+    }
+  }
   
   // Apply curve index scaling using final distance and sample curve data
   let scaled_distance = final_distance * params.curve_index_scaling;
@@ -125,18 +141,14 @@ fn coordinate_noise_transform(coord: vec2<f32>, distance: f32) -> CoordinateTran
   // Apply the coordinate noise expression (can use x, y, and distance)
   let noise_value = ${sanitizedExpression};
   
-  // For 'none' pattern, just return original coordinates and distance
-  if (noise_value == x) { // 'none' pattern returns x
+  // For 'none' passthrough (noise_value == x), return unchanged
+  if (noise_value == x) {
     return CoordinateTransformResult(coord, distance);
   }
   
-  // For other patterns, the noise_value IS the new distance
-  // Calculate new coordinates that would produce this distance
-  let angle = atan2(y, x);
-  let new_x = noise_value * cos(angle);
-  let new_y = noise_value * sin(angle);
-  
-  return CoordinateTransformResult(vec2<f32>(new_x, new_y), noise_value);
+  // TODO: Once expressions return adjusted coordinates, update here.
+  // For now, keep coordinates unchanged to respect selected distance calc.
+  return CoordinateTransformResult(coord, distance);
 }
 `;
 }
