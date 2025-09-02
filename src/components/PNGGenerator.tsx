@@ -948,6 +948,8 @@ self.onmessage = (e) => {
       }}>
         <LiquidViewport 
           textureDataUrl={generatedImage}
+          curve={curve}
+          coordinateNoise={coordinateNoise}
           onError={(error) => onError?.(error)}
         />
         
