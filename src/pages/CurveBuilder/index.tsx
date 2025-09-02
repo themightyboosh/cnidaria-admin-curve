@@ -130,6 +130,9 @@ function CurveBuilder() {
 
           // Bump render version to force canvases to remount
           setRenderVersion(prev => prev + 1)
+
+          // Refresh curves list while preserving current selection
+          await loadCurves(0, { preserveSelectionId: (curveData as Curve).id })
         }
       } else {
         console.error('❌ Failed to reload curve:', response.status, response.statusText)
@@ -266,7 +269,7 @@ function CurveBuilder() {
   }
 
   // Load curves from API
-  const loadCurves = async (retryCount = 0) => {
+  const loadCurves = async (retryCount = 0, options?: { autoLoadLatest?: boolean; preserveSelectionId?: string }) => {
     setIsLoadingCurves(true)
     setError(null)
     console.log(`Loading curves from API... (attempt ${retryCount + 1})`)
@@ -345,28 +348,25 @@ function CurveBuilder() {
           console.log('Processed curve names:', processedCurves.map(c => c['curve-name']))
           setCurves(processedCurves)
           
-          // Auto-load the most recent curve AFTER populating the dropdown
-          if (processedCurves.length > 0) {
-            // Sort curves by updated-at or created-at timestamp (most recent first)
+          // Preserve selection if requested
+          const preserveId = options?.preserveSelectionId
+          const autoLoadLatest = options?.autoLoadLatest
+          if (preserveId) {
+            const existing = processedCurves.find(c => c.id === preserveId)
+            if (existing) {
+              console.log('🔄 Preserving current selection after refresh:', existing['curve-name'])
+              await handleCurveSelect(existing)
+            }
+          } else if (autoLoadLatest && processedCurves.length > 0 && !selectedCurve) {
+            // Only auto-load on first mount if nothing is selected
             const sortedCurves = [...processedCurves].sort((a, b) => {
-              const aTime = new Date(a['updated-at'] || a['created-at'] || 0).getTime()
-              const bTime = new Date(b['updated-at'] || b['created-at'] || 0).getTime()
-              return bTime - aTime // Most recent first
+              const aTime = new Date((a as any)['updated-at'] || (a as any)['created-at'] || 0).getTime()
+              const bTime = new Date((b as any)['updated-at'] || (b as any)['created-at'] || 0).getTime()
+              return bTime - aTime
             })
-            
-            const mostRecentCurve = sortedCurves[0]
-            console.log('🔄 Auto-loading most recent curve after dropdown populated:', mostRecentCurve['curve-name'])
-            
-            // Use setTimeout to ensure curves are rendered in dropdown first
-            setTimeout(async () => {
-              try {
-                await handleCurveSelect(mostRecentCurve)
-                console.log('✅ Auto-loaded most recent curve successfully')
-              } catch (error) {
-                console.error('❌ Failed to auto-load most recent curve:', error)
-                console.log('✅ Curves dropdown populated, auto-loading failed but user can select manually')
-              }
-            }, 100) // Small delay to ensure dropdown is populated
+            const mostRecent = sortedCurves[0]
+            console.log('🔄 Auto-loading most recent curve (initial mount):', mostRecent['curve-name'])
+            await handleCurveSelect(mostRecent)
           }
         } else {
           console.error('API returned success: false:', data)
@@ -470,7 +470,7 @@ function CurveBuilder() {
   // Load curves and tags on component mount
   useEffect(() => {
     loadCoordinateNoiseTypes()
-    loadCurves()
+    loadCurves(0, { autoLoadLatest: true })
     loadAllTags()
   }, [])
 
