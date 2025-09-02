@@ -1,0 +1,17 @@
+# Simple Dockerfile for Cnidaria Admin Curve Tool
+# Single-stage build optimized for Cloud Run
+
+FROM nginx:alpine
+
+# Copy built application (assumes dist/ exists from local build)
+COPY dist/ /usr/share/nginx/html/
+
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Expose port 80 for Cloud Run
+EXPOSE 80
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]
+

@@ -1,0 +1,530 @@
+import React, { useState, useEffect } from 'react'
+import { apiUrl } from '../../config/environments'
+import { getContrastingTextColor } from '../../utils/colorSpectrum'
+import './TagManager.css'
+
+interface Tag {
+  id: string
+  name: string
+  description: string
+  color: string
+  createdAt: string
+  updatedAt: string
+  usage: {
+    total: number
+    byCollection: Record<string, number>
+  }
+}
+
+interface EditingTag {
+  id: string
+  name: string
+  description: string
+  color: string
+}
+
+interface TagManagerProps {
+  onTagsChanged?: () => void // Callback when tags are modified
+  hasUnsavedChanges?: boolean // Whether the parent component has unsaved changes
+}
+
+const TagManager: React.FC<TagManagerProps> = ({ onTagsChanged, hasUnsavedChanges }) => {
+  const [tags, setTags] = useState<Tag[]>([])
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set())
+  const [editingTags, setEditingTags] = useState<Map<string, EditingTag>>(new Map())
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load all tags from API
+  // Note: tag-usage tracks which objects use each tag
+  // Future: Can be extended for counting across other collections beyond curves
+  const loadTags = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`${apiUrl}/tags`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Sort tags by creation date (newest first)
+          const sortedTags = (data.data?.tags || []).sort((a: Tag, b: Tag) => {
+            const dateA = new Date(a.createdAt).getTime()
+            const dateB = new Date(b.createdAt).getTime()
+            return dateB - dateA // Descending order (newest first)
+          })
+          setTags(sortedTags)
+          
+          // Refresh editing state for any expanded tags
+          const newEditing = new Map(editingTags)
+          expandedTags.forEach(tagId => {
+            const tag = sortedTags.find((t: Tag) => t.id === tagId)
+            if (tag) {
+              newEditing.set(tagId, {
+                id: tagId,
+                name: tag.name,
+                description: tag.description || '',
+                color: tag.color
+              })
+            }
+          })
+          setEditingTags(newEditing)
+        } else {
+          setError('Failed to load tags')
+        }
+      } else {
+        setError(`API Error: ${response.status}`)
+      }
+    } catch (err) {
+      setError('Network error loading tags')
+      console.error('Error loading tags:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Load tags on component mount
+  useEffect(() => {
+    loadTags()
+  }, [])
+
+  // Toggle tag expansion
+  const toggleTag = (tagId: string) => {
+    const newExpanded = new Set(expandedTags)
+    if (newExpanded.has(tagId)) {
+      newExpanded.delete(tagId)
+      // Clear editing state when collapsing
+      const newEditing = new Map(editingTags)
+      newEditing.delete(tagId)
+      setEditingTags(newEditing)
+    } else {
+      newExpanded.add(tagId)
+      // Initialize editing state with current tag data
+      const tag = tags.find(t => t.id === tagId)
+      if (tag) {
+        console.log('Loading tag data for editing:', tag) // Debug log
+        const newEditing = new Map(editingTags)
+        newEditing.set(tagId, {
+          id: tagId,
+          name: tag.name,
+          description: tag.description || '',
+          color: tag.color
+        })
+        setEditingTags(newEditing)
+      } else {
+        console.error('Tag not found for editing:', tagId) // Debug log
+      }
+    }
+    setExpandedTags(newExpanded)
+  }
+
+  // Convert to kebab-case format
+  const toKebabCase = (str: string): string => {
+    return str
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+      .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+      .substring(0, 50) // Ensure max length of 50 characters
+  }
+
+  // Update editing state
+  const updateEditingTag = (tagId: string, field: keyof EditingTag, value: string) => {
+    const newEditing = new Map(editingTags)
+    const current = newEditing.get(tagId)
+    if (current) {
+      let processedValue = value
+      
+      if (field === 'name') {
+        processedValue = toKebabCase(value)
+        // Ensure minimum length of 3 characters
+        if (processedValue.length < 3) {
+          processedValue = processedValue.padEnd(3, '0')
+        }
+      }
+      
+      newEditing.set(tagId, { ...current, [field]: processedValue })
+      setEditingTags(newEditing)
+    }
+  }
+
+  // Check if tag has changes
+  const hasChanges = (tagId: string): boolean => {
+    const tag = tags.find(t => t.id === tagId)
+    const editing = editingTags.get(tagId)
+    if (!tag || !editing) return false
+    
+    return (
+      editing.name !== tag.name ||
+      editing.description !== (tag.description || '') ||
+      editing.color !== tag.color
+    )
+  }
+
+  // Update tag
+  const updateTag = async (tagId: string) => {
+    const editing = editingTags.get(tagId)
+    if (!editing) return
+
+    // Validate tag name before sending
+    if (editing.name.length < 3) {
+      setError('Tag name must be at least 3 characters long')
+      return
+    }
+    
+    if (editing.name.length > 50) {
+      setError('Tag name must be 50 characters or less')
+      return
+    }
+    
+    if (!/^[a-z0-9-]+$/.test(editing.name)) {
+      setError('Tag name must contain only lowercase letters, numbers, and hyphens')
+      return
+    }
+
+    const updateData = {
+      name: editing.name,
+      description: editing.description,
+      color: editing.color
+    }
+    
+    console.log('Updating tag with data:', updateData) // Debug log
+
+    try {
+      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Update tag response:', data) // Debug log
+        if (data.success) {
+          // Refresh tags list
+          await loadTags()
+          // Clear editing state
+          const newEditing = new Map(editingTags)
+          newEditing.delete(tagId)
+          setEditingTags(newEditing)
+          // Notify parent component of changes
+          onTagsChanged?.()
+        } else {
+          setError(`Failed to update tag: ${data.message || 'API returned error'}`)
+        }
+      } else {
+        const errorText = await response.text()
+        console.error('Update tag failed:', response.status, response.statusText, errorText)
+        
+        // Try to parse error response for better error message
+        try {
+          const errorData = JSON.parse(errorText)
+          console.log('Parsed error data:', errorData) // Debug log
+          const errorMessage = errorData.message || errorData.error || errorData.details || JSON.stringify(errorData)
+          setError(`Failed to update tag: ${errorMessage}`)
+        } catch {
+          console.log('Raw error text:', errorText) // Debug log
+          setError(`Failed to update tag: ${response.status} ${response.statusText} - ${errorText}`)
+        }
+      }
+    } catch (err) {
+      setError('Error updating tag')
+      console.error('Error updating tag:', err)
+    }
+  }
+
+  // Generate unique tag name based on count
+  const generateUniqueTagName = (): string => {
+    const baseName = 'tag'
+    let counter = tags.length + 1
+    let tagName = `${baseName}-${counter}`
+    
+    // Check if name already exists and increment counter
+    while (tags.some(tag => tag.name === tagName)) {
+      counter++
+      tagName = `${baseName}-${counter}`
+    }
+    
+    return tagName
+  }
+
+  // Create new tag
+  const createNewTag = async () => {
+    const newTagId = `temp-${Date.now()}` // Temporary ID for new tag
+    const uniqueTagName = generateUniqueTagName()
+    const newTag: EditingTag = {
+      id: newTagId,
+      name: uniqueTagName,
+      description: 'Tag Description',
+      color: '#007acc'
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newTag.name,
+          description: newTag.description,
+          color: newTag.color
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Create tag response:', data)
+        if (data.success && data.data && data.data.id) {
+          // Refresh tags list
+          await loadTags()
+          // Expand the newly created tag
+          const newExpanded = new Set(expandedTags)
+          newExpanded.add(data.data.id)
+          setExpandedTags(newExpanded)
+          // Set editing state for the new tag
+          const newEditing = new Map(editingTags)
+          newEditing.set(data.data.id, {
+            id: data.data.id,
+            name: newTag.name,
+            description: newTag.description,
+            color: newTag.color
+          })
+          setEditingTags(newEditing)
+          // Notify parent component of changes
+          onTagsChanged?.()
+        } else {
+          setError(`Failed to create tag: ${data.message || 'Invalid response format'}`)
+        }
+      } else {
+        const errorText = await response.text()
+        setError(`Failed to create tag: ${response.status} ${response.statusText} - ${errorText}`)
+      }
+    } catch (err) {
+      setError('Error creating tag')
+      console.error('Error creating tag:', err)
+    }
+  }
+
+  // Delete tag
+  const deleteTag = async (tagId: string) => {
+    const tag = tags.find(t => t.id === tagId)
+    const tagName = tag ? tag.name : 'this tag'
+    
+    // Count how many curves use this tag
+    const usageCount = tag ? tag.usage.total : 0
+    
+    const confirmMessage = `Are you sure you want to delete "${tagName}"? This will remove it from ${usageCount} curve${usageCount !== 1 ? 's' : ''}.`
+    
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/tags/${tagId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Delete tag response:', data) // Debug log
+        
+        // Refresh tags list
+        await loadTags()
+        // Clear editing state
+        const newEditing = new Map(editingTags)
+        newEditing.delete(tagId)
+        setEditingTags(newEditing)
+        // Clear expanded state
+        const newExpanded = new Set(expandedTags)
+        newExpanded.delete(tagId)
+        setExpandedTags(newExpanded)
+        // Notify parent component of changes
+        onTagsChanged?.()
+      } else {
+        const errorText = await response.text()
+        console.error('Delete tag failed:', response.status, response.statusText, errorText)
+        
+        // Try to parse error response for better error message
+        try {
+          const errorData = JSON.parse(errorText)
+          setError(`Failed to delete tag: ${errorData.message || errorData.error || `${response.status} ${response.statusText}`}`)
+        } catch {
+          setError(`Failed to delete tag: ${response.status} ${response.statusText} - ${errorText}`)
+        }
+      }
+    } catch (err) {
+      setError('Error deleting tag')
+      console.error('Error deleting tag:', err)
+    }
+  }
+
+  return (
+    <div className="tag-manager-container">
+      <div className="tag-list-container">
+        {hasUnsavedChanges && (
+          <div className="warning-state">
+            <p>⚠️ Note: The curve has unsaved changes. Tag assignments may not be reflected until you save the curve.</p>
+          </div>
+        )}
+        
+        {isLoading && (
+          <div className="loading-state">Loading tags...</div>
+        )}
+
+        {error && (
+          <div className="error-state">
+            <p>Error: {error}</p>
+            <button onClick={loadTags} className="retry-btn">Retry</button>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <div className="tag-table">
+            <div className="tag-table-header">
+              <div className="tag-header-row">
+                <span className="tag-col-expand"></span>
+                <span className="tag-col-name">Name</span>
+                <span className="tag-col-usage">Curve Count</span>
+              </div>
+            </div>
+
+            <div className="tag-table-body">
+              {tags.map((tag) => (
+                <div key={tag.id} className="tag-row-container">
+                  {/* Main Row */}
+                  <div className="tag-row" onClick={() => toggleTag(tag.id)}>
+                    <span className="tag-col-expand">
+                      <span className="expand-icon">
+                        {expandedTags.has(tag.id) ? '▼' : '▶'}
+                      </span>
+                    </span>
+                    <span className="tag-col-name">
+                      <span className="tag-name-text">{tag.name}</span>
+                      <div 
+                        className="color-circle" 
+                        style={{ backgroundColor: tag.color }}
+                      ></div>
+                    </span>
+                    <span className="tag-col-usage">
+                      {tag.usage.total}
+                    </span>
+                  </div>
+
+                  {/* Expanded Edit Form */}
+                  {expandedTags.has(tag.id) && (
+                    <div className="tag-edit-form">
+                      <div className="edit-form-grid">
+                        <div className="edit-field">
+                          <label>Tag Name:</label>
+                          <input
+                            type="text"
+                            value={editingTags.get(tag.id)?.name || ''}
+                            onChange={(e) => updateEditingTag(tag.id, 'name', e.target.value)}
+                            className="edit-input"
+                          />
+                        </div>
+
+                        <div className="edit-field">
+                          <label>Description:</label>
+                          <textarea
+                            value={editingTags.get(tag.id)?.description || ''}
+                            onChange={(e) => updateEditingTag(tag.id, 'description', e.target.value)}
+                            className="edit-textarea"
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="edit-field">
+                          <label>Color:</label>
+                          <div className="color-picker-container">
+                            <input
+                              type="color"
+                              value={editingTags.get(tag.id)?.color || '#007acc'}
+                              onChange={(e) => updateEditingTag(tag.id, 'color', e.target.value)}
+                              className="color-picker"
+                            />
+                            <span className="color-value">
+                              {editingTags.get(tag.id)?.color || '#007acc'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Tag Usage Information */}
+                        <div className="edit-field">
+                          <label>Usage:</label>
+                          <div className="tag-usage-info">
+                            {tag.usage && tag.usage.total > 0 ? (
+                              <div className="usage-breakdown">
+                                {Object.entries(tag.usage.byCollection).map(([collectionType, count]) => (
+                                  <div key={collectionType} className="usage-item">
+                                    <span className="usage-type">{collectionType}:</span>
+                                    <span className="usage-count">{count} items</span>
+                                  </div>
+                                ))}
+                                <div className="usage-item total">
+                                  <span className="usage-type">Total:</span>
+                                  <span className="usage-count">{tag.usage.total} items</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="no-usage">Not used by any objects</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="edit-actions">
+                        <button 
+                          className={`update-btn ${!hasChanges(tag.id) ? 'disabled' : ''}`}
+                          onClick={() => updateTag(tag.id)}
+                          disabled={!hasChanges(tag.id)}
+                        >
+                          Update
+                        </button>
+                        <button 
+                          className="delete-btn-edit"
+                          onClick={() => deleteTag(tag.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {tags.length === 0 && !isLoading && (
+                <div className="empty-state">
+                  <p>No tags found</p>
+                </div>
+              )}
+            </div>
+
+            {/* Create New Tag Button */}
+            <div className="create-tag-section">
+              <button 
+                className="create-tag-btn"
+                onClick={createNewTag}
+                style={{
+                  backgroundColor: '#4a90e2',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  width: '100%',
+                  marginTop: '20px'
+                }}
+              >
+                + Create New Tag
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default TagManager

@@ -1,21 +1,44 @@
 {
-  "name": "cnidaria-workspace",
-  "version": "1.0.0",
-  "private": true,
+  "name": "cnidaria-admin-curve",
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
-    "dev:admin": "cd cnidaria-admin-curve && npm run dev",
-    "dev:api": "cd cnidaria-api && npm start",
-    "build:admin": "cd cnidaria-admin-curve && npm run build",
-    "install:all": "cd cnidaria-admin-curve && npm install && cd ../cnidaria-api && npm install",
-    "start": "concurrently \"npm run dev:admin\" \"npm run dev:api\"",
-    "admin": "cd cnidaria-admin-curve && npm run dev",
-    "api": "cd cnidaria-api && npm start"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy:dev": "./deploy-cloudrun-dev.sh",
+    "deploy:stage": "./deploy-cloudrun-stage.sh",
+    "deploy:prod": "./deploy-cloudrun-prod.sh",
+    "cloud-run:status": "gcloud run services list --region=us-central1",
+    "cloud-run:logs:dev": "gcloud run services logs read cnidaria-admin-curves-dev --region=us-central1",
+    "cloud-run:logs:stage": "gcloud run services logs read cnidaria-admin-curves-stage --region=us-central1",
+    "cloud-run:logs:prod": "gcloud run services logs read cnidaria-admin-curves-prod --region=us-central1"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.8.2",
+    "upng-js": "^2.1.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@types/three": "0.162.0",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@webgpu/types": "^0.1.64",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "three": "0.179.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
   },
-  "workspaces": [
-    "cnidaria-admin-curve",
-    "cnidaria-api"
-  ]
+  "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
 }

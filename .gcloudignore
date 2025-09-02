@@ -1,0 +1,52 @@
+# Google Cloud Build ignore file
+# Excludes files from being uploaded to Cloud Build
+
+# Development files
+node_modules/
+.git/
+.gitignore
+.env*
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts (except dist for static hosting)
+coverage/
+.nyc_output/
+*.tgz
+*.tar.gz
+
+# Documentation (unless needed for build)
+README.md
+SETUP.md
+*.md
+
+# Old deployment scripts
+deploy-frontend-*.sh
+firebase.json
+.firebaserc
+
+# Large unnecessary files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# Test files
+__tests__/
+*.test.*
+*.spec.*
+
+# Temporary files
+.tmp/
+temp/
