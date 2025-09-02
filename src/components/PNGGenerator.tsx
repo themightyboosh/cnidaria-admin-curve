@@ -24,7 +24,7 @@ const GENERATION_CONFIG = {
 
 interface PNGGeneratorProps {
   curve: Curve;
-  coordinateNoise: CoordinateNoise;
+  coordinateNoise: CoordinateNoise | null; // Allow null for bypass mode
   selectedPalette?: string;
   imageSize?: '32' | '64' | '128' | '256' | '512' | '1024';
   onError?: (error: string) => void;
@@ -440,9 +440,11 @@ self.onmessage = (e) => {
   const startGeneration = useCallback(async () => {
     if (isGenerating) return;
 
+    const bypassMode = coordinateNoise === null;
     console.log('🚀 Starting WebGPU PNG generation with:');
     console.log('  Curve:', curve['curve-name'], 'coordinate-noise:', curve['coordinate-noise']);
-    console.log('  Noise object:', coordinateNoise.name, 'expression:', coordinateNoise.gpuExpression);
+    console.log('  Mode:', bypassMode ? 'BYPASS (steps 2→6)' : 'NORMAL (7-step)');
+    console.log('  Noise expression:', bypassMode ? 'default radial' : coordinateNoise.gpuExpression);
     console.log('  Palette:', selectedPalette);
 
     try {
@@ -453,7 +455,7 @@ self.onmessage = (e) => {
       // Update last generation params
       setLastGenerationParams({
         curveId: curve['curve-name'],
-        noiseId: coordinateNoise.name,
+        noiseId: coordinateNoise?.name || 'bypass-mode',
         noiseCalc: curve['noise-calc'] || 'radial',
         palette: selectedPalette,
         imageSize: imageSize
@@ -471,11 +473,14 @@ self.onmessage = (e) => {
         'curve-distance-calc': (curve['curve-distance-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
       };
 
+      // Use default expression for bypass mode or actual expression
+      const gpuExpression = coordinateNoise?.gpuExpression || 'sqrt(x * x + y * y)'; // Default radial for bypass
+      
       // Process complete image with progress tracking
       const result = await webgpuService.processCompleteImage(
         curveData,
         palette,
-        coordinateNoise.gpuExpression,
+        gpuExpression,
         imageSize,
         imageSize,
         3.0, // 300% zoom scale
@@ -487,7 +492,7 @@ self.onmessage = (e) => {
             done, 
             total: totalPixels, 
             percentage: progressPercent,
-            stage 
+            stage: coordinateNoise ? stage : `${stage} (Bypass Mode)`
           });
         }
       );
@@ -533,7 +538,7 @@ self.onmessage = (e) => {
     // If we have a previous result and only palette changed, just recolor
     if (lastResultRef.current && lastGenerationParams && 
         lastGenerationParams.curveId === curve['curve-name'] &&
-        lastGenerationParams.noiseId === coordinateNoise.name &&
+        lastGenerationParams.noiseId === (coordinateNoise?.name || 'bypass-mode') &&
         lastGenerationParams.noiseCalc === (curve['noise-calc'] || 'radial')) {
       
       // Recolor the existing result
@@ -563,7 +568,7 @@ self.onmessage = (e) => {
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
 
-    const filename = `${GENERATION_CONFIG.DOWNLOAD_FILENAME_PREFIX}-${curve['curve-name']}-${coordinateNoise.name}-${selectedPalette}.png`;
+    const filename = `${GENERATION_CONFIG.DOWNLOAD_FILENAME_PREFIX}-${curve['curve-name']}-${coordinateNoise?.name || 'bypass'}-${selectedPalette}.png`;
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = filename;
@@ -574,9 +579,12 @@ self.onmessage = (e) => {
 
   // Check if regeneration is needed
   const needsRegeneration = useMemo(() => {
+    // Handle bypass mode (coordinateNoise is null)
+    const noiseId = coordinateNoise?.name || 'bypass-mode';
+    
     const result = lastGenerationParams === null ||
       lastGenerationParams.curveId !== curve['curve-name'] ||
-      lastGenerationParams.noiseId !== coordinateNoise.name ||
+      lastGenerationParams.noiseId !== noiseId ||
       lastGenerationParams.noiseCalc !== (curve['noise-calc'] || 'radial') ||
       lastGenerationParams.palette !== selectedPalette ||
       lastGenerationParams.imageSize !== getImageSize();
@@ -586,10 +594,11 @@ self.onmessage = (e) => {
       lastParams: lastGenerationParams,
       currentParams: {
         curveId: curve['curve-name'],
-        noiseId: coordinateNoise.name,
+        noiseId: noiseId,
         noiseCalc: curve['noise-calc'] || 'radial',
         palette: selectedPalette,
-        imageSize: getImageSize()
+        imageSize: getImageSize(),
+        bypassMode: coordinateNoise === null
       }
     });
     
@@ -598,6 +607,11 @@ self.onmessage = (e) => {
 
   // Test coordinate noise function
   const testCoordinateNoise = useCallback(() => {
+    if (!coordinateNoise) {
+      console.log('🧪 Coordinate noise bypassed - using default radial calculation');
+      return;
+    }
+    
     console.log('🧪 Testing coordinate noise function:');
     console.log('  Noise:', coordinateNoise.name);
     console.log('  Expression:', coordinateNoise.gpuExpression);
@@ -910,10 +924,11 @@ self.onmessage = (e) => {
       noiseName: coordinateNoise?.name
     });
 
-    if (curve && coordinateNoise && !isGenerating) {
-      // Always generate if we have the required data and aren't currently generating
+    if (curve && !isGenerating) {
+      // Generate if we have curve data (coordinateNoise can be null for bypass mode)
       if (needsRegeneration || !generatedImage) {
         console.log('🔄 Auto-generating PNG due to parameter change or missing image');
+        console.log('  Mode:', coordinateNoise ? 'Normal' : 'Bypass');
         
         // Start generation immediately
         startGeneration();
@@ -923,8 +938,8 @@ self.onmessage = (e) => {
     } else {
       console.log('❌ Missing requirements for auto-generation:', {
         missingCurve: !curve,
-        missingNoise: !coordinateNoise,
-        currentlyGenerating: isGenerating
+        currentlyGenerating: isGenerating,
+        coordinateNoiseMode: coordinateNoise ? 'normal' : 'bypass'
       });
     }
   }, [curve, coordinateNoise, selectedPalette, externalImageSize, needsRegeneration, isGenerating, startGeneration, generatedImage]);
@@ -981,7 +996,7 @@ self.onmessage = (e) => {
               <div>
                 <div>Ready to generate {getImageSize()}×{getImageSize()} PNG visualization</div>
                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#555' }}>
-                  Using {coordinateNoise.name} coordinate noise with {curve['curve-name']}
+                  Using {coordinateNoise ? coordinateNoise.name : 'bypass mode'} with {curve['curve-name']}
                 </div>
               </div>
             )}

@@ -32,6 +32,7 @@ interface Curve {
   "curve-tags"?: string[]  // Store document IDs
   "coordinate-noise": string
   "curve-distance-calc"?: "radial" | "cartesian-x" | "cartesian-y" // Distance calculation method
+  "distance-modulus"?: number // NEW: modulus for distance calculations (defaults to 0, ignored if 0)
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
@@ -670,6 +671,8 @@ function CurveBuilder() {
       "curve-description": "A new curve created from scratch",
       "curve-tags": [],
       "coordinate-noise": "radial",
+      "curve-distance-calc": "radial",
+      "distance-modulus": 0,
       "curve-width": 256,
       "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256)),
       "curve-index-scaling": 1.0,
@@ -1250,6 +1253,24 @@ function CurveBuilder() {
                           </select>
                         </div>
 
+                        {/* Bypass Coordinate Noise Checkbox - Mapped Mode Only */}
+                        <div className="form-group">
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={bypassCoordinateNoise}
+                              onChange={(e) => setBypassCoordinateNoise(e.target.checked)}
+                              title="Bypass coordinate noise transformation (jump from step 2 to step 6)"
+                            />
+                            <span>Bypass Coordinate Noise</span>
+                          </label>
+                          {bypassCoordinateNoise && (
+                            <div style={{ fontSize: '12px', color: '#ffa500', marginTop: '4px' }}>
+                              ⚠️ Skipping coordinate transformation (steps 3-5)
+                            </div>
+                          )}
+                        </div>
+
                         {/* Download PNG Button */}
                         <div className="form-group">
                           <button
@@ -1626,6 +1647,33 @@ function CurveBuilder() {
                       />
                     </div>
 
+                    {/* Distance Modulus */}
+                    <div className="form-group">
+                      <label>Distance Modulus:</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={Number(editingCurve["distance-modulus"]) || 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          handleFieldChange("distance-modulus", isNaN(val) ? 0 : Math.max(0, val));
+                        }}
+                        title="Apply modulus to distance calculations (0 = no modulus, ignored)"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                      />
+                      {(editingCurve["distance-modulus"] || 0) > 0 && (
+                        <div style={{ fontSize: '12px', color: '#4CAF50', marginTop: '4px' }}>
+                          ✅ Distance will repeat every {editingCurve["distance-modulus"]} units
+                        </div>
+                      )}
+                      {(editingCurve["distance-modulus"] || 0) === 0 && (
+                        <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                          ℹ️ No modulus applied (continuous distance)
+                        </div>
+                      )}
+                    </div>
+
 
                     <div className="form-group">
                       <label>Noise Seed:</label>
@@ -1639,23 +1687,7 @@ function CurveBuilder() {
                       />
                     </div>
 
-                    {/* Bypass Coordinate Noise Checkbox */}
-                    <div className="form-group">
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="checkbox"
-                          checked={bypassCoordinateNoise}
-                          onChange={(e) => setBypassCoordinateNoise(e.target.checked)}
-                          title="Bypass coordinate noise transformation (use raw coordinates)"
-                        />
-                        <span>Bypass</span>
-                      </label>
-                      {bypassCoordinateNoise && (
-                        <div style={{ fontSize: '12px', color: '#ffa500', marginTop: '4px' }}>
-                          ⚠️ Using raw coordinates (no transformation)
-                        </div>
-                      )}
-                    </div>
+
 
                     {/* Debug Values - Simple */}
                     <div className="form-group" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '6px' }}>
