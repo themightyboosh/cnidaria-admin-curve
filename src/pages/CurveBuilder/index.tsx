@@ -7,6 +7,8 @@ import Header from '../../components/Header'
 import TagManager from '../TagManager'
 import CurveGraph from './CurveGraph'
 import PNGGenerator from '../../components/PNGGenerator'
+// @ts-ignore - vite svg import as URL
+import logoUrl from '../../assets/logo.svg'
 import WebGPUCompatibilityBadge from '../../components/WebGPUCompatibilityBadge'
 import { getPaletteOptions } from '../../utils/paletteUtils'
 import { getDefaultNoiseExpression, type CoordinateNoise } from '../../utils/mathPipeline'
@@ -27,16 +29,17 @@ interface Tag {
 
 interface Curve {
   id: string
+  name?: string
   "curve-name": string
   "curve-description": string
   "curve-tags"?: string[]  // Store document IDs
-  "coordinate-noise": string
+  "coordinate-noise"?: string
   "curve-distance-calc"?: "radial" | "cartesian-x" | "cartesian-y" // Distance calculation method
   "distance-modulus"?: number // NEW: modulus for distance calculations (defaults to 0, ignored if 0)
   "curve-width": number
   "curve-data": number[]
   "curve-index-scaling"?: number
-  "coordinate-noise-seed"?: number
+  "noise-seed"?: number
 }
 
 interface ProcessCoordinateResponse {
@@ -111,7 +114,7 @@ function CurveBuilder() {
         const curveData = (data && data.data) ? data.data : data
         if (curveData) {
           // Ensure required defaults/migrations
-          if (!curveData["coordinate-noise"]) curveData["coordinate-noise"] = "radial"
+          // coordinate-noise now resolved via link; keep legacy fallback only if present
           if (!curveData["curve-distance-calc"]) curveData["curve-distance-calc"] = "radial"
           if (!Array.isArray(curveData["curve-data"])) curveData["curve-data"] = []
 
@@ -119,10 +122,19 @@ function CurveBuilder() {
           setEditingCurve({ ...(curveData as Curve) })
           setHasUnsavedChanges(false)
 
-          // Reload coordinate noise for mapped view
-          const noiseName = (curveData as Curve)["coordinate-noise"] || 'radial'
-          const noise = await loadCoordinateNoise(noiseName)
-          setCoordinateNoise(noise)
+          // Load coordinate noise via link endpoint (curve.name as canonical)
+          try {
+            const linkCurveKey = (curveData as any).name || (curveData as any)['curve-name'] || (curveData as any).id
+            const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${linkCurveKey}`)
+            const linkJson = await linkRes.json()
+            if (linkJson.success && linkJson.data && linkJson.data.noise) {
+              setCoordinateNoise(linkJson.data.noise)
+            } else {
+              setCoordinateNoise(null)
+            }
+          } catch (_) {
+            setCoordinateNoise(null)
+          }
 
           // Purge caches and colors
           setCoordinateCache(new Map())
@@ -268,8 +280,8 @@ function CurveBuilder() {
     }
   }
 
-  // Load curves from API
-  const loadCurves = async (retryCount = 0, options?: { autoLoadLatest?: boolean; preserveSelectionId?: string }) => {
+  // Load curves from API (no auto-select on startup)
+  const loadCurves = async (retryCount = 0, options?: { preserveSelectionId?: string }) => {
     setIsLoadingCurves(true)
     setError(null)
     console.log(`Loading curves from API... (attempt ${retryCount + 1})`)
@@ -350,23 +362,12 @@ function CurveBuilder() {
           
           // Preserve selection if requested
           const preserveId = options?.preserveSelectionId
-          const autoLoadLatest = options?.autoLoadLatest
           if (preserveId) {
             const existing = processedCurves.find(c => c.id === preserveId)
             if (existing) {
               console.log('🔄 Preserving current selection after refresh:', existing['curve-name'])
               await handleCurveSelect(existing)
             }
-          } else if (autoLoadLatest && processedCurves.length > 0 && !selectedCurve) {
-            // Only auto-load on first mount if nothing is selected
-            const sortedCurves = [...processedCurves].sort((a, b) => {
-              const aTime = new Date((a as any)['updated-at'] || (a as any)['created-at'] || 0).getTime()
-              const bTime = new Date((b as any)['updated-at'] || (b as any)['created-at'] || 0).getTime()
-              return bTime - aTime
-            })
-            const mostRecent = sortedCurves[0]
-            console.log('🔄 Auto-loading most recent curve (initial mount):', mostRecent['curve-name'])
-            await handleCurveSelect(mostRecent)
           }
         } else {
           console.error('API returned success: false:', data)
@@ -403,7 +404,8 @@ function CurveBuilder() {
     setIsLoadingTags(true)
     try {
       // Load linked tags (tags currently linked to this curve)
-      const linkedResponse = await fetch(`${apiUrl}/api/tags/linked/curves/${curveId}`)
+      const linkKey = selectedCurve?.name || selectedCurve?.['curve-name'] || selectedCurve?.id || curveId
+      const linkedResponse = await fetch(`${apiUrl}/api/tags/linked/curves/${linkKey}`)
       const linkedData = await linkedResponse.json()
       
       // Load all available tags
@@ -467,10 +469,10 @@ function CurveBuilder() {
     }
   }
 
-  // Load curves and tags on component mount
+  // Load curves and tags on component mount (no auto-selection)
   useEffect(() => {
     loadCoordinateNoiseTypes()
-    loadCurves(0, { autoLoadLatest: true })
+    loadCurves(0)
     loadAllTags()
   }, [])
 
@@ -711,16 +713,16 @@ function CurveBuilder() {
   const createNewCurve = () => {
     const newCurve: Curve = {
       id: `curve-${Date.now()}`,
+      name: generateUniqueCurveName(),
       "curve-name": generateUniqueCurveName(),
       "curve-description": "A new curve created from scratch",
       "curve-tags": [],
-      "coordinate-noise": "radial",
       "curve-distance-calc": "radial",
       "distance-modulus": 0,
       "curve-width": 256,
       "curve-data": Array.from({ length: 256 }, () => Math.floor(Math.random() * 256)),
       "curve-index-scaling": 1.0,
-      "coordinate-noise-seed": 0
+      "noise-seed": Math.floor(Math.random() * (3333 - 33 + 1)) + 33
     }
     
     setSelectedCurve(newCurve)
@@ -757,10 +759,18 @@ function CurveBuilder() {
     }
 
     // Load coordinate noise for mapped view
-    const noiseName = curve['coordinate-noise'] || 'radial'
-    console.log('Loading coordinate noise for curve:', curve['curve-name'], 'noise type:', noiseName)
-    const noise = await loadCoordinateNoise(noiseName)
-    setCoordinateNoise(noise)
+    // Resolve coordinate-noise via link
+    try {
+      const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${curve.id}`)
+      const linkJson = await linkRes.json()
+      if (linkJson.success && linkJson.data && linkJson.data.noise) {
+        setCoordinateNoise(linkJson.data.noise)
+      } else {
+        setCoordinateNoise(null)
+      }
+    } catch (_) {
+      setCoordinateNoise(null)
+    }
     
     // Clear cache and colors for new curve
     setCoordinateCache(new Map())
@@ -971,6 +981,72 @@ function CurveBuilder() {
     }
   }
 
+  // Duplicate current curve under a new name (id), copy tags and noise link
+  const duplicateCurveAs = async () => {
+    if (!selectedCurve || !editingCurve) return
+    const suggested = `${(selectedCurve.name || selectedCurve["curve-name"] || selectedCurve.id)}-copy`
+    const newName = window.prompt('Duplicate as (new name):', suggested)
+    if (!newName) return
+    try {
+      setIsSaving(true)
+      // Build payload with allowed fields + name
+      const payload: any = {
+        name: newName,
+        'curve-description': editingCurve['curve-description'],
+        'curve-width': editingCurve['curve-width'],
+        'curve-distance-calc': editingCurve['curve-distance-calc'],
+        'distance-modulus': editingCurve['distance-modulus'],
+        'curve-data': editingCurve['curve-data'],
+        'noise-seed': editingCurve['noise-seed']
+      }
+      const createRes = await fetch(`${apiUrl}/api/curves`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!createRes.ok) {
+        const txt = await createRes.text()
+        throw new Error(`Create failed: ${createRes.status} ${txt}`)
+      }
+      const created = await createRes.json()
+      const newId = created?.data?.id || created?.id || newName
+
+      // Copy coordinate-noise link (if any)
+      try {
+        const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${selectedCurve.id}`)
+        const linkJson = await linkRes.json()
+        const noiseId = linkJson?.data?.noiseId
+        if (noiseId) {
+          await fetch(`${apiUrl}/api/coordinate-noise-links/link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ curveId: newId, noiseId })
+          })
+        }
+      } catch (_) {}
+
+      // Copy tags
+      try {
+        if (assignedTags.length > 0) {
+          await Promise.all(assignedTags.map(tag => fetch(`${apiUrl}/api/tags/link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagId: tag.id, collectionId: 'curves', docId: newId })
+          })))
+        }
+      } catch (_) {}
+
+      // Reload and select new curve
+      await loadCurves(0, { preserveSelectionId: newId })
+      await reloadCurve(newId)
+    } catch (err) {
+      console.error('Duplicate failed:', err)
+      setError(`Duplicate failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   // Save curve changes
   const saveCurveChanges = async () => {
     if (!editingCurve || !selectedCurve) return
@@ -988,14 +1064,26 @@ function CurveBuilder() {
       // Check if this is a new curve (temporary ID) or existing curve
       const isNewCurve = selectedCurve.id.startsWith('curve-') && selectedCurve.id.includes('-')
       
+      // Restrict payload to allowed fields
+      const payload: any = {
+        'curve-description': editingCurve['curve-description'],
+        'curve-width': editingCurve['curve-width'],
+        'curve-distance-calc': editingCurve['curve-distance-calc'],
+        'distance-modulus': editingCurve['distance-modulus'],
+        'curve-data': editingCurve['curve-data'],
+        'noise-seed': editingCurve['noise-seed']
+      }
+      // For create, include name (id)
+      if (isNewCurve) {
+        payload.name = editingCurve['curve-name'] || selectedCurve.id
+      }
+
       const response = await fetch(
         isNewCurve ? `${apiUrl}/api/curves` : `${apiUrl}/api/curves/${selectedCurve.id}`,
         {
           method: isNewCurve ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(editingCurve)
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         }
       )
       
@@ -1110,11 +1198,14 @@ function CurveBuilder() {
                       title={`Choose a curve to edit and visualize (${curves.length} available)`}
                     >
                       <option value="">{curves.length > 0 ? `Select a curve... (${curves.length} available)` : 'Loading curves...'}</option>
-                      {curves.map(curve => (
-                        <option key={curve.id} value={curve.id}>
-                          {curve["curve-name"]}
-                        </option>
-                      ))}
+                      {curves.map(curve => {
+                        const label = (curve.name || curve["curve-name"] || curve.id)
+                        return (
+                          <option key={curve.id} value={curve.id}>
+                            {label}
+                          </option>
+                        )
+                      })}
                     </select>
                   </div>
                 )}
@@ -1191,6 +1282,29 @@ function CurveBuilder() {
                       title="Delete the current curve"
                     >
                       {isSaving ? 'Deleting...' : 'Delete'}
+                    </button>
+                  )}
+
+                  {/* Duplicate Button */}
+                  {selectedCurve && (
+                    <button
+                      type="button"
+                      onClick={duplicateCurveAs}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: '#6c757d',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '10px 16px',
+                        fontSize: '14px',
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
+                        fontWeight: '500',
+                        flex: '1'
+                      }}
+                      title="Duplicate this curve under a new name (copies tags and noise link)"
+                    >
+                      Duplicate
                     </button>
                   )}
                 </div>
@@ -1588,29 +1702,26 @@ function CurveBuilder() {
                 </h3>
                 {expandedSections.settings && (
                   <div className="section-content">
-                    {/* Curve Name */}
+                    {/* Curve Name (canonical) - read-only; use Duplicate to create a new name */}
                     <div className="form-group">
                       <label>Curve Name:</label>
                       <input
                         type="text"
-                        value={editingCurve["curve-name"] || ""}
-                        onChange={(e) => handleFieldChange("curve-name", e.target.value)}
+                        value={selectedCurve.name || selectedCurve["curve-name"] || selectedCurve.id}
+                        onChange={() => {}}
+                        disabled
                         title="The name of this curve"
                         style={{
                           backgroundColor: '#2a2a2a',
                           color: '#ffffff',
-                          border: editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '') 
-                            ? '1px solid #ff6b6b' 
-                            : '1px solid #444',
+                          border: '1px solid #444',
                           borderRadius: '4px',
                           padding: '8px 12px'
                         }}
                       />
-                      {editingCurve && !validateCurveName(editingCurve["curve-name"], selectedCurve?.id || '') && (
-                        <div style={{ fontSize: '12px', color: '#ff6b6b', marginTop: '4px' }}>
-                          ⚠️ This name is already taken. Please choose a different name.
-                        </div>
-                      )}
+                      <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+                        Renaming is disabled. Use Duplicate to create a new curve.
+                      </div>
                     </div>
 
                     {/* Curve Description */}
@@ -1635,47 +1746,82 @@ function CurveBuilder() {
 
                     <div className="form-group">
                       <label>Coordinate Noise:</label>
-                      <select
-                        value={editingCurve["coordinate-noise"] || "radial"}
-                        onChange={(e) => handleFieldChange("coordinate-noise", e.target.value)}
-                        title="Select the coordinate noise pattern for this curve"
-                        disabled={isLoadingCoordinateNoiseTypes || isSaving}
-                      >
-                        {isLoadingCoordinateNoiseTypes ? (
-                          <option value="">Loading coordinate noise types...</option>
-                        ) : isSaving ? (
-                          <option value="">Saving changes...</option>
-                        ) : (
-                          coordinateNoiseTypesList.map((noiseType) => (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <select
+                          value={coordinateNoise?.id || ''}
+                          onChange={async (e) => {
+                            if (!selectedCurve) return;
+                            const newNoiseId = e.target.value
+                            // Link curve to selected noise via API
+                            try {
+                              await fetch(`${apiUrl}/api/coordinate-noise-links/link`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ curveId: selectedCurve.id, noiseId: newNoiseId })
+                              })
+                              // Reload link to update local coordinateNoise
+                              const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${selectedCurve.id}`)
+                              const linkJson = await linkRes.json()
+                              if (linkJson.success && linkJson.data && linkJson.data.noise) {
+                                setCoordinateNoise(linkJson.data.noise)
+                                setRenderVersion(prev => prev + 1)
+                              }
+                            } catch (err) {
+                              console.error('Failed to link coordinate noise:', err)
+                            }
+                          }}
+                          title="Select the coordinate noise pattern for this curve (via link)"
+                          disabled={isLoadingCoordinateNoiseTypes || isSaving}
+                        >
+                          <option value="">None</option>
+                          {coordinateNoiseTypesList.map((noiseType) => (
                             <option key={noiseType.id} value={noiseType.id}>
                               {noiseType.displayName}
                             </option>
-                          ))
+                          ))}
+                        </select>
+                        {coordinateNoise?.id && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!selectedCurve) return;
+                              try {
+                                await fetch(`${apiUrl}/api/coordinate-noise-links/unlink`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ curveId: selectedCurve.id })
+                                })
+                                setCoordinateNoise(null)
+                                setRenderVersion(prev => prev + 1)
+                              } catch (err) {
+                                console.error('Failed to unlink coordinate noise:', err)
+                              }
+                            }}
+                          >
+                            Unlink
+                          </button>
                         )}
-                      </select>
-                      {isSaving && (
-                        <div style={{ fontSize: '12px', color: '#ff6b6b', marginTop: '4px' }}>
-                          ⚡ Auto-saving coordinate noise changes...
-                        </div>
-                      )}
+                      </div>
                     </div>
                     
-                    {/* Universal Index Scaling */}
+                    {/* Index Scaling (discrete values) */}
                     <div className="form-group">
                       <label>Index Scaling:</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        min="0.001"
-                        max="1.0"
-                        value={Number(editingCurve["curve-index-scaling"]) || 1.0}
-                        onChange={(e) => {
+                      <select
+                        value={(editingCurve["curve-index-scaling"] ?? 1.0).toString()}
+                        onChange={async (e) => {
                           const val = parseFloat(e.target.value);
-                          handleFieldChange("curve-index-scaling", isNaN(val) ? 1.0 : val);
+                          const clamped = Math.min(1.0, Math.max(0.0001, isNaN(val) ? 1.0 : val));
+                          handleFieldChange("curve-index-scaling", clamped);
+                          await saveCurveField('curve-index-scaling', clamped);
+                          setRenderVersion(prev => prev + 1);
                         }}
-                        title="Controls how many cells of distance are needed to move to the next index position (0.001 to 1.0)"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
+                        title="Cells of distance required to move to next index position"
+                      >
+                        {['1','0.1','0.01','0.001','0.0001'].map(v => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Distance Modulus */}
@@ -1712,9 +1858,16 @@ function CurveBuilder() {
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        value={editingCurve["coordinate-noise-seed"]?.toString() || "0"}
-                        onChange={(e) => handleFieldChange("coordinate-noise-seed", parseInt(e.target.value) || 0)}
-                        title="Random seed for consistent noise patterns (0 = no seed)"
+                        value={(editingCurve["noise-seed"] ?? '').toString()}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value)
+                          handleFieldChange("noise-seed", isNaN(n) ? undefined : n)
+                        }}
+                        onBlur={async () => {
+                          if (!selectedCurve || editingCurve["noise-seed"] === undefined) return;
+                          await saveCurveField('noise-seed', editingCurve['noise-seed'])
+                        }}
+                        title="Random seed for consistent noise patterns"
                       />
                     </div>
 
@@ -1771,43 +1924,51 @@ function CurveBuilder() {
               onDataPointClick={handleDataPointClick}
             />
           ) : (
-            selectedCurve && coordinateNoise ? (
-              <PNGGenerator
-                key={`png-${renderVersion}-${selectedCurve.id}`}
-                ref={pngGeneratorRef}
-                curve={selectedCurve}
-                coordinateNoise={bypassCoordinateNoise ? null : coordinateNoise}
-                selectedPalette={selectedPalette}
-                imageSize={imageSize}
-                onError={(error) => setPngError(error)}
-                onCurveDistanceCalcChange={async (distanceCalc) => {
-                  if (editingCurve) {
-                    // Update the editing curve
-                    const updatedCurve = { ...editingCurve, 'curve-distance-calc': distanceCalc }
-                    setEditingCurve(updatedCurve)
-                    setHasUnsavedChanges(true)
-                    
-                    // Auto-save the change
-                    try {
-                      const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updatedCurve)
-                      })
-                      
-                      if (response.ok) {
-                        console.log('✅ Curve-distance-calc auto-saved:', distanceCalc)
-                        // Perform uniform save -> reload -> refresh behavior
-                        await reloadCurve(selectedCurve.id)
-                      } else {
-                        console.error('❌ Failed to auto-save curve-distance-calc')
+            selectedCurve ? (
+              coordinateNoise ? (
+                <PNGGenerator
+                  key={`png-${renderVersion}-${selectedCurve.id}`}
+                  ref={pngGeneratorRef}
+                  curve={selectedCurve}
+                  coordinateNoise={bypassCoordinateNoise ? null : coordinateNoise}
+                  selectedPalette={selectedPalette}
+                  imageSize={imageSize}
+                  onError={(error) => setPngError(error)}
+                  onCurveDistanceCalcChange={async (distanceCalc) => {
+                    if (editingCurve) {
+                      const updatedCurve = { ...editingCurve, 'curve-distance-calc': distanceCalc }
+                      setEditingCurve(updatedCurve)
+                      setHasUnsavedChanges(true)
+                      try {
+                        const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(updatedCurve)
+                        })
+                        if (response.ok) {
+                          await reloadCurve(selectedCurve.id)
+                        } else {
+                          console.error('❌ Failed to auto-save curve-distance-calc')
+                        }
+                      } catch (error) {
+                        console.error('❌ Error auto-saving curve-distance-calc:', error)
                       }
-                    } catch (error) {
-                      console.error('❌ Error auto-saving curve-distance-calc:', error)
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#000000',
+                  border: '1px solid #333'
+                }}>
+                  <div style={{ color: '#888', fontSize: '14px' }}>Preparing renderer…</div>
+                </div>
+              )
             ) : (
               <div style={{
                 width: '100%',
@@ -1822,7 +1983,16 @@ function CurveBuilder() {
                 flexDirection: 'column',
                 gap: '16px'
               }}>
-                <div>Select a curve to generate 1024×1024 PNG</div>
+                <img 
+                  src={logoUrl as unknown as string} 
+                  alt="Cnidaria Logo"
+                  style={{
+                    maxWidth: '80%',
+                    maxHeight: '80%',
+                    opacity: 0.15,
+                    filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.6))'
+                  }}
+                />
                 {pngError && (
                   <div style={{ 
                     color: '#ff6b6b', 

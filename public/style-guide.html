@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cnidaria Admin – UI Template & Style Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo:wght@200;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        /* Color system */
+        --background-color: #0b0b0f;
+        --surface-1: #121218;
+        --surface-2: #1a1a22;
+        --card-bg: #15151b;
+        --foreground-color: #f2f4f8;
+        --text-muted: #a3a9b7;
+        --border-subtle: #272a34;
+        --accent-primary: #0b8cff;
+        --accent-secondary: #7c3aed;
+        --accent-azure: #008cff;
+
+        /* Spacing scale (8pt grid) */
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-7: 28px;
+        --space-8: 32px;
+
+        /* Radii */
+        --radius-1: 6px;
+        --radius-2: 10px;
+        --radius-3: 12px;
+
+        /* Shadows */
+        --shadow-1: 0 4px 12px rgba(0,0,0,0.30);
+        --shadow-2: 0 10px 28px rgba(0,0,0,0.45);
+
+        /* Typography */
+        --font-sans: 'Exo', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        --fs-12: 12px;
+        --fs-14: 14px;
+        --fs-16: 16px;
+        --fs-18: 18px;
+        --fs-22: 22px;
+        --fs-32: 32px;
+      }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--background-color);
+        color: var(--foreground-color);
+        font-family: var(--font-sans);
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-rows: 85px 1fr;
+        height: 100dvh;
+      }
+
+      /*
+        GLOBAL HEADER (shared across all pages)
+        - Keep structure and class names in sync with src/components/Header.tsx / Header.css
+      */
+      .cnidaria-header {
+        background: linear-gradient(135deg, var(--background-color) 0%, var(--card-bg) 100%);
+        color: var(--foreground-color);
+        height: 85px;
+        border-bottom: 2px solid var(--accent-primary);
+        box-shadow: var(--shadow-1);
+        position: relative;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        padding: 0 var(--space-5);
+      }
+
+      .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        height: 100%;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      .logo img { width: 48px; height: 48px; }
+      .logo-title {
+        margin: 0;
+        font-weight: 800;
+        font-size: var(--fs-32);
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      }
+      .logo-title .thin { font-weight: 200; letter-spacing: 2px; opacity: 0.9; }
+
+      .header-actions { margin-left: auto; display: flex; gap: var(--space-4); align-items: center; }
+      .logout-placeholder { color: var(--text-muted); background: rgba(255,255,255,0.06); border: 1px dashed rgba(255,255,255,0.2); padding: 6px 10px; border-radius: var(--radius-1); font-size: var(--fs-12); }
+
+      /* MEGA MENU (appears on hover of header) */
+      .header-button-group {
+        display: none;
+        position: absolute; left: 0; right: 0; top: 85px;
+        background: linear-gradient(180deg, rgba(18,8,26,0.98), rgba(27,15,42,0.94));
+        background-image: url('/src/assets/textures/tentacles.svg');
+        background-size: cover; background-position: center; background-repeat: no-repeat;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+        box-shadow: var(--shadow-2);
+        padding: 16px 20px 24px 20px;
+        z-index: 200;
+        display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px 16px;
+      }
+      .cnidaria-header:hover .header-button-group,
+      .header-button-group:hover, .header-button-group:focus-within { display: grid; }
+
+      .header-button { display:flex; align-items:center; gap:10px; background:#000; border:1px solid rgba(0,90,180,0.2); border-radius:12px; padding:6px 12px; min-width:220px; color:inherit; text-decoration:none; transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+      .header-button:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(0,90,180,0.22); border-color:rgba(0,140,230,0.45); }
+      .header-button-icon img { width:40px; height:40px; }
+      .header-button-title { font-size:18px; font-weight:800; letter-spacing:0.8px; }
+      .header-button-subtitle { font-size:14px; color:var(--text-muted); }
+
+      /* LAYOUT: Content area beneath header */
+      .page-content {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: var(--space-5);
+        height: calc(100dvh - 85px);
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--border-subtle);
+        background: var(--surface-1);
+        padding: var(--space-4);
+      }
+      .main {
+        padding: var(--space-5);
+        overflow: auto;
+      }
+
+      /* Canvas area placeholder (use this wrapper for visual consistency) */
+      .canvas-area {
+        background: #000;
+        border: 1px solid #333;
+        border-radius: var(--radius-2);
+        height: 640px;
+        display: grid; place-items: center;
+        position: relative; overflow: hidden;
+      }
+      .canvas-logo { width: 80%; height: auto; opacity: .15; filter: drop-shadow(0 4px 20px rgba(0,0,0,.6)); }
+
+      /* Core components */
+      .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:8px; border:1px solid var(--border-subtle); background: var(--surface-2); color: var(--foreground-color); cursor:pointer; font-weight:600; }
+      .btn:hover { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(11,140,255,0.15) inset; }
+      .btn-primary { background: linear-gradient(135deg, #0057c2, #008cff); border-color: #0b8cff; }
+      .btn-danger { background: linear-gradient(135deg, #7a1f1f, #c62828); border-color:#d32f2f; }
+
+      .card { background: var(--surface-1); border:1px solid var(--border-subtle); border-radius: var(--radius-2); padding: var(--space-5); box-shadow: var(--shadow-1); }
+      .section-title { margin: 0 0 var(--space-3) 0; font-size: var(--fs-18); font-weight: 700; }
+      .form-group { display:flex; flex-direction:column; gap:6px; margin-bottom: var(--space-4); }
+      .form-group label { font-size: var(--fs-12); color: var(--text-muted); }
+      .form-group input, .form-group select, .form-group textarea { background: var(--surface-2); color: var(--foreground-color); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px; }
+
+      /* Grid helpers */
+      .grid-2 { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--space-4); }
+      .grid-3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--space-4); }
+
+      /* Notes: Keep these class names consistent across pages for a unified look & feel */
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- Global Header (Use exactly this structure/classes) -->
+      <header class="cnidaria-header">
+        <div class="header-content">
+          <div class="logo">
+            <img src="/src/assets/logo.svg" alt="Cnidaria" />
+            <h1 class="logo-title">Cnidaria <span class="thin">WORLD BUILDER</span></h1>
+          </div>
+
+          <!-- Mega menu (appears on hover of header) -->
+          <nav class="header-button-group" aria-label="Mega menu">
+            <!-- Example button tiles (copy/paste to add) -->
+            <a href="#" class="header-button">
+              <span class="header-button-icon"><img src="/src/assets/icons/yggdrasil.svg" alt="" /></span>
+              <span class="header-button-text"><span class="header-button-title">YGGDRASIL</span><span class="header-button-subtitle">tend the world tree</span></span>
+            </a>
+            <a href="#" class="header-button">
+              <span class="header-button-icon"><img src="/src/assets/icons/curve-builder.svg" alt="" /></span>
+              <span class="header-button-text"><span class="header-button-title">CURVE BUILDER</span><span class="header-button-subtitle">the heart of smooth randomness</span></span>
+            </a>
+            <a href="#" class="header-button">
+              <span class="header-button-icon"><img src="/src/assets/icons/bands.svg" alt="" /></span>
+              <span class="header-button-text"><span class="header-button-title">BANDS</span><span class="header-button-subtitle">numbers take actions</span></span>
+            </a>
+            <a href="#" class="header-button">
+              <span class="header-button-icon"><img src="/src/assets/icons/jackets.svg" alt="" /></span>
+              <span class="header-button-text"><span class="header-button-title">JACKETS</span><span class="header-button-subtitle">wrap curves in functionality</span></span>
+            </a>
+          </nav>
+
+          <div class="header-actions">
+            <div class="logout-placeholder">logout</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content area: mimic standard page layout (sidebar + main) -->
+      <div class="page-content">
+        <aside class="sidebar">
+          <div class="card">
+            <h2 class="section-title">Navigation</h2>
+            <p class="muted">Left sidebar is reserved for page-level navigation and tools.</p>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="card" style="margin-bottom: var(--space-5);">
+            <h2 class="section-title">Page Title</h2>
+            <div class="grid-2">
+              <div class="form-group">
+                <label>Example Input</label>
+                <input placeholder="Type here" />
+              </div>
+              <div class="form-group">
+                <label>Example Select</label>
+                <select>
+                  <option>Option A</option>
+                  <option>Option B</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; gap: var(--space-3);">
+              <button class="btn btn-primary">Primary</button>
+              <button class="btn">Secondary</button>
+              <button class="btn btn-danger">Danger</button>
+            </div>
+          </div>
+
+          <!-- Canvas area reference (matches Curve Manager) -->
+          <section class="canvas-area">
+            <!-- Use 15% opacity logo when empty -->
+            <img src="/src/assets/logo.svg" alt="Cnidaria" class="canvas-logo" />
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Notes for implementers:
+      - Keep header markup/classes identical across pages; it is global.
+      - Use the CSS variables above and base components (.btn, .card, .form-group) for consistency.
+      - Canvas areas should use .canvas-area wrapper for standard border/radius and background.
+      - Mega menu is hover-activated on the header and should not be duplicated per-page.
+    -->
+  </body>
+  </html>
+
+

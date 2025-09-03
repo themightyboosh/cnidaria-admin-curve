@@ -12,7 +12,6 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
 
   const navItems = [
     { path: '/', label: 'Menu', icon: '🏠' },
-    { path: '/curves', label: 'Curve Builder', icon: '🔧' },
     { path: '/tags', label: 'Tag Manager', icon: '🏷️' },
     { path: '/wave-editor', label: 'Wave Editor', icon: '🌊' }
   ]

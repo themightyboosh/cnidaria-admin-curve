@@ -58,7 +58,7 @@ const PNGGenerator = React.forwardRef<{ startGeneration: () => void }, PNGGenera
   console.log('🔍 PNGGenerator render with props:', {
     hasCurve: !!curve,
     hasCoordinateNoise: !!coordinateNoise,
-    curveName: curve?.['curve-name'],
+    curveName: (curve as any)?.name || (curve as any)?.['curve-name'],
     coordinateNoiseName: coordinateNoise?.name,
     selectedPalette: externalSelectedPalette,
     imageSize: externalImageSize
@@ -446,7 +446,7 @@ self.onmessage = (e) => {
 
     const bypassMode = coordinateNoise === null;
     console.log('🚀 Starting WebGPU PNG generation with:');
-    console.log('  Curve:', curve['curve-name'], 'coordinate-noise:', curve['coordinate-noise']);
+    console.log('  Curve:', (curve as any).name || (curve as any)['curve-name'], 'coordinate-noise:', (coordinateNoise as any)?.name || 'bypass');
     console.log('  Mode:', bypassMode ? 'BYPASS (steps 2→6)' : 'NORMAL (7-step)');
     console.log('  Noise expression:', bypassMode ? 'default radial' : coordinateNoise.gpuExpression);
     console.log('  Palette:', selectedPalette);
@@ -458,7 +458,7 @@ self.onmessage = (e) => {
       
       // Update last generation params
       setLastGenerationParams({
-        curveId: curve['curve-name'],
+        curveId: (curve as any)['name'] || (curve as any)['curve-name'],
         noiseId: coordinateNoise?.name || 'bypass-mode',
         noiseCalc: curve['noise-calc'] || 'radial',
         palette: selectedPalette,
@@ -542,7 +542,7 @@ self.onmessage = (e) => {
 
     // If we have a previous result and only palette changed, just recolor
     if (lastResultRef.current && lastGenerationParams && 
-        lastGenerationParams.curveId === curve['curve-name'] &&
+        lastGenerationParams.curveId === ((curve as any)['name'] || (curve as any)['curve-name']) &&
         lastGenerationParams.noiseId === (coordinateNoise?.name || 'bypass-mode') &&
         lastGenerationParams.noiseCalc === (curve['noise-calc'] || 'radial')) {
       
@@ -578,7 +578,7 @@ self.onmessage = (e) => {
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
 
-    const filename = `${GENERATION_CONFIG.DOWNLOAD_FILENAME_PREFIX}-${curve['curve-name']}-${coordinateNoise?.name || 'bypass'}-${selectedPalette}.png`;
+    const filename = `${GENERATION_CONFIG.DOWNLOAD_FILENAME_PREFIX}-${(((curve as any)['name']) || ((curve as any)['curve-name']))}-${coordinateNoise?.name || 'bypass'}-${selectedPalette}.png`;
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = filename;
@@ -593,7 +593,7 @@ self.onmessage = (e) => {
     const noiseId = coordinateNoise?.name || 'bypass-mode';
     
     const result = lastGenerationParams === null ||
-      lastGenerationParams.curveId !== curve['curve-name'] ||
+      lastGenerationParams.curveId !== (((curve as any)['name']) || ((curve as any)['curve-name'])) ||
       lastGenerationParams.noiseId !== noiseId ||
       lastGenerationParams.noiseCalc !== (curve['noise-calc'] || 'radial') ||
       lastGenerationParams.palette !== selectedPalette ||
@@ -603,7 +603,7 @@ self.onmessage = (e) => {
       result,
       lastParams: lastGenerationParams,
       currentParams: {
-        curveId: curve['curve-name'],
+        curveId: ((curve as any)['name']) || ((curve as any)['curve-name']),
         noiseId: noiseId,
         noiseCalc: curve['noise-calc'] || 'radial',
         palette: selectedPalette,
@@ -930,7 +930,7 @@ self.onmessage = (e) => {
       isGenerating,
       needsRegeneration,
       hasGeneratedImage: !!generatedImage,
-      curveName: curve?.['curve-name'],
+      curveName: (curve as any)?.['name'] || (curve as any)?.['curve-name'],
       noiseName: coordinateNoise?.name
     });
 
@@ -1007,7 +1007,7 @@ self.onmessage = (e) => {
               <div>
                 <div>Ready to generate {getImageSize()}×{getImageSize()} PNG visualization</div>
                 <div style={{ marginTop: '8px', fontSize: '14px', color: '#555' }}>
-                  Using {coordinateNoise ? coordinateNoise.name : 'bypass mode'} with {curve['curve-name']}
+                  Using {coordinateNoise ? coordinateNoise.name : 'bypass mode'} with {((curve as any)['name'] || (curve as any)['curve-name'])}
                 </div>
               </div>
             )}
