@@ -4,6 +4,29 @@ import React from 'react'
 import logoUrl from '../assets/logo.svg'
 import './Header.css'
 import { useAuth } from '../contexts/AuthContext'
+// Asset URLs (bundled by Vite)
+// @ts-ignore
+import iconYggdrasil from '../assets/icons/yggdrasil.svg'
+// @ts-ignore
+import iconCurve from '../assets/icons/curve-builder.svg'
+// @ts-ignore
+import iconBands from '../assets/icons/bands.svg'
+// @ts-ignore
+import iconJackets from '../assets/icons/jackets.svg'
+// @ts-ignore
+import iconRepo from '../assets/icons/repo-man.svg'
+// @ts-ignore
+import iconTags from '../assets/icons/tag-manager.svg'
+// @ts-ignore
+import iconLoom from '../assets/icons/semantic-loom.svg'
+// @ts-ignore
+import iconMerzbow from '../assets/icons/merzbow.svg'
+// @ts-ignore
+import iconRainbow from '../assets/icons/rainbow.svg'
+// @ts-ignore
+import iconConfig from '../assets/icons/config-control.svg'
+// @ts-ignore
+import iconObjects from '../assets/icons/objects.svg'
 
 interface HeaderProps {
   title?: string
@@ -16,17 +39,17 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user, logout } = useAuth()
   const headerButtons = [
-    { href: '#', icon: '/src/assets/icons/yggdrasil.svg', title: 'YGGDRASIL', subtitle: 'tend the world tree' },
-    { href: '#', icon: '/src/assets/icons/curve-builder.svg', title: 'CURVE BUILDER', subtitle: 'the heart of smooth randomness' },
-    { href: '#', icon: '/src/assets/icons/bands.svg', title: 'BANDS', subtitle: 'numbers take actions' },
-    { href: '#', icon: '/src/assets/icons/jackets.svg', title: 'WRAP JACKETS', subtitle: 'wrap curves in functionality' },
-    { href: 'https://github.com/themightyboosh/', icon: '/src/assets/icons/repo-man.svg', title: 'REPO MAN', subtitle: 'get some github lub', target: '_blank' as const },
-    { href: '#', icon: '/src/assets/icons/tag-manager.svg', title: 'TAG MANAGER', subtitle: 'describe a thing' },
-    { href: '#', icon: '/src/assets/icons/semantic-loom.svg', title: 'SEMANTIC LOOM', subtitle: 'AI synthetic poetic myth maker' },
-    { href: '#', icon: '/src/assets/icons/merzbow.svg', title: 'MERZBOW', subtitle: 'manage the noise formulas' },
-    { href: '#', icon: '/src/assets/icons/rainbow.svg', title: 'RAINBOW', subtitle: 'manage the color pallettes' },
-    { href: '/config', icon: '/src/assets/icons/config-control.svg', title: 'CONFIG & CONTROL', subtitle: 'manage settings and server configs' },
-    { href: '#', icon: '/src/assets/icons/objects.svg', title: 'OBJECTS', subtitle: 'where the things are' },
+    { href: '#', icon: iconYggdrasil as unknown as string, title: 'YGGDRASIL', subtitle: 'tend the world tree' },
+    { href: '#', icon: iconCurve as unknown as string, title: 'CURVE BUILDER', subtitle: 'the heart of smooth randomness' },
+    { href: '#', icon: iconBands as unknown as string, title: 'BANDS', subtitle: 'numbers take actions' },
+    { href: '#', icon: iconJackets as unknown as string, title: 'WRAP JACKETS', subtitle: 'wrap curves in functionality' },
+    { href: 'https://github.com/themightyboosh/', icon: iconRepo as unknown as string, title: 'REPO MAN', subtitle: 'get some github lub', target: '_blank' as const },
+    { href: '#', icon: iconTags as unknown as string, title: 'TAG MANAGER', subtitle: 'describe a thing' },
+    { href: '#', icon: iconLoom as unknown as string, title: 'SEMANTIC LOOM', subtitle: 'AI synthetic poetic myth maker' },
+    { href: '#', icon: iconMerzbow as unknown as string, title: 'MERZBOW', subtitle: 'manage the noise formulas' },
+    { href: '#', icon: iconRainbow as unknown as string, title: 'RAINBOW', subtitle: 'manage the color pallettes' },
+    { href: '/config', icon: iconConfig as unknown as string, title: 'CONFIG & CONTROL', subtitle: 'manage settings and server configs' },
+    { href: '#', icon: iconObjects as unknown as string, title: 'OBJECTS', subtitle: 'where the things are' },
   ]
   return (
     <header className="cnidaria-header">

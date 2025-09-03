@@ -101,8 +101,7 @@
   left: 0;
   right: 0;
   top: 85px;
-  background: linear-gradient(180deg, rgba(18,8,26,0.98), rgba(27,15,42,0.94));
-  background-image: url('/src/assets/textures/tentacles.svg');
+  background: linear-gradient(180deg, rgba(18,8,26,0.98), rgba(27,15,42,0.94)), url('../assets/textures/tentacles.svg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
