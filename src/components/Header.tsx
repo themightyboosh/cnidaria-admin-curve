@@ -3,6 +3,7 @@ import React from 'react'
 // @ts-ignore - vite svg import as URL
 import logoUrl from '../assets/logo.svg'
 import './Header.css'
+import { useAuth } from '../contexts/AuthContext'
 
 interface HeaderProps {
   title?: string
@@ -13,17 +14,18 @@ const Header: React.FC<HeaderProps> = ({
   title = "Cnidaria",
   currentPage = "Dashboard"
 }) => {
+  const { user, logout } = useAuth()
   const headerButtons = [
     { href: '#', icon: '/src/assets/icons/yggdrasil.svg', title: 'YGGDRASIL', subtitle: 'tend the world tree' },
     { href: '#', icon: '/src/assets/icons/curve-builder.svg', title: 'CURVE BUILDER', subtitle: 'the heart of smooth randomness' },
     { href: '#', icon: '/src/assets/icons/bands.svg', title: 'BANDS', subtitle: 'numbers take actions' },
-    { href: '#', icon: '/src/assets/icons/jackets.svg', title: 'JACKETS', subtitle: 'wrap curves in functionality' },
+    { href: '#', icon: '/src/assets/icons/jackets.svg', title: 'WRAP JACKETS', subtitle: 'wrap curves in functionality' },
     { href: 'https://github.com/themightyboosh/', icon: '/src/assets/icons/repo-man.svg', title: 'REPO MAN', subtitle: 'get some github lub', target: '_blank' as const },
     { href: '#', icon: '/src/assets/icons/tag-manager.svg', title: 'TAG MANAGER', subtitle: 'describe a thing' },
     { href: '#', icon: '/src/assets/icons/semantic-loom.svg', title: 'SEMANTIC LOOM', subtitle: 'AI synthetic poetic myth maker' },
     { href: '#', icon: '/src/assets/icons/merzbow.svg', title: 'MERZBOW', subtitle: 'manage the noise formulas' },
     { href: '#', icon: '/src/assets/icons/rainbow.svg', title: 'RAINBOW', subtitle: 'manage the color pallettes' },
-    { href: '#', icon: '/src/assets/icons/config-control.svg', title: 'CONFIG & CONTROL', subtitle: 'manage settings and server configs' },
+    { href: '/config', icon: '/src/assets/icons/config-control.svg', title: 'CONFIG & CONTROL', subtitle: 'manage settings and server configs' },
     { href: '#', icon: '/src/assets/icons/objects.svg', title: 'OBJECTS', subtitle: 'where the things are' },
   ]
   return (
@@ -51,7 +53,13 @@ const Header: React.FC<HeaderProps> = ({
           ))}
         </nav>
         <div className="header-actions">
-          <div className="logout-placeholder">logout</div>
+          {user && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
+              <span style={{ fontSize: 12, color: '#a3a9b7' }}>{user.email}</span>
+            </div>
+          )}
+          <button className="logout-placeholder" onClick={logout}>Sign out</button>
         </div>
       </div>
     </header>

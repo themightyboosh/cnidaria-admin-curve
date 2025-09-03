@@ -6,6 +6,9 @@ import WaveEditor from '../pages/WaveEditor'
 import TagManager from '../pages/TagManager'
 import WorldView from '../pages/WorldView/index'
 import ErrorBoundary from '../components/ErrorBoundary'
+import ProtectedRoute from '../components/ProtectedRoute'
+import Login from '../pages/Login'
+import ConfigControl from '../pages/ConfigControl'
 
 export const router = createBrowserRouter([
   {
@@ -17,29 +20,18 @@ export const router = createBrowserRouter([
         index: true,
         element: <Menu />
       },
+      { path: 'login', element: <Login /> },
       {
-        path: 'curves',
-        element: <CurveBuilder />
-      },
-      {
-        path: 'curves/:curveId',
-        element: <CurveBuilder />
-      },
-      {
-        path: 'tags',
-        element: <TagManager />
-      },
-      {
-        path: 'wave-editor',
-        element: <WaveEditor />
-      },
-      {
-        path: 'wave-editor/:curveId',
-        element: <WaveEditor />
-      },
-      {
-        path: 'world-view',
-        element: <WorldView />
+        element: <ProtectedRoute />,
+        children: [
+          { path: 'config', element: <ConfigControl /> },
+          { path: 'curves', element: <CurveBuilder /> },
+          { path: 'curves/:curveId', element: <CurveBuilder /> },
+          { path: 'tags', element: <TagManager /> },
+          { path: 'wave-editor', element: <WaveEditor /> },
+          { path: 'wave-editor/:curveId', element: <WaveEditor /> },
+          { path: 'world-view', element: <WorldView /> }
+        ]
       }
     ]
   }
