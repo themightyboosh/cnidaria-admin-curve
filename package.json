@@ -16,7 +16,14 @@
     "cloud-run:status": "gcloud run services list --region=us-central1",
     "cloud-run:logs:dev": "gcloud run services logs read cnidaria-admin-curves-dev --region=us-central1",
     "cloud-run:logs:stage": "gcloud run services logs read cnidaria-admin-curves-stage --region=us-central1",
-    "cloud-run:logs:prod": "gcloud run services logs read cnidaria-admin-curves-prod --region=us-central1"
+    "cloud-run:logs:prod": "gcloud run services logs read cnidaria-admin-curves-prod --region=us-central1",
+    "version:patch": "pnpm version patch --no-git-tag-version",
+    "version:minor": "pnpm version minor --no-git-tag-version",
+    "version:major": "pnpm version major --no-git-tag-version",
+    "version:check": "echo $npm_package_version",
+    "version:current": "node -p \"require('./package.json').version\"",
+    "version:bump": "node scripts/version-bump.js",
+    "version:auto": "node scripts/version-bump.js --auto"
   },
   "dependencies": {
     "firebase": "^12.2.1",

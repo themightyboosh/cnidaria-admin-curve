@@ -1,0 +1,194 @@
+/* ConfigControl Page Styles - Matches CurveBuilder styling */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Left Pane */
+.left-pane {
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+  flex-shrink: 0;
+  background-color: #2a2a2a;
+  border-right: 1px solid #444;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Info Sections */
+.info-section {
+  margin-bottom: 20px;
+  background-color: #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.collapsible-header {
+  background-color: #444;
+  color: #ffffff;
+  padding: 7.5px 10px;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+  background-color: #555;
+}
+
+.toggle-icon {
+  margin-right: 10px;
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+.section-content {
+  padding: 20px;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.form-group select {
+  cursor: pointer;
+}
+
+/* Info Items */
+.info-item {
+  margin-bottom: 12px;
+  padding: 8px 0;
+  color: #ccc;
+}
+
+.info-item strong {
+  color: #ffffff;
+}
+
+/* Button Styles */
+.manage-tags-btn {
+  background-color: #444;
+  color: #ffffff;
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.manage-tags-btn:hover {
+  background-color: #555;
+  border-color: #777;
+}
+
+.manage-tags-btn:active {
+  background-color: #333;
+}
+
+.manage-tags-btn.active {
+  background-color: #007acc;
+  border-color: #0066aa;
+}
+
+.manage-tags-btn.active:hover {
+  background-color: #0066aa;
+  transform: translateY(-1px);
+}
+
+/* Canvas Area */
+.canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: #000;
+}
+
+.grid-canvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000;
+  overflow-y: auto;
+}
+
+/* Loading States */
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+  
+  .left-pane {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+  }
+  
+  .canvas-area {
+    height: 50vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .left-pane {
+    padding: 15px;
+  }
+  
+  .section-content {
+    padding: 15px;
+  }
+}

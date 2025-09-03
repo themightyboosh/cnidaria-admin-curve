@@ -52,7 +52,6 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
     <div className={`admin-layout ${className}`}>
       <Header 
         title={pageInfo.title}
-        subtitle={pageInfo.subtitle}
         currentPage={getCurrentPage()}
       />
       

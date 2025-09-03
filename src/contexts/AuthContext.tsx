@@ -28,6 +28,11 @@ export const useAuth = (): AuthContextType => {
 }
 
 async function fetchApproval(idToken: string): Promise<{ approved: boolean; role: Role | null }> {
+  // Dev bypass: auto-approve in development environment
+  if (environment === 'development') {
+    return { approved: true, role: 'admin' }
+  }
+  
   try {
     const res = await fetch(`${apiUrl}/auth/approval`, {
       method: 'GET',

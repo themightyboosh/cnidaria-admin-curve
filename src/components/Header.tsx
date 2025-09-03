@@ -1,4 +1,5 @@
 import React from 'react'
+import { useLocation } from 'react-router-dom'
 // Static SVG logo (no interactivity)
 // @ts-ignore - vite svg import as URL
 import logoUrl from '../assets/logo.svg'
@@ -38,9 +39,11 @@ const Header: React.FC<HeaderProps> = ({
   currentPage = "Dashboard"
 }) => {
   const { user, logout } = useAuth()
+  const location = useLocation()
+  const isLoginPage = location.pathname === '/'
   const headerButtons = [
     { href: '#', icon: iconYggdrasil as unknown as string, title: 'YGGDRASIL', subtitle: 'tend the world tree' },
-    { href: '#', icon: iconCurve as unknown as string, title: 'CURVE BUILDER', subtitle: 'the heart of smooth randomness' },
+    { href: '/curves', icon: iconCurve as unknown as string, title: 'CURVE BUILDER', subtitle: 'the heart of smooth randomness' },
     { href: '#', icon: iconBands as unknown as string, title: 'BANDS', subtitle: 'numbers take actions' },
     { href: '#', icon: iconJackets as unknown as string, title: 'WRAP JACKETS', subtitle: 'wrap curves in functionality' },
     { href: 'https://github.com/themightyboosh/', icon: iconRepo as unknown as string, title: 'REPO MAN', subtitle: 'get some github lub', target: '_blank' as const },
@@ -52,7 +55,7 @@ const Header: React.FC<HeaderProps> = ({
     { href: '#', icon: iconObjects as unknown as string, title: 'OBJECTS', subtitle: 'where the things are' },
   ]
   return (
-    <header className="cnidaria-header">
+    <header className={`cnidaria-header ${isLoginPage ? 'login-page' : ''}`}>
       <div className="header-content">
         <div className="logo-section">
           <div className="logo">
@@ -62,19 +65,21 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         </div>
-        <nav className="header-button-group" aria-label="Mega menu">
-          {headerButtons.map((btn) => (
-            <a href={btn.href} key={btn.title} className="header-button" target={(btn as any).target || undefined} rel={(btn as any).target === '_blank' ? 'noopener noreferrer' : undefined}>
-              <span className="header-button-icon">
-                <img src={btn.icon} alt="" />
-              </span>
-              <span className="header-button-text">
-                <span className="header-button-title">{btn.title}</span>
-                <span className="header-button-subtitle">{btn.subtitle}</span>
-              </span>
-            </a>
-          ))}
-        </nav>
+        {!isLoginPage && (
+          <nav className="header-button-group" aria-label="Mega menu">
+            {headerButtons.map((btn) => (
+              <a href={btn.href} key={btn.title} className="header-button" target={(btn as any).target || undefined} rel={(btn as any).target === '_blank' ? 'noopener noreferrer' : undefined}>
+                <span className="header-button-icon">
+                  <img src={btn.icon} alt="" />
+                </span>
+                <span className="header-button-text">
+                  <span className="header-button-title">{btn.title}</span>
+                  <span className="header-button-subtitle">{btn.subtitle}</span>
+                </span>
+              </a>
+            ))}
+          </nav>
+        )}
         <div className="header-actions">
           {user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -82,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({
               <span style={{ fontSize: 12, color: '#a3a9b7' }}>{user.email}</span>
             </div>
           )}
-          <button className="logout-placeholder" onClick={logout}>Sign out</button>
+          {user && <button className="logout-placeholder" onClick={logout}>Sign out</button>}
         </div>
       </div>
     </header>

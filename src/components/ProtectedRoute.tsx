@@ -7,7 +7,7 @@ const ProtectedRoute: React.FC = () => {
   const location = useLocation()
   if (loading) return null
   if (!user || !approved) {
-    return <Navigate to="/login" replace state={{ from: location }} />
+    return <Navigate to="/" replace state={{ from: location }} />
   }
   return <Outlet />
 }

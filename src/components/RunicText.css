@@ -1,0 +1,73 @@
+/* Runic Text Component - Simplified Letter-by-Letter Swap */
+
+.runic-text-container {
+  position: relative;
+  display: block;
+}
+
+.runic-letter {
+  display: inline-block;
+  position: relative;
+  font-family: 'Exo', sans-serif;
+  /* Let Exo font determine natural spacing - no width constraints */
+}
+
+/* Runic overlay - positioned over the natural Exo letter */
+.runic-letter::before {
+  content: attr(data-runic);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Hide runic overlay when revealed */
+.runic-letter.revealed::before {
+  opacity: 0;
+}
+
+/* Original Exo letter - always present with natural spacing, but invisible initially */
+.runic-letter {
+  color: inherit;
+  opacity: 0;
+}
+
+.runic-letter.revealed {
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.runic-letter.revealed {
+  /* Smooth transition when swapping to original letter */
+  transform: scale(1.05);
+  animation: letter-reveal 0.3s ease-out forwards;
+}
+
+@keyframes letter-reveal {
+  0% {
+    transform: scale(1.05);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Hover effect for revealed letters */
+.runic-letter.revealed:hover {
+  transform: scale(1.02);
+}

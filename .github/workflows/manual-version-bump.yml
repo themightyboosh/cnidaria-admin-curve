@@ -1,0 +1,196 @@
+name: Manual Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      branch:
+        description: 'Target branch'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - main
+          - prod
+
+jobs:
+  manual-version-bump:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action (Manual)"
+
+      - name: Get current version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Validate bump type for branch
+        run: |
+          BRANCH="${{ github.event.inputs.branch }}"
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+          
+          echo "Manual version bump requested:"
+          echo "- Branch: $BRANCH"
+          echo "- Bump Type: $BUMP_TYPE"
+          
+          # Warning for non-standard combinations
+          case $BRANCH in
+            "dev")
+              if [ "$BUMP_TYPE" != "patch" ]; then
+                echo "⚠️ WARNING: Dev branch typically uses patch bumps, but $BUMP_TYPE was requested"
+              fi
+              ;;
+            "staging")
+              if [ "$BUMP_TYPE" != "minor" ]; then
+                echo "⚠️ WARNING: Staging branch typically uses minor bumps, but $BUMP_TYPE was requested"
+              fi
+              ;;
+            "main"|"prod")
+              if [ "$BUMP_TYPE" != "major" ]; then
+                echo "⚠️ WARNING: Main/prod branch typically uses major bumps, but $BUMP_TYPE was requested"
+              fi
+              ;;
+          esac
+
+      - name: Bump version
+        id: version-bump
+        run: |
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+          echo "Performing manual $BUMP_TYPE version bump"
+          
+          # Use pnpm to bump version
+          pnpm version $BUMP_TYPE --no-git-tag-version
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version in other files
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          
+          # Update version in version.ts
+          if [ -f "src/config/version.ts" ]; then
+            sed -i "s/export const VERSION = .*/export const VERSION = '$NEW_VERSION'/" src/config/version.ts
+            echo "Updated src/config/version.ts"
+          fi
+          
+          # Update version in environments.ts if it exists
+          if [ -f "src/config/environments.ts" ]; then
+            sed -i "s/version: .*/version: '$NEW_VERSION',/" src/config/environments.ts
+            echo "Updated src/config/environments.ts"
+          fi
+
+      - name: Create commit and tag
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          BRANCH="${{ github.event.inputs.branch }}"
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+          
+          # Add all changed files
+          git add .
+          
+          # Create commit with manual indicator
+          git commit -m "chore($BRANCH): manual bump version to $NEW_VERSION [$BUMP_TYPE]
+          
+          - Manual version bump from ${{ steps.current-version.outputs.current_version }} to $NEW_VERSION
+          - Requested by: ${{ github.actor }}
+          - Target branch: $BRANCH
+          - Bump type: $BUMP_TYPE"
+          
+          # Create git tag
+          git tag -a "v$NEW_VERSION" -m "Version $NEW_VERSION - Manual $BUMP_TYPE bump on $BRANCH by ${{ github.actor }}"
+          
+          echo "Created commit and tag for version $NEW_VERSION"
+
+      - name: Push changes
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          BRANCH="${{ github.event.inputs.branch }}"
+          
+          # Push the commit and tag
+          git push origin $BRANCH
+          git push origin "v$NEW_VERSION"
+          
+          echo "Pushed version $NEW_VERSION to $BRANCH"
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version-bump.outputs.new_version }}
+          release_name: Release v${{ steps.version-bump.outputs.new_version }} (Manual)
+          body: |
+            ## Version ${{ steps.version-bump.outputs.new_version }} (Manual Release)
+            
+            **Branch**: `${{ github.event.inputs.branch }}`  
+            **Bump Type**: `${{ github.event.inputs.bump_type }}`  
+            **Previous Version**: `${{ steps.current-version.outputs.current_version }}`  
+            **Requested By**: @${{ github.actor }}
+            
+            ### Changes
+            - Manual ${{ github.event.inputs.bump_type }} version bump
+            - Triggered manually on `${{ github.event.inputs.branch }}` branch
+            
+            ### Branch Versioning Strategy
+            - `dev` → patch (0.0.+1) *recommended*
+            - `staging` → minor (0.+1.0) *recommended*  
+            - `main/prod` → major (+1.0.0) *recommended*
+            
+            ---
+            *This release was manually triggered via GitHub Actions workflow*
+          draft: false
+          prerelease: ${{ github.event.inputs.branch != 'main' && github.event.inputs.branch != 'prod' }}
+
+      - name: Summary
+        run: |
+          echo "## Manual Version Bump Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Requested By**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.event.inputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Type**: \`${{ github.event.inputs.bump_type }}\`" >> $GITHUB_STEP_SUMMARY  
+          echo "- **Previous Version**: \`${{ steps.current-version.outputs.current_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version**: \`${{ steps.version-bump.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Tag**: \`v${{ steps.version-bump.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release**: [v${{ steps.version-bump.outputs.new_version }}](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version-bump.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,195 @@
+name: Semantic Versioning
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+      - prod
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+      - prod
+    types: [closed]
+
+jobs:
+  semantic-version:
+    # Only run on merged PRs or direct pushes to target branches
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Determine version bump type
+        id: version-type
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          echo "Branch: $BRANCH_NAME"
+          
+          case $BRANCH_NAME in
+            "dev")
+              echo "bump_type=patch" >> $GITHUB_OUTPUT
+              echo "Version bump: PATCH (dev branch)"
+              ;;
+            "staging")
+              echo "bump_type=minor" >> $GITHUB_OUTPUT
+              echo "Version bump: MINOR (staging branch)"
+              ;;
+            "main"|"prod")
+              echo "bump_type=major" >> $GITHUB_OUTPUT
+              echo "Version bump: MAJOR (main/prod branch)"
+              ;;
+            *)
+              echo "bump_type=none" >> $GITHUB_OUTPUT
+              echo "No version bump for branch: $BRANCH_NAME"
+              ;;
+          esac
+
+      - name: Get current version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Bump version
+        if: steps.version-type.outputs.bump_type != 'none'
+        id: version-bump
+        run: |
+          BUMP_TYPE="${{ steps.version-type.outputs.bump_type }}"
+          echo "Bumping version: $BUMP_TYPE"
+          
+          # Use pnpm to bump version
+          pnpm version $BUMP_TYPE --no-git-tag-version
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version in other files
+        if: steps.version-type.outputs.bump_type != 'none'
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          
+          # Update version in any additional files if needed
+          # Example: Update version in a constants file
+          if [ -f "src/config/version.ts" ]; then
+            sed -i "s/export const VERSION = .*/export const VERSION = '$NEW_VERSION'/" src/config/version.ts
+          fi
+          
+          # Update version in environment files if they exist
+          if [ -f "src/config/environments.ts" ]; then
+            sed -i "s/version: .*/version: '$NEW_VERSION',/" src/config/environments.ts
+          fi
+
+      - name: Create commit and tag
+        if: steps.version-type.outputs.bump_type != 'none'
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          BRANCH_NAME="${{ github.ref_name }}"
+          BUMP_TYPE="${{ steps.version-type.outputs.bump_type }}"
+          
+          # Add all changed files
+          git add .
+          
+          # Create commit with conventional format
+          git commit -m "chore($BRANCH_NAME): bump version to $NEW_VERSION [$BUMP_TYPE]
+          
+          - Automated version bump from ${{ steps.current-version.outputs.current_version }} to $NEW_VERSION
+          - Triggered by push to $BRANCH_NAME branch
+          - Bump type: $BUMP_TYPE"
+          
+          # Create git tag
+          git tag -a "v$NEW_VERSION" -m "Version $NEW_VERSION - $BUMP_TYPE bump from $BRANCH_NAME"
+          
+          echo "Created commit and tag for version $NEW_VERSION"
+
+      - name: Push changes
+        if: steps.version-type.outputs.bump_type != 'none'
+        run: |
+          NEW_VERSION="${{ steps.version-bump.outputs.new_version }}"
+          
+          # Push the commit and tag
+          git push origin ${{ github.ref_name }}
+          git push origin "v$NEW_VERSION"
+          
+          echo "Pushed version $NEW_VERSION to ${{ github.ref_name }}"
+
+      - name: Create GitHub Release
+        if: steps.version-type.outputs.bump_type != 'none'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version-bump.outputs.new_version }}
+          release_name: Release v${{ steps.version-bump.outputs.new_version }}
+          body: |
+            ## Version ${{ steps.version-bump.outputs.new_version }}
+            
+            **Branch**: `${{ github.ref_name }}`  
+            **Bump Type**: `${{ steps.version-type.outputs.bump_type }}`  
+            **Previous Version**: `${{ steps.current-version.outputs.current_version }}`  
+            
+            ### Changes
+            - Automated ${{ steps.version-type.outputs.bump_type }} version bump
+            - Triggered by push to `${{ github.ref_name }}` branch
+            
+            ### Branch Versioning Strategy
+            - `dev` → patch (0.0.+1)
+            - `staging` → minor (0.+1.0)  
+            - `main/prod` → major (+1.0.0)
+            
+            ---
+            *This release was automatically generated by GitHub Actions*
+          draft: false
+          prerelease: ${{ github.ref_name != 'main' && github.ref_name != 'prod' }}
+
+      - name: Summary
+        if: steps.version-type.outputs.bump_type != 'none'
+        run: |
+          echo "## Version Bump Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Type**: \`${{ steps.version-type.outputs.bump_type }}\`" >> $GITHUB_STEP_SUMMARY  
+          echo "- **Previous Version**: \`${{ steps.current-version.outputs.current_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version**: \`${{ steps.version-bump.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Tag**: \`v${{ steps.version-bump.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release**: [v${{ steps.version-bump.outputs.new_version }}](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version-bump.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY
+
+      - name: No version bump
+        if: steps.version-type.outputs.bump_type == 'none'
+        run: |
+          echo "## No Version Bump" >> $GITHUB_STEP_SUMMARY
+          echo "No version bump performed for branch: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Version bumps are only performed on: \`dev\`, \`staging\`, \`main\`, \`prod\`" >> $GITHUB_STEP_SUMMARY

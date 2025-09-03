@@ -1,18 +1,55 @@
 /* index.css - Global styles and CSS reset */
 
+@import url('https://fonts.googleapis.com/css2?family=Exo:wght@200;400;600;700;800&display=swap');
+
 :root {
-  --accent-primary: #007acc;
-  --accent-secondary: #005a9e;
-  --background-color: #1a1a1a;
-  --foreground-color: #ffffff;
+  /* Color system from style guide */
+  --background-color: #0b0b0f;
+  --surface-1: #121218;
+  --surface-2: #1a1a22;
+  --card-bg: #15151b;
+  --foreground-color: #f2f4f8;
+  --text-muted: #a3a9b7;
+  --border-subtle: #272a34;
+  --accent-primary: #0b8cff;
+  --accent-secondary: #7c3aed;
+  --accent-azure: #008cff;
+
+  /* Legacy variables for compatibility */
   --text-secondary: #cccccc;
-  --text-muted: #888888;
   --border-color: #444444;
-  --card-bg: #2a2a2a;
   --card-bg-secondary: #333333;
   --error-color: #dc3545;
   --success-color: #28a745;
   --warning-color: #ffc107;
+
+  /* Spacing scale (8pt grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* Radii */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 12px;
+
+  /* Shadows */
+  --shadow-1: 0 4px 12px rgba(0,0,0,0.30);
+  --shadow-2: 0 10px 28px rgba(0,0,0,0.45);
+
+  /* Typography */
+  --font-sans: 'Exo', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --fs-12: 12px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-22: 22px;
+  --fs-32: 32px;
 }
 
 * {
@@ -27,8 +64,7 @@ html, body {
 }
 
 body {
-  font-family: 'Exo', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', sans-serif;
+  font-family: var(--font-sans);
   background-color: var(--background-color);
   color: var(--foreground-color);
   line-height: 1.6;
@@ -78,6 +114,201 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #666;
+}
+
+/* Layout classes from style guide */
+.page-content {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: var(--space-5);
+  height: calc(100dvh - 85px);
+  width: 100vw;
+  max-width: 100%;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  padding: var(--space-4);
+}
+
+.main {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Canvas area placeholder (use this wrapper for visual consistency) */
+.canvas-area {
+  background: #000;
+  border: 1px solid #333;
+  border-radius: var(--radius-2);
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-logo {
+  width: 80%;
+  height: auto;
+  opacity: .15;
+  filter: drop-shadow(0 4px 20px rgba(0,0,0,.6));
+}
+
+/* Core components */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--foreground-color);
+  cursor: pointer;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(11,140,255,0.15) inset;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0057c2, #008cff);
+  border-color: #0b8cff;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #7a1f1f, #c62828);
+  border-color: #d32f2f;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.section-title {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--fs-18);
+  font-weight: 700;
+}
+
+/* Runic Transformation Animation */
+@keyframes runic-transform {
+  0% { 
+    content: attr(data-runic);
+    opacity: 1;
+  }
+  70% { 
+    content: attr(data-runic);
+    opacity: 1;
+  }
+  85% {
+    opacity: 0.3;
+  }
+  100% { 
+    content: attr(data-original);
+    opacity: 1;
+  }
+}
+
+.runic-char {
+  position: relative;
+  display: inline-block;
+  animation: runic-transform var(--duration, 2s) ease-in-out forwards;
+  animation-delay: var(--delay, 0s);
+}
+
+.runic-char::before {
+  content: 'ᚱ'; /* Default runic character - will be random */
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 1;
+  animation: runic-fade-out var(--duration, 2s) ease-in-out forwards;
+  animation-delay: var(--delay, 0s);
+  z-index: 1;
+}
+
+.runic-char {
+  z-index: 2;
+}
+
+/* Random runic characters for variety */
+.runic-char:nth-child(2n)::before { content: 'ᚠ'; }
+.runic-char:nth-child(3n)::before { content: 'ᚢ'; }
+.runic-char:nth-child(4n)::before { content: 'ᚦ'; }
+.runic-char:nth-child(5n)::before { content: 'ᚨ'; }
+.runic-char:nth-child(6n)::before { content: 'ᚱ'; }
+.runic-char:nth-child(7n)::before { content: 'ᚲ'; }
+.runic-char:nth-child(8n)::before { content: 'ᚷ'; }
+.runic-char:nth-child(9n)::before { content: 'ᚹ'; }
+.runic-char:nth-child(10n)::before { content: 'ᚻ'; }
+.runic-char:nth-child(11n)::before { content: 'ᚾ'; }
+.runic-char:nth-child(12n)::before { content: 'ᛁ'; }
+.runic-char:nth-child(13n)::before { content: 'ᛃ'; }
+.runic-char:nth-child(14n)::before { content: 'ᛇ'; }
+.runic-char:nth-child(15n)::before { content: 'ᛈ'; }
+.runic-char:nth-child(16n)::before { content: 'ᛉ'; }
+
+@keyframes runic-fade-out {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Runic paragraph animation */
+.runic-paragraph {
+  position: relative;
+  overflow: hidden;
+}
+
+.runic-paragraph::before {
+  content: 'ᚦᚢᚱ ᚹᚩᚱᛚᛞ ᛒᚢᛁᛚᛞᛖᚱᛋ ᚳᚩᚾᛏᚱᚩᛚ ᚳᛖᚾᛏᛖᚱ ᚠᚩᚱ ᛗᚪᚦᛖᛗᚪᛏᛁᚳᚪᛚ ᛏᛖᚱᚱᚪᛁᚾ ᚷᛖᚾᛖᚱᚪᛏᛁᚩᚾ ᚪᚾᛞ ᚳᚢᚱᚠᛖ ᚪᛞᛗᛁᚾᛁᛋᛏᚱᚪᛏᛁᚩᚾ';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  color: inherit;
+  opacity: 1;
+  animation: paragraph-runic-fade 3s ease-in-out forwards;
+  animation-delay: 0.5s;
+}
+
+.runic-paragraph:nth-child(2)::before {
+  content: 'ᚳᚱᚪᚠᛏ ᛁᚾᚠᛁᚾᛁᛏᛖ ᛚᚪᚾᛞᛋᚳᚪᛈᛖᛋ ᚦᚱᚢᚷᚻ ᚦᛖ ᛈᚩᚹᛖᚱ ᚩᚠ ᛈᚪᚱᚪᛗᛖᛏᚱᛁᚳ ᚳᚢᚱᚠᛖᛋ';
+  animation-delay: 1s;
+}
+
+.runic-paragraph:nth-child(3)::before {
+  content: 'ᛒᚪᚳᛁᛝ ᛁᚾ ᚦᛖ ᛈᚩᚹᛖᚱ ᚩᚠ ᚪᛁ ᚠᚱᚩᛗ ᚦᛖ ᚠᛚᚩᚱ ᚢᛈ ᛏᚩ ᛖᛗᛒᛖᛞ ᛗᚤᚦᛁᚳ ᛋᛏᚩᚱᚤᛏᛖᛚᛚᛁᛝ';
+  animation-delay: 1.5s;
+}
+
+.runic-paragraph:nth-child(4)::before {
+  content: 'ᛋᚻᚪᛈᛖ ᚱᛖᚪᛚᛁᛏᚤ ᚹᛁᚦ ᛗᚪᚦᛖᛗᚪᛏᛁᚳᛋ ᛒᚢᛁᛚᛞ ᚹᚩᚱᛚᛞᛋ ᚦᚪᛏ ᛒᚱᛖᚪᚦᛖ';
+  animation-delay: 2s;
+}
+
+@keyframes paragraph-runic-fade {
+  0% { opacity: 1; }
+  60% { opacity: 1; }
+  80% { opacity: 0.3; }
+  100% { opacity: 0; }
 }
 
 

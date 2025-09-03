@@ -18,9 +18,9 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Menu />
+        element: <Login />
       },
-      { path: 'login', element: <Login /> },
+      { path: 'menu', element: <ProtectedRoute><Menu /></ProtectedRoute> },
       {
         element: <ProtectedRoute />,
         children: [
