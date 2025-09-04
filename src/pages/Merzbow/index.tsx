@@ -602,6 +602,14 @@ const Merzbow: React.FC = () => {
         const savedData = await response.json()
         console.log('✅ DISTORTION CONTROL SAVED - API RESPONSE:', JSON.stringify(savedData, null, 2))
         setHasUnsavedChanges(false)
+        
+        // Update the local distortion controls cache with saved data
+        setAvailableDistortionControls(prev => 
+          prev.map(dp => dp.id === selectedDistortionControl.id ? 
+            { ...dp, ...savedData.data } : dp
+          )
+        )
+        console.log('🔄 Updated local DP cache with saved data')
       } else {
         const errorData = await response.text()
         console.error('❌ SAVE FAILED:', response.status, response.statusText)
