@@ -850,56 +850,15 @@ const Merzbow: React.FC = () => {
     }, 'image/jpeg', 0.95)
   }
 
-  // Export Unity shader
-  const exportUnityShader = () => {
+  // Export foundational curve-shader (GLSL only)
+  const exportCurveShader = () => {
     if (!selectedDistortionControl || !selectedCurve) {
-      console.warn('⚠️ Need distortion control and curve to export shader')
-      return
-    }
-
-    const shaderName = `Cnidaria/${toKebabCase(selectedDistortionControl.name)}`
-    
-    const shaderPackage = unityShaderGenerator.generateUnityPackage({
-      shaderName,
-      distortionControl: selectedDistortionControl,
-      curve: selectedCurve,
-      palette: selectedPalette,
-      includeComments: true,
-      optimizeForMobile: false
-    })
-
-    // Create and download shader file
-    const shaderContent = `${shaderPackage.shader}\n\n/*\n${shaderPackage.instructions}\n*/\n\n/*\n${shaderPackage.materialTemplate}\n*/`
-    const blob = new Blob([shaderContent], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    
-    link.href = url
-    link.download = `${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.shader`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    console.log(`🎮 Exported Unity shader: ${shaderName}`)
-    console.log('📋 Shader includes:')
-    console.log('  - Complete Pipeline F implementation')
-    console.log('  - All 17 distance calculation methods')
-    console.log('  - Fractal and angular distortion')
-    console.log('  - Procedural curve generation')
-    console.log('  - Embedded color palette')
-    console.log('  - Standalone (no external textures needed)')
-  }
-
-  // Export WebGL GLSL shader
-  const exportWebGLShader = () => {
-    if (!selectedDistortionControl || !selectedCurve) {
-      console.warn('⚠️ Need distortion control and curve to export WebGL shader')
+      console.warn('⚠️ Need distortion control and curve to export curve-shader')
       return
     }
 
     const shaderPackage = glslShaderGenerator.generateWebGLPackage({
-      shaderName: `${selectedDistortionControl.name} WebGL`,
+      shaderName: `CurveShader_${toKebabCase(selectedDistortionControl.name)}`,
       distortionControl: selectedDistortionControl,
       curve: selectedCurve,
       palette: selectedPalette,
@@ -907,20 +866,43 @@ const Merzbow: React.FC = () => {
       includeComments: true
     })
 
-    // Create and download shader files
-    const shaderContent = `// Vertex Shader\n${shaderPackage.vertexShader}\n\n// Fragment Shader\n${shaderPackage.fragmentShader}\n\n// JavaScript Setup\n${shaderPackage.uniformSetup}`
+    // Create foundational curve-shader file
+    const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
+// Generated from Merzbow Pipeline F
+// Classification: curve-shader (foundational)
+// 
+// This is a base curve-shader that can be used in higher-order shaders
+// for color, mesh distortion, and transparency applications.
+//
+${shaderPackage.fragmentShader}
+
+// ===== INTEGRATION NOTES =====
+// This curve-shader outputs a single pattern value that can be used as:
+// - Color input for materials
+// - Height displacement for mesh distortion  
+// - Alpha channel for transparency effects
+// - Mask for texture blending
+//
+// For complex materials, combine multiple curve-shaders in a higher-order shader.
+`
+    
     const blob = new Blob([shaderContent], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     
     link.href = url
-    link.download = `${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}-webgl.glsl`
+    link.download = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    console.log(`🌐 Exported WebGL GLSL shader for ${selectedDistortionControl.name}`)
+    console.log(`🎨 Exported foundational curve-shader: ${selectedDistortionControl.name}`)
+    console.log('📋 Curve-shader classification: FOUNDATIONAL')
+    console.log('  - Single pattern output')
+    console.log('  - Reusable in higher-order shaders')
+    console.log('  - Suitable for color, displacement, transparency')
+    console.log('  - Complete Pipeline F implementation')
   }
 
   return (
@@ -1197,22 +1179,14 @@ const Merzbow: React.FC = () => {
                       Export JPEG
                     </button>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                      onClick={exportUnityShader} 
-                      className="export-button unity"
-                      disabled={!selectedDistortionControl || !selectedCurve}
-                    >
-                      Unity Shader
-                    </button>
-                    <button 
-                      onClick={exportWebGLShader} 
-                      className="export-button webgl"
-                      disabled={!selectedDistortionControl || !selectedCurve}
-                    >
-                      WebGL GLSL
-                    </button>
-                  </div>
+                  <button 
+                    onClick={exportCurveShader} 
+                    className="export-button unity"
+                    style={{ width: '100%' }}
+                    disabled={!selectedDistortionControl || !selectedCurve}
+                  >
+                    Export Curve-Shader (GLSL)
+                  </button>
                 </div>
               </div>
             )}
