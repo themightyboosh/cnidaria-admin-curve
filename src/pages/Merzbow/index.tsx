@@ -1,10 +1,154 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
+import { apiUrl } from '../../config/environments'
 import './Merzbow.css'
+
+interface DistortionControl {
+  id: string
+  name: string
+  'angular-distortion': boolean
+  'fractal-distortion': boolean
+  'checkerboard-pattern': boolean
+  'distance-calculation': string
+  'distance-modulus': number
+  'curve-scaling': number
+  'checkerboard-steps': number
+  'angular-frequency': number
+  'angular-amplitude': number
+  'angular-offset': number
+  'fractal-scale-1': number
+  'fractal-scale-2': number
+  'fractal-scale-3': number
+  'fractal-strength': number
+  updatedAt?: string
+}
+
+interface Curve {
+  id: string
+  name: string
+  'curve-data': number[]
+  'curve-width': number
+}
+
+interface Palette {
+  id: string
+  name: string
+  hexColors: string[]
+  colorCount: number
+  hasAlpha: boolean
+  updatedAt?: string
+}
+
+// Curve Link Button Component
+const CurveLinkButton: React.FC<{
+  curveName: string
+  distortionControlId: string
+  onLink: () => void
+}> = ({ curveName, distortionControlId, onLink }) => {
+  const [isLinked, setIsLinked] = useState<boolean | null>(null)
+  const [isLinking, setIsLinking] = useState(false)
+
+  useEffect(() => {
+    const checkLink = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/distortion-control-links/curve/${curveName}`)
+        if (response.ok) {
+          const data = await response.json()
+          const linked = data.success && data.data.hasLink && data.data.distortionControl?.id === distortionControlId
+          setIsLinked(linked)
+        }
+      } catch (error) {
+        console.error('Failed to check link:', error)
+        setIsLinked(false)
+      }
+    }
+    checkLink()
+  }, [curveName, distortionControlId])
+
+  const handleLink = async () => {
+    setIsLinking(true)
+    try {
+      await onLink()
+      setIsLinked(true)
+    } catch (error) {
+      console.error('Failed to link:', error)
+    } finally {
+      setIsLinking(false)
+    }
+  }
+
+  if (isLinked === null) return <div>Checking link...</div>
+  if (isLinked) return null // Hide when linked
+
+  return (
+    <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
+      {isLinking ? '🔗 Linking...' : `🔗 Link to ${curveName}`}
+    </button>
+  )
+}
+
+// Palette Link Button Component
+const PaletteLinkButton: React.FC<{
+  distortionControlId: string
+  paletteId: string
+  onLink: () => void
+}> = ({ distortionControlId, paletteId, onLink }) => {
+  const [isLinked, setIsLinked] = useState<boolean | null>(null)
+  const [isLinking, setIsLinking] = useState(false)
+
+  useEffect(() => {
+    const checkLink = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/distortion-palette-links/distortion/${distortionControlId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const linked = data.success && data.data.hasLink && data.data.link?.paletteId === paletteId
+          setIsLinked(linked)
+        }
+      } catch (error) {
+        console.error('Failed to check palette link:', error)
+        setIsLinked(false)
+      }
+    }
+    checkLink()
+  }, [distortionControlId, paletteId])
+
+  const handleLink = async () => {
+    setIsLinking(true)
+    try {
+      await onLink()
+      setIsLinked(true)
+    } catch (error) {
+      console.error('Failed to link palette:', error)
+    } finally {
+      setIsLinking(false)
+    }
+  }
+
+  if (isLinked === null) return <div>Checking palette link...</div>
+  if (isLinked) return null // Hide when linked
+
+  return (
+    <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
+      {isLinking ? '🎨 Linking...' : '🎨 Link Palette'}
+    </button>
+  )
+}
 
 const Merzbow: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Database state
+  const [availableDistortionControls, setAvailableDistortionControls] = useState<DistortionControl[]>([])
+  const [selectedDistortionControl, setSelectedDistortionControl] = useState<DistortionControl | null>(null)
+  const [availableCurves, setAvailableCurves] = useState<Curve[]>([])
+  const [selectedCurve, setSelectedCurve] = useState<Curve | null>(null)
+  const [availablePalettes, setAvailablePalettes] = useState<Palette[]>([])
+  const [selectedPalette, setSelectedPalette] = useState<Palette | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
 
   // State for all Pipeline F parameters
   const [angularEnabled, setAngularEnabled] = useState(false)
@@ -29,6 +173,193 @@ const Merzbow: React.FC = () => {
   // Center offset for dragging
   const [centerOffsetX, setCenterOffsetX] = useState(0)
   const [centerOffsetY, setCenterOffsetY] = useState(0)
+
+  // Load available distortion controls from API
+  const loadDistortionControls = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-controls/firebase`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          const controls = data.data.distortionControls
+          setAvailableDistortionControls(controls)
+          
+          // Load most recently modified if no last active curve
+          if (controls.length > 0) {
+            const mostRecent = controls.sort((a: DistortionControl, b: DistortionControl) => 
+              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+            )[0]
+            
+            if (!lastActiveCurve) {
+              loadDistortionControl(mostRecent)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load distortion controls:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Load available curves from API
+  const loadCurves = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/curves`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setAvailableCurves(data.data.curves || [])
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load curves:', error)
+    }
+  }
+
+  // Load available palettes from API
+  const loadPalettes = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/palettes`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          const palettes = data.data.palettes
+          setAvailablePalettes(palettes)
+          
+          // Load default grayscale palette if available
+          const grayscale = palettes.find((p: Palette) => p.name.toLowerCase().includes('grayscale'))
+          if (grayscale && !selectedPalette) {
+            setSelectedPalette(grayscale)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load palettes:', error)
+    }
+  }
+
+  // Load distortion control into UI
+  const loadDistortionControl = (control: DistortionControl) => {
+    setSelectedDistortionControl(control)
+    setAngularEnabled(control['angular-distortion'])
+    setFractalEnabled(control['fractal-distortion'])
+    setCheckerboardEnabled(control['checkerboard-pattern'])
+    setDistanceCalc(control['distance-calculation'])
+    setDistanceModulus(control['distance-modulus'])
+    setCurveScaling(control['curve-scaling'])
+    setCheckerboardSteps(control['checkerboard-steps'])
+    setAngularFrequency(control['angular-frequency'])
+    setAngularAmplitude(control['angular-amplitude'])
+    setAngularOffset(control['angular-offset'])
+    setFractalScale1(control['fractal-scale-1'])
+    setFractalScale2(control['fractal-scale-2'])
+    setFractalScale3(control['fractal-scale-3'])
+    setFractalStrength(control['fractal-strength'])
+    setHasUnsavedChanges(false)
+  }
+
+  // Save current distortion control
+  const saveDistortionControl = async () => {
+    if (!selectedDistortionControl) return
+    
+    const updateData = {
+      name: selectedDistortionControl.name,
+      'angular-distortion': angularEnabled,
+      'fractal-distortion': fractalEnabled,
+      'checkerboard-pattern': checkerboardEnabled,
+      'distance-calculation': distanceCalc,
+      'distance-modulus': distanceModulus,
+      'curve-scaling': curveScaling,
+      'checkerboard-steps': checkerboardSteps,
+      'angular-frequency': angularFrequency,
+      'angular-amplitude': angularAmplitude,
+      'angular-offset': angularOffset,
+      'fractal-scale-1': fractalScale1,
+      'fractal-scale-2': fractalScale2,
+      'fractal-scale-3': fractalScale3,
+      'fractal-strength': fractalStrength
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-controls/${selectedDistortionControl.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      })
+
+      if (response.ok) {
+        setHasUnsavedChanges(false)
+        console.log('✅ Distortion control saved successfully')
+        // Reload to get updated timestamp
+        await loadDistortionControls()
+      }
+    } catch (error) {
+      console.error('Failed to save distortion control:', error)
+    }
+  }
+
+  // Check if curve is linked to current distortion control
+  const checkCurveLink = async (curveName: string) => {
+    if (!selectedDistortionControl) return false
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-control-links/curve/${curveName}`)
+      if (response.ok) {
+        const data = await response.json()
+        return data.success && data.data.hasLink && data.data.distortionControl?.id === selectedDistortionControl.id
+      }
+    } catch (error) {
+      console.error('Failed to check curve link:', error)
+    }
+    return false
+  }
+
+  // Link curve to current distortion control
+  const linkCurveToDistortionControl = async (curveName: string) => {
+    if (!selectedDistortionControl) return
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          curveId: curveName, 
+          distortionControlId: selectedDistortionControl.id 
+        })
+      })
+
+      if (response.ok) {
+        console.log(`✅ Linked ${curveName} to ${selectedDistortionControl.name}`)
+      }
+    } catch (error) {
+      console.error('Failed to link curve:', error)
+    }
+  }
+
+  // Link palette to current distortion control
+  const linkPaletteToDistortionControl = async () => {
+    if (!selectedDistortionControl || !selectedPalette) return
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-palette-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          distortionControlId: selectedDistortionControl.id,
+          paletteId: selectedPalette.id 
+        })
+      })
+
+      if (response.ok) {
+        console.log(`🎨 Linked palette ${selectedPalette.name} to distortion control ${selectedDistortionControl.name}`)
+      }
+    } catch (error) {
+      console.error('Failed to link palette:', error)
+    }
+  }
 
 
 
@@ -90,9 +421,12 @@ const Merzbow: React.FC = () => {
     
     console.log(`🔧 Processing Merzbow pattern: ${width}×${height}`)
 
-    // Dummy curve data
-    const dummyCurve = {
-      'curve-data': Array.from({ length: 256 }, (_, i) => i),
+    // Use selected curve data or default ramp
+    const curveData = selectedCurve ? {
+      'curve-data': selectedCurve['curve-data'],
+      'curve-width': selectedCurve['curve-width']
+    } : {
+      'curve-data': Array.from({ length: 256 }, (_, i) => i), // 0-255 ramp default
       'curve-width': 256
     }
 
@@ -170,8 +504,8 @@ const Merzbow: React.FC = () => {
 
           // Apply curve scaling and calculate index position
           const scaledFinalDistance = finalDistance * curveScaling
-          const indexPosition = Math.floor(Math.abs(scaledFinalDistance)) % dummyCurve['curve-width']
-          let curveValue = dummyCurve['curve-data'][indexPosition]
+          const indexPosition = Math.floor(Math.abs(scaledFinalDistance)) % curveData['curve-width']
+          let curveValue = curveData['curve-data'][indexPosition]
 
           // Apply checkerboard pattern
           if (checkerboardEnabled) {
@@ -182,12 +516,29 @@ const Merzbow: React.FC = () => {
             }
           }
 
-          // Set pixel color
-          const color = Math.floor(curveValue)
-          data[index + 0] = color // R
-          data[index + 1] = color // G
-          data[index + 2] = color // B
-          data[index + 3] = 255   // A
+          // Set pixel color using palette or default grayscale
+          if (selectedPalette && selectedPalette.hexColors) {
+            const paletteIndex = Math.floor(curveValue)
+            const hexColor = selectedPalette.hexColors[paletteIndex] || '#000000'
+            
+            // Parse hex color (supports both #RRGGBB and #RRGGBBAA)
+            const r = parseInt(hexColor.slice(1, 3), 16)
+            const g = parseInt(hexColor.slice(3, 5), 16)
+            const b = parseInt(hexColor.slice(5, 7), 16)
+            const a = hexColor.length === 9 ? parseInt(hexColor.slice(7, 9), 16) : 255
+            
+            data[index + 0] = r
+            data[index + 1] = g
+            data[index + 2] = b
+            data[index + 3] = a
+          } else {
+            // Default grayscale
+            const color = Math.floor(curveValue)
+            data[index + 0] = color // R
+            data[index + 1] = color // G
+            data[index + 2] = color // B
+            data[index + 3] = 255   // A
+          }
 
         } catch (error) {
           // Red for errors
@@ -206,6 +557,22 @@ const Merzbow: React.FC = () => {
     console.log('✅ Merzbow pattern complete')
   }
 
+  // Load data on mount
+  useEffect(() => {
+    loadDistortionControls()
+    loadCurves()
+    loadPalettes()
+  }, [])
+
+  // Mark as unsaved when parameters change
+  useEffect(() => {
+    if (selectedDistortionControl) {
+      setHasUnsavedChanges(true)
+    }
+  }, [angularEnabled, angularFrequency, angularAmplitude, angularOffset, 
+      fractalEnabled, fractalScale1, fractalScale2, fractalScale3, fractalStrength,
+      distanceCalc, distanceModulus, curveScaling, checkerboardEnabled, checkerboardSteps])
+
   // Auto-update when parameters change
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -215,7 +582,7 @@ const Merzbow: React.FC = () => {
   }, [angularEnabled, angularFrequency, angularAmplitude, angularOffset, 
       fractalEnabled, fractalScale1, fractalScale2, fractalScale3, fractalStrength,
       distanceCalc, distanceModulus, curveScaling, checkerboardEnabled, checkerboardSteps,
-      centerOffsetX, centerOffsetY])
+      centerOffsetX, centerOffsetY, selectedCurve, selectedPalette])
 
   // Initialize canvas to fill viewport with any aspect ratio
   useEffect(() => {
@@ -324,69 +691,289 @@ const Merzbow: React.FC = () => {
     e.preventDefault() // Prevent context menu when right-clicking for scaling
   }
 
+  // Export canvas in various formats
+  const exportImage = (format: string, quality: number = 1.0) => {
+    if (!canvasRef.current) return
+    
+    const canvas = canvasRef.current
+    const link = document.createElement('a')
+    const timestamp = Date.now()
+    
+    let mimeType: string
+    let extension: string
+    
+    switch (format) {
+      case 'png':
+        mimeType = 'image/png'
+        extension = 'png'
+        quality = 1.0 // PNG doesn't use quality parameter
+        break
+      case 'jpeg':
+        mimeType = 'image/jpeg'
+        extension = 'jpg'
+        break
+      case 'webp':
+        mimeType = 'image/webp'
+        extension = 'webp'
+        break
+      default:
+        mimeType = 'image/png'
+        extension = 'png'
+        quality = 1.0
+    }
+    
+    // Convert to blob
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob)
+        link.href = url
+        link.download = `merzbow-pattern-${timestamp}.${extension}`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        console.log(`📸 Exported as ${format.toUpperCase()} (${(blob.size / 1024).toFixed(1)}KB)`)
+      }
+    }, mimeType, quality)
+  }
+
+  // Export as PNG with transparency
+  const exportAsPNG = () => exportImage('png')
+  
+  // Export as high-quality JPEG
+  const exportAsJPEG = () => exportImage('jpeg', 0.95)
+  
+  // Export as WebP
+  const exportAsWebP = () => exportImage('webp', 0.9)
+
   return (
     <div className="app">
       <Header title="Cnidaria" currentPage="Merzbow" />
       
       <div className="main-content">
         <div className="merzbow-controls">
-          <label>
-            <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
-            Angular Distortion
-          </label>
-          
-          <label>
-            <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
-            Fractal Distortion
-          </label>
-          
-          <label>
-            <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
-            Checkerboard Pattern
-          </label>
+          {/* Stacked Dropdowns Section */}
+          <div className="dropdown-section">
+            <div className="dropdown-row">
+              <label>Distortion Profile:</label>
+              <select 
+                className="compact-select"
+                value={selectedDistortionControl?.id || ''} 
+                onChange={(e) => {
+                  const control = availableDistortionControls.find(c => c.id === e.target.value)
+                  if (control) loadDistortionControl(control)
+                }}
+                disabled={isLoading}
+              >
+                <option value="">Select...</option>
+                {availableDistortionControls.map(control => (
+                  <option key={control.id} value={control.id}>
+                    {control.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <label>Distance Calculation:</label>
-          <select value={distanceCalc} onChange={(e) => setDistanceCalc(e.target.value)}>
-            <option value="radial">Radial</option>
-            <option value="cartesian-x">Cartesian X</option>
-            <option value="cartesian-y">Cartesian Y</option>
-            <option value="manhattan">Manhattan</option>
-            <option value="chebyshev">Chebyshev</option>
-            <option value="hexagonal">Hexagonal</option>
-            <option value="spiral">Spiral</option>
-            <option value="ripple">Ripple</option>
-            <option value="hyperbolic">Hyperbolic</option>
-          </select>
+            <div className="dropdown-row">
+              <label>Curve Data:</label>
+              <select 
+                className="compact-select"
+                value={selectedCurve?.name || ''} 
+                onChange={(e) => {
+                  const curve = availableCurves.find(c => c.name === e.target.value)
+                  setSelectedCurve(curve || null)
+                }}
+              >
+                <option value="">Default (0-255 ramp)</option>
+                {availableCurves.map(curve => (
+                  <option key={curve.name} value={curve.name}>
+                    {curve.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <label>Distance Modulus:</label>
-          <input type="number" value={distanceModulus} min="0" max="500" step="10" onChange={(e) => setDistanceModulus(parseFloat(e.target.value) || 0)} />
+            <div className="dropdown-row">
+              <label>Color Palette:</label>
+              <select 
+                className="compact-select"
+                value={selectedPalette?.id || ''} 
+                onChange={(e) => {
+                  const palette = availablePalettes.find(p => p.id === e.target.value)
+                  setSelectedPalette(palette || null)
+                }}
+              >
+                <option value="">Default (Grayscale)</option>
+                {availablePalettes.map(palette => (
+                  <option key={palette.id} value={palette.id}>
+                    {palette.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <label>Curve Scaling: {curveScaling.toFixed(4)}</label>
-          <input type="range" value={curveScaling} min="0.0001" max="1.0" step="0.0001" onChange={(e) => setCurveScaling(parseFloat(e.target.value))} />
+          </div>
 
-          <label>Checkerboard Steps:</label>
-          <input type="number" value={checkerboardSteps} min="1" max="200" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value) || 50)} />
+          {/* Name Editor */}
+          {selectedDistortionControl && (
+            <div className="name-section">
+              <label>Name:</label>
+              <input 
+                type="text" 
+                value={selectedDistortionControl.name} 
+                onChange={(e) => {
+                  setSelectedDistortionControl({
+                    ...selectedDistortionControl,
+                    name: e.target.value
+                  })
+                  setHasUnsavedChanges(true)
+                }}
+              />
+            </div>
+          )}
 
-          <label>Angular Frequency: {angularFrequency}</label>
-          <input type="range" value={angularFrequency} min="0" max="64" step="0.1" onChange={(e) => setAngularFrequency(parseFloat(e.target.value))} />
-          
-          <label>Angular Amplitude: {angularAmplitude}</label>
-          <input type="range" value={angularAmplitude} min="0" max="100" step="1" onChange={(e) => setAngularAmplitude(parseFloat(e.target.value))} />
-          
-          <label>Angular Offset: {angularOffset}°</label>
-          <input type="range" value={angularOffset} min="0" max="360" step="5" onChange={(e) => setAngularOffset(parseFloat(e.target.value))} />
+          {/* Distance Calculation */}
+          <div className="dropdown-row">
+            <label>Distance Calculation:</label>
+            <select className="compact-select" value={distanceCalc} onChange={(e) => setDistanceCalc(e.target.value)}>
+              <option value="radial">radial</option>
+              <option value="cartesian-x">cartesian-x</option>
+              <option value="cartesian-y">cartesian-y</option>
+              <option value="manhattan">manhattan</option>
+              <option value="chebyshev">chebyshev</option>
+              <option value="minkowski-3">minkowski-3</option>
+              <option value="hexagonal">hexagonal</option>
+              <option value="triangular">triangular</option>
+              <option value="spiral">spiral</option>
+              <option value="cross">cross</option>
+              <option value="sine-wave">sine-wave</option>
+              <option value="ripple">ripple</option>
+              <option value="interference">interference</option>
+              <option value="hyperbolic">hyperbolic</option>
+              <option value="polar-rose">polar-rose</option>
+              <option value="lemniscate">lemniscate</option>
+              <option value="logarithmic">logarithmic</option>
+            </select>
+          </div>
 
-          <label>Fractal Scale 1: {fractalScale1}</label>
-          <input type="range" value={fractalScale1} min="0.001" max="0.1" step="0.001" onChange={(e) => setFractalScale1(parseFloat(e.target.value))} />
-          
-          <label>Fractal Scale 2: {fractalScale2}</label>
-          <input type="range" value={fractalScale2} min="0.01" max="0.5" step="0.01" onChange={(e) => setFractalScale2(parseFloat(e.target.value))} />
-          
-          <label>Fractal Scale 3: {fractalScale3}</label>
-          <input type="range" value={fractalScale3} min="0.05" max="1.0" step="0.05" onChange={(e) => setFractalScale3(parseFloat(e.target.value))} />
-          
-          <label>Fractal Strength: {fractalStrength}</label>
-          <input type="range" value={fractalStrength} min="1" max="50" step="1" onChange={(e) => setFractalStrength(parseFloat(e.target.value))} />
+          {/* Action Buttons */}
+          <div className="action-buttons">
+            {hasUnsavedChanges && (
+              <button onClick={saveDistortionControl} className="save-button">
+                💾 Save Changes
+              </button>
+            )}
+            <div className="export-dropdown">
+              <button onClick={exportAsPNG} className="export-button">
+                📸 PNG
+              </button>
+              <button onClick={exportAsJPEG} className="export-button secondary">
+                📸 JPEG
+              </button>
+              <button onClick={exportAsWebP} className="export-button secondary">
+                📸 WebP
+              </button>
+            </div>
+          </div>
+
+          {/* Link Buttons */}
+          <div className="link-section">
+            {selectedCurve && selectedDistortionControl && (
+              <CurveLinkButton 
+                curveName={selectedCurve.name}
+                distortionControlId={selectedDistortionControl.id}
+                onLink={() => linkCurveToDistortionControl(selectedCurve.name)}
+              />
+            )}
+            {selectedPalette && selectedDistortionControl && (
+              <PaletteLinkButton 
+                distortionControlId={selectedDistortionControl.id}
+                paletteId={selectedPalette.id}
+                onLink={() => linkPaletteToDistortionControl()}
+              />
+            )}
+          </div>
+
+          <hr style={{ margin: '20px 0', border: '1px solid #444' }} />
+
+          {/* Feature Toggles */}
+          <div className="toggle-section">
+            <label>
+              <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
+              Angular Distortion
+            </label>
+            
+            <label>
+              <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
+              Fractal Distortion
+            </label>
+            
+            <label>
+              <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
+              Checkerboard Pattern
+            </label>
+          </div>
+
+          {/* Core Parameters */}
+          <div className="param-section">
+            <div className="param-row">
+              <label>Distance Modulus:</label>
+              <input type="number" value={distanceModulus} min="0" max="500" step="10" onChange={(e) => setDistanceModulus(parseFloat(e.target.value) || 0)} />
+            </div>
+
+            <div className="param-row">
+              <label>Curve Scaling: {curveScaling.toFixed(4)}</label>
+              <input type="range" value={curveScaling} min="0.0001" max="1.0" step="0.0001" onChange={(e) => setCurveScaling(parseFloat(e.target.value))} />
+            </div>
+
+            <div className="param-row">
+              <label>Checkerboard Steps:</label>
+              <input type="number" value={checkerboardSteps} min="1" max="200" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value) || 50)} />
+            </div>
+          </div>
+
+          {/* Angular Controls */}
+          <div className="angular-section">
+            <h4>Angular Distortion</h4>
+            <div className="param-row">
+              <label>Frequency: {angularFrequency}</label>
+              <input type="range" value={angularFrequency} min="0" max="64" step="0.1" onChange={(e) => setAngularFrequency(parseFloat(e.target.value))} />
+            </div>
+            
+            <div className="param-row">
+              <label>Amplitude: {angularAmplitude}</label>
+              <input type="range" value={angularAmplitude} min="0" max="100" step="1" onChange={(e) => setAngularAmplitude(parseFloat(e.target.value))} />
+            </div>
+            
+            <div className="param-row">
+              <label>Offset: {angularOffset}°</label>
+              <input type="range" value={angularOffset} min="0" max="360" step="5" onChange={(e) => setAngularOffset(parseFloat(e.target.value))} />
+            </div>
+          </div>
+
+          {/* Fractal Controls */}
+          <div className="fractal-section">
+            <h4>Fractal Distortion</h4>
+            <div className="param-row">
+              <label>Scale 1: {fractalScale1}</label>
+              <input type="range" value={fractalScale1} min="0.001" max="0.1" step="0.001" onChange={(e) => setFractalScale1(parseFloat(e.target.value))} />
+            </div>
+            
+            <div className="param-row">
+              <label>Scale 2: {fractalScale2}</label>
+              <input type="range" value={fractalScale2} min="0.01" max="0.5" step="0.01" onChange={(e) => setFractalScale2(parseFloat(e.target.value))} />
+            </div>
+            
+            <div className="param-row">
+              <label>Scale 3: {fractalScale3}</label>
+              <input type="range" value={fractalScale3} min="0.05" max="1.0" step="0.05" onChange={(e) => setFractalScale3(parseFloat(e.target.value))} />
+            </div>
+            
+            <div className="param-row">
+              <label>Strength: {fractalStrength}</label>
+              <input type="range" value={fractalStrength} min="1" max="50" step="1" onChange={(e) => setFractalStrength(parseFloat(e.target.value))} />
+            </div>
+          </div>
         </div>
 
         <canvas 

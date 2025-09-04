@@ -86,8 +86,8 @@ function CurveBuilder() {
   const [assignedTags, setAssignedTags] = useState<Tag[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
-  const [coordinateNoiseTypesList, setCoordinateNoiseTypesList] = useState<Array<{id: string, name: string, cpuLoadLevel: number, displayName: string}>>([])
-  const [isLoadingCoordinateNoiseTypes, setIsLoadingCoordinateNoiseTypes] = useState(false)
+  const [distortionControlsList, setDistortionControlsList] = useState<Array<{id: string, name: string, displayName: string}>>([])
+  const [isLoadingDistortionControls, setIsLoadingDistortionControls] = useState(false)
   const [renderVersion, setRenderVersion] = useState(0)
   const [isReloading, setIsReloading] = useState(false)
 
@@ -122,13 +122,13 @@ function CurveBuilder() {
           setEditingCurve({ ...(curveData as Curve) })
           setHasUnsavedChanges(false)
 
-          // Load coordinate noise via link endpoint (curve.name as canonical)
+          // Load distortion control via link endpoint (curve.name as canonical)
           try {
             const linkCurveKey = (curveData as any).name || (curveData as any)['curve-name'] || (curveData as any).id
-            const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${linkCurveKey}`)
+            const linkRes = await fetch(`${apiUrl}/api/distortion-control-links/curve/${linkCurveKey}`)
             const linkJson = await linkRes.json()
-            if (linkJson.success && linkJson.data && linkJson.data.noise) {
-              setCoordinateNoise(linkJson.data.noise)
+            if (linkJson.success && linkJson.data && linkJson.data.distortionControl) {
+              setCoordinateNoise(linkJson.data.distortionControl)
             } else {
               setCoordinateNoise(null)
             }
@@ -163,29 +163,28 @@ function CurveBuilder() {
     return coordinateCache.get(getCoordinateKey(x, y))
   }
 
-  // Load coordinate noise types from API
-  const loadCoordinateNoiseTypes = async () => {
-    setIsLoadingCoordinateNoiseTypes(true)
+  // Load distortion controls from API
+  const loadDistortionControls = async () => {
+    setIsLoadingDistortionControls(true)
     try {
-      const response = await fetch(`${apiUrl}/api/coordinate-noise/firebase`)
+      const response = await fetch(`${apiUrl}/api/distortion-controls/firebase`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          const noiseTypes = data.data.noiseTypes.map((noise: any) => ({
-            id: noise.id,
-            name: noise.name,
-            cpuLoadLevel: noise.cpuLoadLevel,
-            displayName: `${noise.name} (${noise.cpuLoadLevel} cpu)`
+          const controls = data.data.distortionControls.map((control: any) => ({
+            id: control.id,
+            name: control.name,
+            displayName: `${control.name}`
           }))
-          setCoordinateNoiseTypesList(noiseTypes)
-          console.log(`📊 Loaded ${noiseTypes.length} coordinate noise types for dropdown`)
+          setDistortionControlsList(controls)
+          console.log(`🎨 Loaded ${controls.length} distortion controls for dropdown`)
         }
       }
     } catch (error) {
-      console.error('Failed to load coordinate noise types:', error)
-      setError('Failed to load coordinate noise types')
+      console.error('Failed to load distortion controls:', error)
+      setError('Failed to load distortion controls')
     } finally {
-      setIsLoadingCoordinateNoiseTypes(false)
+      setIsLoadingDistortionControls(false)
     }
   }
 
@@ -471,7 +470,7 @@ function CurveBuilder() {
 
   // Load curves and tags on component mount (no auto-selection)
   useEffect(() => {
-    loadCoordinateNoiseTypes()
+    loadDistortionControls()
     loadCurves(0)
     loadAllTags()
   }, [])
@@ -758,13 +757,13 @@ function CurveBuilder() {
       setValueRange({ min: 0, max: 255, mid: 127 })
     }
 
-    // Load coordinate noise for mapped view
-    // Resolve coordinate-noise via link
+    // Load distortion control for mapped view
+    // Resolve distortion-control via link
     try {
-      const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${curve.id}`)
+      const linkRes = await fetch(`${apiUrl}/api/distortion-control-links/curve/${curve.name}`)
       const linkJson = await linkRes.json()
-      if (linkJson.success && linkJson.data && linkJson.data.noise) {
-        setCoordinateNoise(linkJson.data.noise)
+      if (linkJson.success && linkJson.data && linkJson.data.distortionControl) {
+        setCoordinateNoise(linkJson.data.distortionControl)
       } else {
         setCoordinateNoise(null)
       }
@@ -1011,16 +1010,16 @@ function CurveBuilder() {
       const created = await createRes.json()
       const newId = created?.data?.id || created?.id || newName
 
-      // Copy coordinate-noise link (if any)
+      // Copy distortion-control link (if any)
       try {
-        const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${selectedCurve.id}`)
+        const linkRes = await fetch(`${apiUrl}/api/distortion-control-links/curve/${selectedCurve.name}`)
         const linkJson = await linkRes.json()
-        const noiseId = linkJson?.data?.noiseId
-        if (noiseId) {
-          await fetch(`${apiUrl}/api/coordinate-noise-links/link`, {
+        const controlId = linkJson?.data?.distortionControl?.id
+        if (controlId) {
+          await fetch(`${apiUrl}/api/distortion-control-links/link`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ curveId: newId, noiseId })
+            body: JSON.stringify({ curveId: newName, distortionControlId: controlId })
           })
         }
       } catch (_) {}
@@ -1745,38 +1744,38 @@ function CurveBuilder() {
                     </div>
 
                     <div className="form-group">
-                      <label>Coordinate Noise:</label>
+                      <label>Distortion Profile:</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <select
                           value={coordinateNoise?.id || ''}
                           onChange={async (e) => {
                             if (!selectedCurve) return;
                             const newNoiseId = e.target.value
-                            // Link curve to selected noise via API
+                            // Link curve to selected distortion control via API
                             try {
-                              await fetch(`${apiUrl}/api/coordinate-noise-links/link`, {
+                              await fetch(`${apiUrl}/api/distortion-control-links/link`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ curveId: selectedCurve.id, noiseId: newNoiseId })
+                                body: JSON.stringify({ curveId: selectedCurve.name, distortionControlId: newNoiseId })
                               })
-                              // Reload link to update local coordinateNoise
-                              const linkRes = await fetch(`${apiUrl}/api/coordinate-noise-links/curve/${selectedCurve.id}`)
+                              // Reload link to update local distortion control
+                              const linkRes = await fetch(`${apiUrl}/api/distortion-control-links/curve/${selectedCurve.name}`)
                               const linkJson = await linkRes.json()
-                              if (linkJson.success && linkJson.data && linkJson.data.noise) {
-                                setCoordinateNoise(linkJson.data.noise)
+                              if (linkJson.success && linkJson.data && linkJson.data.distortionControl) {
+                                setCoordinateNoise(linkJson.data.distortionControl)
                                 setRenderVersion(prev => prev + 1)
                               }
                             } catch (err) {
                               console.error('Failed to link coordinate noise:', err)
                             }
                           }}
-                          title="Select the coordinate noise pattern for this curve (via link)"
-                          disabled={isLoadingCoordinateNoiseTypes || isSaving}
+                          title="Select the distortion profile for this curve (via link)"
+                          disabled={isLoadingDistortionControls || isSaving}
                         >
                           <option value="">None</option>
-                          {coordinateNoiseTypesList.map((noiseType) => (
-                            <option key={noiseType.id} value={noiseType.id}>
-                              {noiseType.displayName}
+                          {distortionControlsList.map((control) => (
+                            <option key={control.id} value={control.id}>
+                              {control.displayName}
                             </option>
                           ))}
                         </select>
