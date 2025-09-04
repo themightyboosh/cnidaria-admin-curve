@@ -435,6 +435,7 @@ const Merzbow: React.FC = () => {
   } finally {
     setIsLoadingDP(false)
   }
+  }
 
   // Save current distortion control
   const saveDistortionControl = async () => {
