@@ -603,15 +603,18 @@ const Merzbow: React.FC = () => {
       }
       
       const linksData = await linksResponse.json()
+      console.log(`🔍 Links API Response:`, JSON.stringify(linksData, null, 2))
+      
       if (linksData.success && linksData.data && linksData.data.length > 0) {
         // Use the first link (there should be one for the curve)
         const existingLink = linksData.data[0]
+        console.log(`🔍 Using existing link:`, JSON.stringify(existingLink, null, 2))
         
         const requestBody = { 
           linkId: existingLink.id,
           paletteName: selectedPalette.name 
         }
-        console.log(`📦 Adding palette to existing link:`, requestBody)
+        console.log(`📦 Adding palette to existing link:`, JSON.stringify(requestBody, null, 2))
         
         const response = await fetch(`${apiUrl}/api/distortion-control-links/add-palette`, {
           method: 'POST',
@@ -619,14 +622,18 @@ const Merzbow: React.FC = () => {
           body: JSON.stringify(requestBody)
         })
         
+        console.log(`📡 Add-palette API response status: ${response.status}`)
+        
         if (response.ok) {
           const data = await response.json()
-          console.log(`✅ PALETTE ADDED TO LINK:`, data)
+          console.log(`✅ PALETTE ADDED TO LINK:`, JSON.stringify(data, null, 2))
+          console.log(`🎉 SUCCESS: Palette "${selectedPalette.name}" linked to DP "${selectedDistortionControl.name}"`)
         } else {
           const errorData = await response.text()
           console.error(`🚨 CRITICAL PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
-          console.error(`🚨 Error details:`, errorData)
-          alert(`FAILED to link palette "${selectedPalette.name}": ${response.status} ${response.statusText}`)
+          console.error(`🚨 Full error response:`, errorData)
+          console.error(`🚨 Request was:`, JSON.stringify(requestBody, null, 2))
+          alert(`FAILED to link palette "${selectedPalette.name}": ${response.status} ${response.statusText}\n\nError: ${errorData}`)
           throw new Error(`Palette linking failed: ${response.status} ${response.statusText}`)
         }
       } else {
