@@ -433,7 +433,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     outputTexture[index] = vec4<f32>(color, 1.0);
 }`
   }
-}
 
   /**
    * Generate nested pattern processing
