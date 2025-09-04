@@ -150,6 +150,23 @@ const Merzbow: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
 
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState({
+    profile: true,
+    settings: true,
+    angular: false,
+    fractal: false,
+    export: false
+  })
+
+  // Toggle section visibility
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
   // State for all Pipeline F parameters
   const [angularEnabled, setAngularEnabled] = useState(false)
   const [angularFrequency, setAngularFrequency] = useState(6.0)
@@ -769,225 +786,327 @@ const Merzbow: React.FC = () => {
     }, 'image/png', 1.0)
   }
 
+  // Export JPEG with smart tiling for distance modulus
+  const exportAsJPEG = () => {
+    if (!canvasRef.current) return
+    
+    const canvas = canvasRef.current
+    let exportCanvas = canvas
+    let fileName = generateFileName().replace('.png', '.jpg')
+    
+    // If distance modulus > 0, create a tile
+    if (distanceModulus > 0) {
+      const tileSize = distanceModulus
+      const tileCanvas = document.createElement('canvas')
+      tileCanvas.width = tileSize
+      tileCanvas.height = tileSize
+      const tileCtx = tileCanvas.getContext('2d')
+      
+      if (tileCtx) {
+        // Fill with white background for JPEG
+        tileCtx.fillStyle = '#FFFFFF'
+        tileCtx.fillRect(0, 0, tileSize, tileSize)
+        
+        // Find the center of the original canvas
+        const centerX = canvas.width / 2
+        const centerY = canvas.height / 2
+        
+        // Extract a square tile from the center
+        const sourceX = centerX - tileSize / 2
+        const sourceY = centerY - tileSize / 2
+        
+        tileCtx.drawImage(
+          canvas,
+          sourceX, sourceY, tileSize, tileSize, // source
+          0, 0, tileSize, tileSize // destination
+        )
+        
+        exportCanvas = tileCanvas
+        fileName = generateFileName(true).replace('.png', '.jpg')
+        
+        console.log(`🔲 Creating ${tileSize}×${tileSize} JPEG tile from pattern center`)
+      }
+    }
+    
+    // Export the canvas (original or tile) as JPEG
+    exportCanvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        const sizeKB = (blob.size / 1024).toFixed(1)
+        const dimensions = `${exportCanvas.width}×${exportCanvas.height}`
+        console.log(`📸 Exported JPEG: ${fileName} (${dimensions}, ${sizeKB}KB)`)
+      }
+    }, 'image/jpeg', 0.95)
+  }
+
   return (
     <div className="app">
       <Header title="Cnidaria" currentPage="Merzbow" />
       
       <div className="main-content">
-        <div className="merzbow-controls">
-          {/* Stacked Dropdowns Section */}
-          <div className="dropdown-section">
-            <div className="dropdown-row">
-              <label>Distortion Profile:</label>
-              <select 
-                className="compact-select"
-                value={selectedDistortionControl?.id || ''} 
-                onChange={(e) => {
-                  const control = availableDistortionControls.find(c => c.id === e.target.value)
-                  if (control) loadDistortionControl(control)
-                }}
-                disabled={isLoading}
-              >
-                <option value="">Select...</option>
-                {availableDistortionControls.map(control => (
-                  <option key={control.id} value={control.id}>
-                    {control.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="left-pane">
+          {/* Distortion Profile Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('profile')}>
+              <span className="toggle-icon">{expandedSections.profile ? '▼' : '▶'}</span>
+              Distortion Profile
+            </h3>
+            {expandedSections.profile && (
+              <div className="section-content">
+                <div className="form-group">
+                  <label>Distortion Profile:</label>
+                  <select 
+                    value={selectedDistortionControl?.id || ''} 
+                    onChange={(e) => {
+                      const control = availableDistortionControls.find(c => c.id === e.target.value)
+                      if (control) loadDistortionControl(control)
+                    }}
+                    disabled={isLoading}
+                  >
+                    <option value="">Select...</option>
+                    {availableDistortionControls.map(control => (
+                      <option key={control.id} value={control.id}>
+                        {control.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="dropdown-row">
-              <label>Curve Data:</label>
-              <select 
-                className="compact-select"
-                value={selectedCurve?.name || ''} 
-                onChange={(e) => {
-                  const curve = availableCurves.find(c => c.name === e.target.value)
-                  setSelectedCurve(curve || null)
-                }}
-              >
-                <option value="">Default (0-255 ramp)</option>
-                {availableCurves.map(curve => (
-                  <option key={curve.name} value={curve.name}>
-                    {curve.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="form-group">
+                  <label>Curve Data:</label>
+                  <select 
+                    value={selectedCurve?.name || ''} 
+                    onChange={(e) => {
+                      const curve = availableCurves.find(c => c.name === e.target.value)
+                      setSelectedCurve(curve || null)
+                    }}
+                  >
+                    <option value="">Default (0-255 ramp)</option>
+                    {availableCurves.map(curve => (
+                      <option key={curve.name} value={curve.name}>
+                        {curve.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="dropdown-row">
-              <label>Color Palette:</label>
-              <select 
-                className="compact-select"
-                value={selectedPalette?.id || ''} 
-                onChange={(e) => {
-                  const palette = availablePalettes.find(p => p.id === e.target.value)
-                  setSelectedPalette(palette || null)
-                }}
-              >
-                <option value="">Default (Grayscale)</option>
-                {availablePalettes.map(palette => (
-                  <option key={palette.id} value={palette.id}>
-                    {palette.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="form-group">
+                  <label>Color Palette:</label>
+                  <select 
+                    value={selectedPalette?.id || ''} 
+                    onChange={(e) => {
+                      const palette = availablePalettes.find(p => p.id === e.target.value)
+                      setSelectedPalette(palette || null)
+                    }}
+                  >
+                    <option value="">Default (Grayscale)</option>
+                    {availablePalettes.map(palette => (
+                      <option key={palette.id} value={palette.id}>
+                        {palette.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          </div>
-
-          {/* Name Editor */}
-          {selectedDistortionControl && (
-            <div className="name-section">
-              <label>Name:</label>
-              <input 
-                type="text" 
-                value={selectedDistortionControl.name} 
-                onChange={(e) => {
-                  setSelectedDistortionControl({
-                    ...selectedDistortionControl,
-                    name: e.target.value
-                  })
-                  setHasUnsavedChanges(true)
-                }}
-              />
-            </div>
-          )}
-
-          {/* Distance Calculation */}
-          <div className="dropdown-row">
-            <label>Distance Calculation:</label>
-            <select className="compact-select" value={distanceCalc} onChange={(e) => setDistanceCalc(e.target.value)}>
-              <option value="radial">radial</option>
-              <option value="cartesian-x">cartesian-x</option>
-              <option value="cartesian-y">cartesian-y</option>
-              <option value="manhattan">manhattan</option>
-              <option value="chebyshev">chebyshev</option>
-              <option value="minkowski-3">minkowski-3</option>
-              <option value="hexagonal">hexagonal</option>
-              <option value="triangular">triangular</option>
-              <option value="spiral">spiral</option>
-              <option value="cross">cross</option>
-              <option value="sine-wave">sine-wave</option>
-              <option value="ripple">ripple</option>
-              <option value="interference">interference</option>
-              <option value="hyperbolic">hyperbolic</option>
-              <option value="polar-rose">polar-rose</option>
-              <option value="lemniscate">lemniscate</option>
-              <option value="logarithmic">logarithmic</option>
-            </select>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="action-buttons">
-            {hasUnsavedChanges && (
-              <button onClick={saveDistortionControl} className="save-button">
-                💾 Save Changes
-              </button>
-            )}
-            <button onClick={exportAsPNG} className="export-button">
-              📸 Export PNG
-            </button>
-          </div>
-
-          {/* Link Buttons */}
-          <div className="link-section">
-            {selectedCurve && selectedDistortionControl && (
-              <CurveLinkButton 
-                curveName={selectedCurve.name}
-                distortionControlId={selectedDistortionControl.id}
-                onLink={() => linkCurveToDistortionControl(selectedCurve.name)}
-              />
-            )}
-            {selectedPalette && selectedDistortionControl && (
-              <PaletteLinkButton 
-                distortionControlId={selectedDistortionControl.id}
-                paletteId={selectedPalette.id}
-                onLink={() => linkPaletteToDistortionControl()}
-              />
+                {/* Link Buttons */}
+                <div className="form-group" style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  {selectedCurve && selectedDistortionControl && (
+                    <CurveLinkButton 
+                      curveName={selectedCurve.name}
+                      distortionControlId={selectedDistortionControl.id}
+                      onLink={() => linkCurveToDistortionControl(selectedCurve.name)}
+                    />
+                  )}
+                  {selectedPalette && selectedDistortionControl && (
+                    <PaletteLinkButton 
+                      distortionControlId={selectedDistortionControl.id}
+                      paletteId={selectedPalette.id}
+                      onLink={() => linkPaletteToDistortionControl()}
+                    />
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
-          <hr style={{ margin: '20px 0', border: '1px solid #444' }} />
+          {/* Distortion Settings Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('settings')}>
+              <span className="toggle-icon">{expandedSections.settings ? '▼' : '▶'}</span>
+              Distortion Settings
+            </h3>
+            {expandedSections.settings && (
+              <div className="section-content">
+                {/* Save Button */}
+                {hasUnsavedChanges && (
+                  <button onClick={saveDistortionControl} className="save-button" style={{ marginBottom: '15px' }}>
+                    Save Changes
+                  </button>
+                )}
 
-          {/* Feature Toggles */}
-          <div className="toggle-section">
-            <label>
-              <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
-              Angular Distortion
-            </label>
-            
-            <label>
-              <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
-              Fractal Distortion
-            </label>
-            
-            <label>
-              <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
-              Checkerboard Pattern
-            </label>
+                {/* Name Editor */}
+                {selectedDistortionControl && (
+                  <div className="form-group">
+                    <label>Distortion Name:</label>
+                    <input 
+                      type="text" 
+                      value={selectedDistortionControl.name} 
+                      onChange={(e) => {
+                        setSelectedDistortionControl({
+                          ...selectedDistortionControl,
+                          name: e.target.value
+                        })
+                        setHasUnsavedChanges(true)
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>
+                    <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
+                    Angular Distortion
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label>
+                    <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
+                    Fractal Distortion
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label>
+                    <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
+                    Checkerboard Pattern
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label>Distance Calculation:</label>
+                  <select value={distanceCalc} onChange={(e) => setDistanceCalc(e.target.value)}>
+                    <option value="radial">radial</option>
+                    <option value="cartesian-x">cartesian-x</option>
+                    <option value="cartesian-y">cartesian-y</option>
+                    <option value="manhattan">manhattan</option>
+                    <option value="chebyshev">chebyshev</option>
+                    <option value="minkowski-3">minkowski-3</option>
+                    <option value="hexagonal">hexagonal</option>
+                    <option value="triangular">triangular</option>
+                    <option value="spiral">spiral</option>
+                    <option value="cross">cross</option>
+                    <option value="sine-wave">sine-wave</option>
+                    <option value="ripple">ripple</option>
+                    <option value="interference">interference</option>
+                    <option value="hyperbolic">hyperbolic</option>
+                    <option value="polar-rose">polar-rose</option>
+                    <option value="lemniscate">lemniscate</option>
+                    <option value="logarithmic">logarithmic</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Checkerboard Steps:</label>
+                  <input type="number" value={checkerboardSteps} min="1" max="200" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value) || 50)} />
+                </div>
+
+                <div className="form-group">
+                  <label>Distance Modulus:</label>
+                  <input type="number" value={distanceModulus} min="0" max="500" step="10" onChange={(e) => setDistanceModulus(parseFloat(e.target.value) || 0)} />
+                </div>
+
+                <div className="form-group">
+                  <label>Curve Scaling: {curveScaling.toFixed(4)}</label>
+                  <input type="range" value={curveScaling} min="0.0001" max="1.0" step="0.0001" onChange={(e) => setCurveScaling(parseFloat(e.target.value))} />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Core Parameters */}
-          <div className="param-section">
-            <div className="param-row">
-              <label>Distance Modulus:</label>
-              <input type="number" value={distanceModulus} min="0" max="500" step="10" onChange={(e) => setDistanceModulus(parseFloat(e.target.value) || 0)} />
-            </div>
-
-            <div className="param-row">
-              <label>Curve Scaling: {curveScaling.toFixed(4)}</label>
-              <input type="range" value={curveScaling} min="0.0001" max="1.0" step="0.0001" onChange={(e) => setCurveScaling(parseFloat(e.target.value))} />
-            </div>
-
-            <div className="param-row">
-              <label>Checkerboard Steps:</label>
-              <input type="number" value={checkerboardSteps} min="1" max="200" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value) || 50)} />
-            </div>
+          {/* Angular Settings Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('angular')}>
+              <span className="toggle-icon">{expandedSections.angular ? '▼' : '▶'}</span>
+              Angular Settings
+            </h3>
+            {expandedSections.angular && (
+              <div className="section-content">
+                <div className="form-group">
+                  <label>Frequency: {angularFrequency}</label>
+                  <input type="range" value={angularFrequency} min="0" max="64" step="0.1" onChange={(e) => setAngularFrequency(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="form-group">
+                  <label>Amplitude: {angularAmplitude}</label>
+                  <input type="range" value={angularAmplitude} min="0" max="100" step="1" onChange={(e) => setAngularAmplitude(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="form-group">
+                  <label>Offset: {angularOffset}°</label>
+                  <input type="range" value={angularOffset} min="0" max="360" step="5" onChange={(e) => setAngularOffset(parseFloat(e.target.value))} />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Angular Controls */}
-          <div className="angular-section">
-            <h4>Angular Distortion</h4>
-            <div className="param-row">
-              <label>Frequency: {angularFrequency}</label>
-              <input type="range" value={angularFrequency} min="0" max="64" step="0.1" onChange={(e) => setAngularFrequency(parseFloat(e.target.value))} />
-            </div>
-            
-            <div className="param-row">
-              <label>Amplitude: {angularAmplitude}</label>
-              <input type="range" value={angularAmplitude} min="0" max="100" step="1" onChange={(e) => setAngularAmplitude(parseFloat(e.target.value))} />
-            </div>
-            
-            <div className="param-row">
-              <label>Offset: {angularOffset}°</label>
-              <input type="range" value={angularOffset} min="0" max="360" step="5" onChange={(e) => setAngularOffset(parseFloat(e.target.value))} />
-            </div>
+          {/* Fractal Settings Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('fractal')}>
+              <span className="toggle-icon">{expandedSections.fractal ? '▼' : '▶'}</span>
+              Fractal Settings
+            </h3>
+            {expandedSections.fractal && (
+              <div className="section-content">
+                <div className="form-group">
+                  <label>Scale 1: {fractalScale1}</label>
+                  <input type="range" value={fractalScale1} min="0.001" max="0.1" step="0.001" onChange={(e) => setFractalScale1(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="form-group">
+                  <label>Scale 2: {fractalScale2}</label>
+                  <input type="range" value={fractalScale2} min="0.01" max="0.5" step="0.01" onChange={(e) => setFractalScale2(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="form-group">
+                  <label>Scale 3: {fractalScale3}</label>
+                  <input type="range" value={fractalScale3} min="0.05" max="1.0" step="0.05" onChange={(e) => setFractalScale3(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="form-group">
+                  <label>Strength: {fractalStrength}</label>
+                  <input type="range" value={fractalStrength} min="1" max="50" step="1" onChange={(e) => setFractalStrength(parseFloat(e.target.value))} />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Fractal Controls */}
-          <div className="fractal-section">
-            <h4>Fractal Distortion</h4>
-            <div className="param-row">
-              <label>Scale 1: {fractalScale1}</label>
-              <input type="range" value={fractalScale1} min="0.001" max="0.1" step="0.001" onChange={(e) => setFractalScale1(parseFloat(e.target.value))} />
-            </div>
-            
-            <div className="param-row">
-              <label>Scale 2: {fractalScale2}</label>
-              <input type="range" value={fractalScale2} min="0.01" max="0.5" step="0.01" onChange={(e) => setFractalScale2(parseFloat(e.target.value))} />
-            </div>
-            
-            <div className="param-row">
-              <label>Scale 3: {fractalScale3}</label>
-              <input type="range" value={fractalScale3} min="0.05" max="1.0" step="0.05" onChange={(e) => setFractalScale3(parseFloat(e.target.value))} />
-            </div>
-            
-            <div className="param-row">
-              <label>Strength: {fractalStrength}</label>
-              <input type="range" value={fractalStrength} min="1" max="50" step="1" onChange={(e) => setFractalStrength(parseFloat(e.target.value))} />
-            </div>
+          {/* Export Options Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('export')}>
+              <span className="toggle-icon">{expandedSections.export ? '▼' : '▶'}</span>
+              Export Options
+            </h3>
+            {expandedSections.export && (
+              <div className="section-content">
+                <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={exportAsPNG} className="export-button">
+                    Export PNG
+                  </button>
+                  <button onClick={exportAsJPEG} className="export-button secondary">
+                    Export JPEG
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
