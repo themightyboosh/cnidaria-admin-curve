@@ -341,90 +341,56 @@ const Merzbow: React.FC = () => {
       console.error('Failed to load linked curve:', error)
     }
 
-    // Also load linked palette for this distortion control
-    console.log(`🎨 STARTING PALETTE LOADING SECTION`)
+    // Find and load linked palette (using same pattern as curve discovery)
     try {
-      console.log(`\n🔍 ===== PALETTE LINKING DEBUG =====`)
-      console.log(`🎨 Loading palette for distortion control: "${control.name}" (ID: ${control.id})`)
-      console.log(`🎨 Current selectedPalette before loading:`, selectedPalette?.name || 'none')
-      console.log(`🎨 Available palettes count:`, availablePalettes.length)
-      console.log(`🎨 Available palette IDs:`, availablePalettes.map(p => `${p.id}="${p.name}"`))
+      console.log(`🎨 Looking for palette linked to distortion control: ${control.id}`)
       
-      const url = `${apiUrl}/api/palette-links/distortion/${control.id}`
-      console.log(`🌐 Fetching palette link from:`, url)
-      
-      // Add retry logic for API calls
-      let response
-      let retryCount = 0
-      const maxRetries = 3
-      
-      while (retryCount < maxRetries) {
-        try {
-          response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            }
-          })
-          console.log(`📡 Palette link API response status (attempt ${retryCount + 1}):`, response.status)
-          break
-        } catch (fetchError) {
-          retryCount++
-          console.log(`⚠️ Fetch attempt ${retryCount} failed:`, fetchError)
-          if (retryCount < maxRetries) {
-            console.log(`🔄 Retrying in ${retryCount * 1000}ms...`)
-            await new Promise(resolve => setTimeout(resolve, retryCount * 1000))
-          } else {
-            throw fetchError
-          }
-        }
-      }
-      
+      const response = await fetch(`${apiUrl}/api/palette-links/distortion/${control.id}`)
       if (response.ok) {
         const data = await response.json()
-        console.log(`📦 Full palette link response:`, JSON.stringify(data, null, 2))
-        
         if (data.success && data.data && data.data.hasLink && data.data.link) {
           const linkedPaletteId = data.data.link.paletteId
-          console.log(`🔗 Found linked palette ID: "${linkedPaletteId}"`)
-          
-          // Find the palette in our available palettes
           const linkedPalette = availablePalettes.find(p => p.id === linkedPaletteId)
-          console.log(`🔍 Searching for palette with ID "${linkedPaletteId}"...`)
-          console.log(`🔍 Found in available palettes:`, !!linkedPalette)
           
           if (linkedPalette) {
-            console.log(`✅ AUTO-LOADING LINKED PALETTE: "${linkedPalette.name}" (ID: ${linkedPalette.id})`)
+            console.log(`✅ Found linked palette: ${linkedPalette.name} → ${control.name}`)
             setSelectedPalette(linkedPalette)
-            console.log(`✅ selectedPalette state updated to:`, linkedPalette.name)
           } else {
-            console.log(`❌ PALETTE NOT FOUND: "${linkedPaletteId}" not in available palettes`)
-            console.log(`❌ Available IDs for comparison:`, availablePalettes.map(p => `"${p.id}"`))
+            console.log(`❌ Linked palette ID "${linkedPaletteId}" not found in available palettes`)
           }
         } else {
-          console.log(`❌ NO PALETTE LINK: hasLink=${data.data?.hasLink}, link=${!!data.data?.link}`)
-          console.log(`❌ No palette linked to distortion control: ${control.name}`)
+          console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
         }
-      } else {
-        console.log(`❌ API ERROR: ${response.status} ${response.statusText}`)
-        const errorText = await response.text()
-        console.log(`❌ Error response:`, errorText)
       }
-      console.log(`🔍 ===== END PALETTE DEBUG =====\n`)
     } catch (error) {
-      console.error('❌ PALETTE LOADING EXCEPTION:', error)
+      console.error('Failed to load linked palette:', error)
     }
 
-    // Don't trigger immediate redraw - let the useEffect handle it
-    console.log(`\n✅ ===== DISTORTION PROFILE LOAD COMPLETE =====`)
-    console.log(`📋 Loaded Profile: "${control.name}" (ID: ${control.id})`)
-    console.log(`🎯 Final selectedCurve: ${selectedCurve?.name || 'NONE'}`)
-    console.log(`🎨 Final selectedPalette: ${selectedPalette?.name || 'NONE'}`)
-    console.log(`🔧 Angular: ${control['angular-distortion']}, Fractal: ${control['fractal-distortion']}, Checkerboard: ${control['checkerboard-pattern']}`)
-    console.log(`📏 Distance: ${control['distance-calculation']}, Modulus: ${control['distance-modulus']}, Scaling: ${control['curve-scaling']}`)
+    // VALIDATION: Check if loaded elements match user selection
+    console.log(`\n🔍 ===== VALIDATION & FINAL STATE =====`)
+    console.log(`📋 User Selected: "${control.name}" (ID: ${control.id})`)
+    console.log(`🎯 Loaded Curve: ${selectedCurve?.name || 'NONE'}`)
+    console.log(`🎨 Loaded Palette: ${selectedPalette?.name || 'NONE'}`)
+    console.log(`🎛️ Current DP in State: ${selectedDistortionControl?.name || 'NONE'}`)
+    
+    // Validate consistency
+    const isValid = selectedDistortionControl?.id === control.id
+    console.log(`✅ State Consistency: ${isValid ? 'VALID' : '❌ INVALID'}`)
+    
+    if (!isValid) {
+      console.error(`❌ VALIDATION FAILED: Selected DP mismatch!`)
+      console.error(`   Expected: ${control.name} (${control.id})`)
+      console.error(`   Got: ${selectedDistortionControl?.name} (${selectedDistortionControl?.id})`)
+    }
+    
+    // Check if we're using the same palette as before
+    const previousPaletteName = selectedPalette?.name
+    console.log(`🎨 Palette Check: Current="${previousPaletteName}", Previous=unknown`)
+    
+    console.log(`🔧 Settings: Angular=${control['angular-distortion']}, Fractal=${control['fractal-distortion']}, Checkerboard=${control['checkerboard-pattern']}`)
+    console.log(`📏 Distance: ${control['distance-calculation']}, Modulus=${control['distance-modulus']}, Scaling=${control['curve-scaling']}`)
     console.log(`🎨 Render will be triggered by useEffect in 200ms`)
-    console.log(`===== END LOAD SUMMARY =====\n`)
+    console.log(`===== END VALIDATION =====\n`)
     
   } catch (error) {
     console.error('❌ CRITICAL ERROR in loadDistortionControl:', error)
