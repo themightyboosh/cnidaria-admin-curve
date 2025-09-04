@@ -311,37 +311,76 @@ const Merzbow: React.FC = () => {
 
     // Also load linked palette for this distortion control
     try {
-      console.log(`🎨 Looking for palette linked to distortion control: ${control.id}`)
-      console.log(`🎨 Available palettes:`, availablePalettes.map(p => p.id))
+      console.log(`\n🔍 ===== PALETTE LINKING DEBUG =====`)
+      console.log(`🎨 Loading palette for distortion control: "${control.name}" (ID: ${control.id})`)
+      console.log(`🎨 Current selectedPalette before loading:`, selectedPalette?.name || 'none')
+      console.log(`🎨 Available palettes count:`, availablePalettes.length)
+      console.log(`🎨 Available palette IDs:`, availablePalettes.map(p => `${p.id}="${p.name}"`))
       
-      const response = await fetch(`${apiUrl}/api/palette-links/distortion/${control.id}`)
-      console.log(`🎨 Palette link response status:`, response.status)
+      const url = `${apiUrl}/api/palette-links/distortion/${control.id}`
+      console.log(`🌐 Fetching palette link from:`, url)
+      
+      // Add retry logic for API calls
+      let response
+      let retryCount = 0
+      const maxRetries = 3
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          })
+          console.log(`📡 Palette link API response status (attempt ${retryCount + 1}):`, response.status)
+          break
+        } catch (fetchError) {
+          retryCount++
+          console.log(`⚠️ Fetch attempt ${retryCount} failed:`, fetchError)
+          if (retryCount < maxRetries) {
+            console.log(`🔄 Retrying in ${retryCount * 1000}ms...`)
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000))
+          } else {
+            throw fetchError
+          }
+        }
+      }
       
       if (response.ok) {
         const data = await response.json()
-        console.log(`🎨 Palette link data:`, data)
+        console.log(`📦 Full palette link response:`, JSON.stringify(data, null, 2))
         
-        if (data.success && data.data.hasLink) {
-          console.log(`🎨 Found linked palette ID:`, data.data.link.paletteId)
+        if (data.success && data.data && data.data.hasLink && data.data.link) {
+          const linkedPaletteId = data.data.link.paletteId
+          console.log(`🔗 Found linked palette ID: "${linkedPaletteId}"`)
           
           // Find the palette in our available palettes
-          const linkedPalette = availablePalettes.find(p => p.id === data.data.link.paletteId)
+          const linkedPalette = availablePalettes.find(p => p.id === linkedPaletteId)
+          console.log(`🔍 Searching for palette with ID "${linkedPaletteId}"...`)
+          console.log(`🔍 Found in available palettes:`, !!linkedPalette)
+          
           if (linkedPalette) {
-            console.log(`✅ Auto-loaded linked palette: ${linkedPalette.name}`)
+            console.log(`✅ AUTO-LOADING LINKED PALETTE: "${linkedPalette.name}" (ID: ${linkedPalette.id})`)
             setSelectedPalette(linkedPalette)
+            console.log(`✅ selectedPalette state updated to:`, linkedPalette.name)
           } else {
-            console.log(`⚠️ Linked palette ${data.data.link.paletteId} not found in available palettes`)
-            console.log(`⚠️ Available palette IDs:`, availablePalettes.map(p => `${p.id} (${p.name})`))
+            console.log(`❌ PALETTE NOT FOUND: "${linkedPaletteId}" not in available palettes`)
+            console.log(`❌ Available IDs for comparison:`, availablePalettes.map(p => `"${p.id}"`))
           }
         } else {
-          console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
-          // Don't clear current palette if no link found
+          console.log(`❌ NO PALETTE LINK: hasLink=${data.data?.hasLink}, link=${!!data.data?.link}`)
+          console.log(`❌ No palette linked to distortion control: ${control.name}`)
         }
       } else {
-        console.log(`⚠️ Palette link API error:`, response.status)
+        console.log(`❌ API ERROR: ${response.status} ${response.statusText}`)
+        const errorText = await response.text()
+        console.log(`❌ Error response:`, errorText)
       }
+      console.log(`🔍 ===== END PALETTE DEBUG =====\n`)
     } catch (error) {
-      console.error('Failed to load linked palette:', error)
+      console.error('❌ PALETTE LOADING EXCEPTION:', error)
     }
 
     // Trigger immediate redraw with new distortion profile settings
