@@ -382,6 +382,8 @@ const Merzbow: React.FC = () => {
     // Smaller delay just for curve/palette state clearing
     console.log(`⏱️ Waiting for curve/palette state clear...`)
     await new Promise(resolve => setTimeout(resolve, 50))
+    console.log('📥 LOADING DISTORTION SETTINGS FROM DP:', JSON.stringify(control, null, 2))
+    
     setAngularEnabled(control['angular-distortion'])
     setFractalEnabled(control['fractal-distortion'])
     setCheckerboardEnabled(control['checkerboard-pattern'])
@@ -396,6 +398,8 @@ const Merzbow: React.FC = () => {
     setFractalScale2(control['fractal-scale-2'])
     setFractalScale3(control['fractal-scale-3'])
     setFractalStrength(control['fractal-strength'])
+    
+    console.log('📥 LOADED SETTINGS TO STATE - Angular:', control['angular-distortion'], 'Fractal:', control['fractal-distortion'])
     setHasUnsavedChanges(false)
 
     // Find and load linked curve and palette from consolidated distortion-control-links
@@ -584,6 +588,8 @@ const Merzbow: React.FC = () => {
       'fractal-scale-3': fractalScale3,
       'fractal-strength': fractalStrength
     }
+    
+    console.log('💾 SAVING DISTORTION SETTINGS:', JSON.stringify(updateData, null, 2))
 
     try {
       const response = await fetch(`${apiUrl}/api/distortion-controls/${selectedDistortionControl.id}`, {
@@ -593,12 +599,14 @@ const Merzbow: React.FC = () => {
       })
 
       if (response.ok) {
+        const savedData = await response.json()
+        console.log('✅ DISTORTION CONTROL SAVED - API RESPONSE:', JSON.stringify(savedData, null, 2))
         setHasUnsavedChanges(false)
-        console.log('✅ Distortion control saved successfully')
-        // Don't reload distortion controls to avoid triggering auto-selection
-        console.log('💾 Save complete - keeping current UI state stable')
       } else {
-        console.error('❌ Failed to save distortion control:', response.statusText)
+        const errorData = await response.text()
+        console.error('❌ SAVE FAILED:', response.status, response.statusText)
+        console.error('❌ ERROR DETAILS:', errorData)
+        alert(`Failed to save distortion control: ${response.statusText}\n\nError: ${errorData}`)
       }
     } catch (error) {
       console.error('❌ Error saving distortion control:', error)
