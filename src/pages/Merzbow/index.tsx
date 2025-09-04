@@ -643,7 +643,46 @@ const Merzbow: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         console.log(`✅ Created new DP:`, data)
+        
+        // Reload DPs to get the new one
         await loadDistortionControls()
+        
+        // Auto-link latest curve and palette to new DP
+        const newDP = availableDistortionControls.find(dp => dp.name === newName)
+        if (newDP && availableCurves.length > 0 && availablePalettes.length > 0) {
+          const latestCurve = [...availableCurves].sort((a, b) => 
+            new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
+          )[0]
+          const latestPalette = [...availablePalettes].sort((a, b) => 
+            new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
+          )[0]
+          
+          console.log(`🔗 Auto-linking latest curve "${latestCurve.name}" and palette "${latestPalette.name}" to new DP`)
+          
+          try {
+            const linkBody = {
+              curveId: latestCurve.id,
+              distortionControlId: newDP.id,
+              paletteName: latestPalette.name
+            }
+            
+            const linkResponse = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(linkBody)
+            })
+            
+            if (linkResponse.ok) {
+              const linkData = await linkResponse.json()
+              console.log(`✅ Auto-linked curve and palette to new DP:`, linkData)
+              console.log(`🎉 New DP created with latest curve "${latestCurve.name}" and palette "${latestPalette.name}"`)
+            } else {
+              console.error(`❌ Failed to auto-link to new DP:`, linkResponse.statusText)
+            }
+          } catch (linkError) {
+            console.error(`❌ Error auto-linking to new DP:`, linkError)
+          }
+        }
       } else {
         const errorData = await response.text()
         console.error(`❌ Failed to create DP:`, errorData)
@@ -700,7 +739,43 @@ const Merzbow: React.FC = () => {
       })
       
       if (response.ok) {
+        const newDPData = await response.json()
+        console.log(`✅ Duplicated DP:`, newDPData)
+        
+        // Reload DPs to get the new one
         await loadDistortionControls()
+        
+        // Find the new DP and duplicate its link relationships
+        const newDP = availableDistortionControls.find(dp => dp.name === copyName)
+        if (newDP && selectedCurve && selectedPalette) {
+          console.log(`🔗 Duplicating link relationships to new DP "${copyName}"`)
+          
+          try {
+            const linkBody = {
+              curveId: selectedCurve.id,
+              distortionControlId: newDP.id,
+              paletteName: selectedPalette.name
+            }
+            
+            const linkResponse = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(linkBody)
+            })
+            
+            if (linkResponse.ok) {
+              const linkData = await linkResponse.json()
+              console.log(`✅ Link relationships duplicated:`, linkData)
+              console.log(`🎉 Duplicate complete with same curve "${selectedCurve.name}" and palette "${selectedPalette.name}"`)
+            } else {
+              console.error(`❌ Failed to duplicate link relationships:`, linkResponse.statusText)
+            }
+          } catch (linkError) {
+            console.error(`❌ Error duplicating links:`, linkError)
+          }
+        } else {
+          console.log(`⚠️ No current curve/palette to duplicate links for`)
+        }
       } else {
         alert(`Failed to duplicate: ${response.statusText}`)
       }
