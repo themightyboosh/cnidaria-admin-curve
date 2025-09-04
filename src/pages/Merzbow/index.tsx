@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
+import { SaveButton } from '../../components/shared'
 import { apiUrl } from '../../config/environments'
 import { unityShaderGenerator } from '../../utils/unityShaderGenerator'
 import { glslShaderGenerator } from '../../utils/glslShaderGenerator'
@@ -1513,17 +1514,14 @@ void main() {
 
 
                 {/* Save Button */}
-                {hasUnsavedChanges && (
-                  <div className="form-group">
-                    <button 
-                      onClick={saveDistortionControl} 
-                      className="save-button full-width"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                )}
+                <div className="form-group">
+                  <SaveButton
+                    onClick={saveDistortionControl}
+                    isSaving={isSaving}
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    title="Save distortion control changes"
+                  />
+                </div>
               </div>
             )}
           </div>

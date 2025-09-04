@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { SaveButton } from '../../components/shared'
 import { apiUrl } from '../../config/environments'
 
 interface Curve {
@@ -184,13 +185,13 @@ function WaveEditor() {
                 </button>
               ) : (
                 <div className="edit-actions">
-                  <button 
-                    className="save-btn"
+                  <SaveButton
                     onClick={handleSave}
-                    disabled={isLoading || !hasUnsavedChanges}
-                  >
-                    {isLoading ? 'Saving...' : 'Save Changes'}
-                  </button>
+                    isSaving={isLoading}
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    className="save-btn"
+                    title="Save wave data changes"
+                  />
                   <button 
                     className="cancel-btn"
                     onClick={handleCancel}
