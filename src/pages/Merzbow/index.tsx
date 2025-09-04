@@ -1635,57 +1635,99 @@ void main() {
       return
     }
 
-    // Create cube geometry
-    const cubeVertices = new Float32Array([
-      // Front face
-      -1, -1,  1,  0, 0,
-       1, -1,  1,  1, 0,
-       1,  1,  1,  1, 1,
-      -1,  1,  1,  0, 1,
-      // Back face
-      -1, -1, -1,  1, 0,
-      -1,  1, -1,  1, 1,
-       1,  1, -1,  0, 1,
-       1, -1, -1,  0, 0,
-      // Top face
-      -1,  1, -1,  0, 1,
-      -1,  1,  1,  0, 0,
-       1,  1,  1,  1, 0,
-       1,  1, -1,  1, 1,
-      // Bottom face
-      -1, -1, -1,  0, 0,
-       1, -1, -1,  1, 0,
-       1, -1,  1,  1, 1,
-      -1, -1,  1,  0, 1,
-      // Right face
-       1, -1, -1,  1, 0,
-       1,  1, -1,  1, 1,
-       1,  1,  1,  0, 1,
-       1, -1,  1,  0, 0,
-      // Left face
-      -1, -1, -1,  0, 0,
-      -1, -1,  1,  1, 0,
-      -1,  1,  1,  1, 1,
-      -1,  1, -1,  0, 1
-    ])
-
-    const cubeIndices = new Uint16Array([
-      0,  1,  2,    0,  2,  3,    // front
-      4,  5,  6,    4,  6,  7,    // back
-      8,  9,  10,   8,  10, 11,   // top
-      12, 13, 14,   12, 14, 15,   // bottom
-      16, 17, 18,   16, 18, 19,   // right
-      20, 21, 22,   20, 22, 23    // left
-    ])
+    // Create complex geometric primitives
+    const createTorus = (majorRadius = 1, minorRadius = 0.4, majorSegments = 32, minorSegments = 16) => {
+      const vertices = []
+      const indices = []
+      
+      for (let i = 0; i <= majorSegments; i++) {
+        const u = (i / majorSegments) * Math.PI * 2
+        for (let j = 0; j <= minorSegments; j++) {
+          const v = (j / minorSegments) * Math.PI * 2
+          
+          const x = (majorRadius + minorRadius * Math.cos(v)) * Math.cos(u)
+          const y = minorRadius * Math.sin(v)
+          const z = (majorRadius + minorRadius * Math.cos(v)) * Math.sin(u)
+          
+          vertices.push(x, y, z)
+          vertices.push(i / majorSegments, j / minorSegments) // UV
+          
+          if (i < majorSegments && j < minorSegments) {
+            const a = i * (minorSegments + 1) + j
+            const b = (i + 1) * (minorSegments + 1) + j
+            const c = (i + 1) * (minorSegments + 1) + (j + 1)
+            const d = i * (minorSegments + 1) + (j + 1)
+            
+            indices.push(a, b, d, b, c, d)
+          }
+        }
+      }
+      
+      return {
+        vertices: new Float32Array(vertices),
+        indices: new Uint16Array(indices)
+      }
+    }
+    
+    const createIcosphere = (radius = 1, subdivisions = 2) => {
+      const vertices = []
+      const indices = []
+      
+      // Golden ratio
+      const phi = (1 + Math.sqrt(5)) / 2
+      const a = 1
+      const b = 1 / phi
+      
+      // Initial icosahedron vertices
+      const baseVertices = [
+        [-a, b, 0], [a, b, 0], [-a, -b, 0], [a, -b, 0],
+        [0, -a, b], [0, a, b], [0, -a, -b], [0, a, -b],
+        [b, 0, -a], [b, 0, a], [-b, 0, -a], [-b, 0, a]
+      ]
+      
+      // Normalize and scale vertices
+      baseVertices.forEach(v => {
+        const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+        vertices.push(v[0]/len * radius, v[1]/len * radius, v[2]/len * radius)
+        // UV coordinates (spherical mapping)
+        const u = 0.5 + Math.atan2(v[2], v[0]) / (2 * Math.PI)
+        const v_coord = 0.5 - Math.asin(v[1]/len) / Math.PI
+        vertices.push(u, v_coord)
+      })
+      
+      // Initial triangle indices for icosahedron
+      const triangles = [
+        [0,11,5], [0,5,1], [0,1,7], [0,7,10], [0,10,11],
+        [1,5,9], [5,11,4], [11,10,2], [10,7,6], [7,1,8],
+        [3,9,4], [3,4,2], [3,2,6], [3,6,8], [3,8,9],
+        [4,9,5], [2,4,11], [6,2,10], [8,6,7], [9,8,1]
+      ]
+      
+      triangles.forEach(tri => {
+        indices.push(tri[0], tri[1], tri[2])
+      })
+      
+      return {
+        vertices: new Float32Array(vertices),
+        indices: new Uint16Array(indices)
+      }
+    }
+    
+    // Use torus for better shader pattern visibility
+    const mesh = createTorus(1.2, 0.5, 48, 24)
+    const meshVertices = mesh.vertices
+    const meshIndices = mesh.indices
+    
+    console.log(`🔺 Generated torus: ${meshVertices.length/5} vertices, ${meshIndices.length/3} triangles`)
 
     // Create buffers
     const vertexBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, cubeVertices, gl.STATIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, meshVertices, gl.STATIC_DRAW)
 
     const indexBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIndices, gl.STATIC_DRAW)
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, meshIndices, gl.STATIC_DRAW)
 
     // Set up attributes
     const positionLocation = gl.getAttribLocation(program, 'a_position')
@@ -1733,8 +1775,8 @@ void main() {
       gl.uniform2f(offsetLocation, centerOffsetX, centerOffsetY)
       gl.uniform1f(scaleLocation, curveScaling)
 
-      // Draw cube
-      gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0)
+      // Draw icosphere
+      gl.drawElements(gl.TRIANGLES, meshIndices.length, gl.UNSIGNED_SHORT, 0)
 
       // Check for WebGL errors
       const error = gl.getError()
