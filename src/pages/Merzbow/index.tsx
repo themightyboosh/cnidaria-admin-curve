@@ -235,6 +235,9 @@ const Merzbow: React.FC = () => {
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
   const [previousPaletteName, setPreviousPaletteName] = useState<string | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isDuplicating, setIsDuplicating] = useState(false)
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
@@ -718,6 +721,176 @@ const Merzbow: React.FC = () => {
       console.error('Error checking link status:', error)
     }
     return { curveLinked: false, paletteLinked: false }
+  }
+
+  // Create new distortion profile
+  const createNewDistortionProfile = async () => {
+    if (isCreating) return
+    setIsCreating(true)
+    
+    try {
+      // Generate name: "new-profile-{count+1}"
+      const newName = `new-profile-${availableDistortionControls.length + 1}`
+      
+      // Default settings
+      const newProfileData = {
+        name: newName,
+        'angular-distortion': false,
+        'fractal-distortion': false,
+        'checkerboard-pattern': false,
+        'distance-calculation': 'radial',
+        'distance-modulus': 0,
+        'curve-scaling': 1.0,
+        'checkerboard-steps': 0,
+        'angular-frequency': 0.0,
+        'angular-amplitude': 0,
+        'angular-offset': 0.0,
+        'fractal-scale-1': 0.0,
+        'fractal-scale-2': 0.0,
+        'fractal-scale-3': 0.05,
+        'fractal-strength': 1
+      }
+      
+      console.log(`🆕 Creating new distortion profile: "${newName}"`)
+      
+      const response = await fetch(`${apiUrl}/api/distortion-controls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProfileData)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ Created new DP:`, data)
+        
+        // Reload DPs and auto-select the new one
+        await loadDistortionControls()
+        const newDP = availableDistortionControls.find(dp => dp.name === newName)
+        if (newDP) {
+          await loadDistortionControl(newDP)
+          
+          // Auto-link latest curve and palette
+          if (availableCurves.length > 0 && availablePalettes.length > 0) {
+            const latestCurve = [...availableCurves].sort((a, b) => 
+              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
+            )[0]
+            const latestPalette = [...availablePalettes].sort((a, b) => 
+              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
+            )[0]
+            
+            console.log(`🔗 Auto-linking latest curve "${latestCurve.name}" and palette "${latestPalette.name}" to new DP`)
+            
+            setSelectedCurve(latestCurve)
+            setSelectedPalette(latestPalette)
+            
+            // Create the link
+            await linkBothToDistortionControl()
+          }
+        }
+      } else {
+        const errorData = await response.text()
+        console.error(`❌ Failed to create DP:`, errorData)
+        alert(`Failed to create distortion profile: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('❌ Error creating DP:', error)
+      alert(`Error creating distortion profile: ${error}`)
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  // Delete current distortion profile
+  const deleteDistortionProfile = async () => {
+    if (!selectedDistortionControl || isDeleting) return
+    
+    if (!confirm(`Are you sure you want to delete "${selectedDistortionControl.name}"? This cannot be undone.`)) {
+      return
+    }
+    
+    setIsDeleting(true)
+    
+    try {
+      console.log(`🗑️ Deleting distortion profile: "${selectedDistortionControl.name}"`)
+      
+      const response = await fetch(`${apiUrl}/api/distortion-controls/${selectedDistortionControl.id}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        console.log(`✅ Deleted DP successfully`)
+        
+        // Clear current selection and reload list
+        setSelectedDistortionControl(null)
+        setSelectedCurve(null)
+        setSelectedPalette(null)
+        await loadDistortionControls()
+      } else {
+        const errorData = await response.text()
+        console.error(`❌ Failed to delete DP:`, errorData)
+        alert(`Failed to delete distortion profile: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('❌ Error deleting DP:', error)
+      alert(`Error deleting distortion profile: ${error}`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // Duplicate current distortion profile
+  const duplicateDistortionProfile = async () => {
+    if (!selectedDistortionControl || isDuplicating) return
+    setIsDuplicating(true)
+    
+    try {
+      // Generate name: "{original-name}-copy-{count+1}"
+      const baseName = selectedDistortionControl.name
+      const copyName = `${baseName}-copy-${availableDistortionControls.length + 1}`
+      
+      // Copy all settings from current DP
+      const duplicateData = {
+        ...selectedDistortionControl,
+        name: copyName,
+        id: undefined // Remove ID so API creates new one
+      }
+      delete duplicateData.id
+      
+      console.log(`📋 Duplicating distortion profile: "${baseName}" → "${copyName}"`)
+      
+      const response = await fetch(`${apiUrl}/api/distortion-controls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(duplicateData)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ Duplicated DP:`, data)
+        
+        // Reload DPs and auto-select the duplicate
+        await loadDistortionControls()
+        const duplicateDP = availableDistortionControls.find(dp => dp.name === copyName)
+        if (duplicateDP) {
+          await loadDistortionControl(duplicateDP)
+          
+          // Link same curve and palette as original
+          if (selectedCurve && selectedPalette) {
+            console.log(`🔗 Linking same curve "${selectedCurve.name}" and palette "${selectedPalette.name}" to duplicate`)
+            await linkBothToDistortionControl()
+          }
+        }
+      } else {
+        const errorData = await response.text()
+        console.error(`❌ Failed to duplicate DP:`, errorData)
+        alert(`Failed to duplicate distortion profile: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('❌ Error duplicating DP:', error)
+      alert(`Error duplicating distortion profile: ${error}`)
+    } finally {
+      setIsDuplicating(false)
+    }
   }
 
   // Link both curve and palette to current distortion control
@@ -1787,6 +1960,62 @@ void main() {
                   )}
                 </div>
 
+                {/* CRUD Buttons */}
+                <div className="form-group" style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={createNewDistortionProfile}
+                    disabled={isCreating}
+                    style={{
+                      backgroundColor: '#28a745',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      flex: 1
+                    }}
+                  >
+                    {isCreating ? 'Creating...' : 'Create'}
+                  </button>
+                  
+                  <button 
+                    onClick={deleteDistortionProfile}
+                    disabled={!selectedDistortionControl || isDeleting}
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      flex: 1,
+                      opacity: !selectedDistortionControl ? 0.5 : 1
+                    }}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                  
+                  <button 
+                    onClick={duplicateDistortionProfile}
+                    disabled={!selectedDistortionControl || isDuplicating}
+                    style={{
+                      backgroundColor: '#ffc107',
+                      color: '#333',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      flex: 1,
+                      opacity: !selectedDistortionControl ? 0.5 : 1
+                    }}
+                  >
+                    {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+                  </button>
+                </div>
+
 
                 {/* Save Button */}
                 <div className="form-group">
@@ -1801,13 +2030,14 @@ void main() {
             )}
           </div>
 
-          {/* Distortion Links Panel */}
-          <div className="info-section">
-            <h3 className="collapsible-header" onClick={() => toggleSection('links')}>
-              <span className="toggle-icon">{expandedSections.links ? '▼' : '▶'}</span>
-              Distortion Links
-            </h3>
-            {expandedSections.links && (
+          {/* Distortion Links Panel - Hidden until DP loaded */}
+          {selectedDistortionControl && (
+            <div className="info-section">
+              <h3 className="collapsible-header" onClick={() => toggleSection('links')}>
+                <span className="toggle-icon">{expandedSections.links ? '▼' : '▶'}</span>
+                Distortion Links
+              </h3>
+              {expandedSections.links && (
               <div className="section-content">
                 <div className="form-group">
                   <label>Curve:</label>
@@ -1865,13 +2095,14 @@ void main() {
             )}
           </div>
 
-          {/* Distortion Settings Panel */}
-          <div className="info-section">
-            <h3 className="collapsible-header" onClick={() => toggleSection('settings')}>
-              <span className="toggle-icon">{expandedSections.settings ? '▼' : '▶'}</span>
-              Distortion Settings
-            </h3>
-            {expandedSections.settings && (
+          {/* Distortion Settings Panel - Hidden until DP loaded */}
+          {selectedDistortionControl && (
+            <div className="info-section">
+              <h3 className="collapsible-header" onClick={() => toggleSection('settings')}>
+                <span className="toggle-icon">{expandedSections.settings ? '▼' : '▶'}</span>
+                Distortion Settings
+              </h3>
+              {expandedSections.settings && (
               <div className="section-content">
                 {/* Name Editor */}
                 {selectedDistortionControl && (
@@ -1953,13 +2184,14 @@ void main() {
             )}
           </div>
 
-          {/* Angular Settings Panel */}
-          <div className="info-section">
-            <h3 className="collapsible-header" onClick={() => toggleSection('angular')}>
-              <span className="toggle-icon">{expandedSections.angular ? '▼' : '▶'}</span>
-              Angular Settings
-            </h3>
-            {expandedSections.angular && (
+          {/* Angular Settings Panel - Hidden until DP loaded */}
+          {selectedDistortionControl && (
+            <div className="info-section">
+              <h3 className="collapsible-header" onClick={() => toggleSection('angular')}>
+                <span className="toggle-icon">{expandedSections.angular ? '▼' : '▶'}</span>
+                Angular Settings
+              </h3>
+              {expandedSections.angular && (
               <div className="section-content">
                 <div className="form-group">
                   <label>Frequency: {angularFrequency}</label>
@@ -1978,8 +2210,10 @@ void main() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Fractal Settings Panel */}
+          {/* Fractal Settings Panel - Hidden until DP loaded */}
+          {selectedDistortionControl && (
           <div className="info-section">
             <h3 className="collapsible-header" onClick={() => toggleSection('fractal')}>
               <span className="toggle-icon">{expandedSections.fractal ? '▼' : '▶'}</span>
@@ -2009,8 +2243,10 @@ void main() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Export Options Panel */}
+          {/* Export Options Panel - Hidden until DP loaded */}
+          {selectedDistortionControl && (
           <div className="info-section">
             <h3 className="collapsible-header" onClick={() => toggleSection('export')}>
               <span className="toggle-icon">{expandedSections.export ? '▼' : '▶'}</span>
@@ -2182,6 +2418,7 @@ void main() {
               </div>
             </div>
           </div>
+          )}
         )}
       </div>
     </div>
