@@ -105,8 +105,12 @@ const PaletteLinkButton: React.FC<{
         const response = await fetch(`${apiUrl}/api/distortion-palette-links/distortion/${distortionControlId}`)
         if (response.ok) {
           const data = await response.json()
-          const linked = data.success && data.data.hasLink && data.data.link?.paletteId === paletteId
+          console.log('🔍 Palette link response:', data)
+          const linked = data.success && data.data && data.data.hasLink && data.data.link?.paletteId === paletteId
           setIsLinked(linked)
+        } else {
+          console.warn('Palette link API response not ok:', response.status)
+          setIsLinked(false)
         }
       } catch (error) {
         console.error('Failed to check palette link:', error)
@@ -884,7 +888,19 @@ const Merzbow: React.FC = () => {
         includeComments: true
       })
 
-      console.log('✅ Shader package generated:', shaderPackage)
+      console.log('✅ Shader package generated')
+
+      // Validate GLSL before export
+      console.log('🔍 Validating GLSL shaders...')
+      const validation = validateGLSL(shaderPackage.fragmentShader, shaderPackage.vertexShader)
+      
+      if (!validation.valid) {
+        console.error('❌ GLSL Validation Failed:', validation.errors)
+        alert(`❌ GLSL Validation Failed:\n\n${validation.errors.join('\n\n')}`)
+        return
+      }
+      
+      console.log('✅ GLSL validation passed')
 
       // Create foundational curve-shader file
       const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
@@ -1228,12 +1244,79 @@ void main() {
       ['u_time', Date.now() / 1000]
     ]
 
+    console.log('🔧 Setting uniforms for 3D preview:')
     uniforms.forEach(([name, value]) => {
       const location = gl.getUniformLocation(program, name)
-      if (location) {
+      if (location !== null) {
         gl.uniform1f(location, value as number)
+        console.log(`  ✅ ${name}: ${value}`)
+      } else {
+        console.warn(`  ❌ Uniform '${name}' not found in shader (optimized out?)`)
       }
     })
+  }
+
+  // Validate GLSL shader before export
+  const validateGLSL = (fragmentShader: string, vertexShader: string): { valid: boolean; errors: string[] } => {
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2')
+    if (!gl) {
+      return { valid: false, errors: ['WebGL2 not available for validation'] }
+    }
+
+    const errors: string[] = []
+
+    try {
+      // Validate vertex shader
+      const vs = gl.createShader(gl.VERTEX_SHADER)
+      if (vs) {
+        gl.shaderSource(vs, vertexShader)
+        gl.compileShader(vs)
+        
+        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+          const error = gl.getShaderInfoLog(vs)
+          errors.push(`Vertex Shader Error: ${error}`)
+        }
+      }
+
+      // Validate fragment shader
+      const fs = gl.createShader(gl.FRAGMENT_SHADER)
+      if (fs) {
+        gl.shaderSource(fs, fragmentShader)
+        gl.compileShader(fs)
+        
+        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+          const error = gl.getShaderInfoLog(fs)
+          errors.push(`Fragment Shader Error: ${error}`)
+        }
+      }
+
+      // Try to link program
+      if (vs && fs && errors.length === 0) {
+        const program = gl.createProgram()
+        if (program) {
+          gl.attachShader(program, vs)
+          gl.attachShader(program, fs)
+          gl.linkProgram(program)
+          
+          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            const error = gl.getProgramInfoLog(program)
+            errors.push(`Program Link Error: ${error}`)
+          }
+          
+          gl.deleteProgram(program)
+        }
+      }
+
+      // Cleanup
+      if (vs) gl.deleteShader(vs)
+      if (fs) gl.deleteShader(fs)
+
+    } catch (error) {
+      errors.push(`Validation Exception: ${error}`)
+    }
+
+    return { valid: errors.length === 0, errors }
   }
 
   return (
