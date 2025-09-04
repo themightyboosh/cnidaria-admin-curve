@@ -1469,9 +1469,15 @@ void main() {
                   <label>Curve:</label>
                   <select 
                     value={selectedCurve?.name || ''} 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const curve = availableCurves.find(c => c.name === e.target.value)
                       setSelectedCurve(curve || null)
+                      
+                      // Auto-link curve to current distortion control
+                      if (curve && selectedDistortionControl) {
+                        console.log(`🔗 Auto-linking curve "${curve.name}" to distortion control "${selectedDistortionControl.name}"`)
+                        await linkCurveToDistortionControl(curve.name)
+                      }
                     }}
                   >
                     <option value="">Default (0-255 ramp)</option>
@@ -1488,10 +1494,16 @@ void main() {
                   <select 
                     key={`palette-${selectedPalette?.id || 'none'}`}
                     value={selectedPalette?.id || ''} 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const palette = availablePalettes.find(p => p.id === e.target.value)
                       setSelectedPalette(palette || null)
-                      console.log(`🎨 Manually selected palette: ${palette?.name || 'none'}`)
+                      console.log(`🎨 Selected palette: ${palette?.name || 'none'}`)
+                      
+                      // Auto-link palette to current distortion control
+                      if (palette && selectedDistortionControl) {
+                        console.log(`🔗 Auto-linking palette "${palette.name}" to distortion control "${selectedDistortionControl.name}"`)
+                        await linkPaletteToDistortionControl()
+                      }
                     }}
                   >
                     <option value="">Default (Grayscale)</option>
@@ -1503,23 +1515,16 @@ void main() {
                   </select>
                 </div>
 
-                {/* Link Buttons */}
-                <div className="form-group" style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                  {selectedCurve && selectedDistortionControl && (
-                    <CurveLinkButton 
-                      curveName={selectedCurve.name}
-                      distortionControlId={selectedDistortionControl.id}
-                      onLink={() => linkCurveToDistortionControl(selectedCurve.name)}
-                    />
-                  )}
-                  {selectedPalette && selectedDistortionControl && (
-                    <PaletteLinkButton 
-                      distortionControlId={selectedDistortionControl.id}
-                      paletteId={selectedPalette.id}
-                      paletteName={selectedPalette.name}
-                      onLink={() => linkPaletteToDistortionControl()}
-                    />
-                  )}
+                {/* Auto-linking enabled - no manual buttons needed */}
+                <div className="form-group" style={{ 
+                  padding: '10px', 
+                  background: '#444', 
+                  borderRadius: '6px', 
+                  fontSize: '12px', 
+                  color: '#ccc',
+                  fontStyle: 'italic'
+                }}>
+                  ✅ Auto-linking enabled: Selections automatically link to distortion profile
                 </div>
               </div>
             )}
