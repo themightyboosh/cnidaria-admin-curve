@@ -84,7 +84,7 @@ const CurveLinkButton: React.FC<{
 
   return (
     <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
-      {isLinking ? 'Linking...' : `Link to ${curveName}`}
+      {isLinking ? 'Linking...' : 'Link Curve'}
     </button>
   )
 }
@@ -135,7 +135,7 @@ const PaletteLinkButton: React.FC<{
 
   return (
     <button onClick={handleLink} disabled={isLinking} className="link-button">
-      {isLinking ? 'Linking...' : `Link ${paletteName}`}
+      {isLinking ? 'Linking...' : 'Link Palette'}
     </button>
   )
 }
@@ -212,16 +212,7 @@ const Merzbow: React.FC = () => {
           const controls = data.data.distortionControls
           setAvailableDistortionControls(controls)
           
-          // Load most recently modified if no last active curve
-          if (controls.length > 0) {
-            const mostRecent = controls.sort((a: DistortionControl, b: DistortionControl) => 
-              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
-            )[0]
-            
-            if (!lastActiveCurve) {
-              await loadDistortionControl(mostRecent)
-            }
-          }
+          // Don't auto-load here - will be handled after all data is loaded
         }
       }
     } catch (error) {
@@ -352,6 +343,12 @@ const Merzbow: React.FC = () => {
     } catch (error) {
       console.error('Failed to load linked palette:', error)
     }
+
+    // Trigger immediate redraw with new distortion profile settings
+    console.log(`🎨 Triggering redraw for new distortion profile: ${control.name}`)
+    setTimeout(() => {
+      processPattern()
+    }, 100) // Small delay to ensure state updates are complete
   }
 
   // Save current distortion control
@@ -652,12 +649,46 @@ const Merzbow: React.FC = () => {
     console.log('✅ Merzbow pattern complete')
   }
 
-  // Load data on mount
+  // Load data on mount in proper sequence
   useEffect(() => {
-    loadDistortionControls()
-    loadCurves()
-    loadPalettes()
+    const loadAllData = async () => {
+      console.log('🔄 Loading all data in sequence...')
+      
+      // Load all data first
+      await Promise.all([
+        loadDistortionControls(),
+        loadCurves(), 
+        loadPalettes()
+      ])
+      
+      console.log('✅ All data loaded, ready for auto-selection')
+    }
+    
+    loadAllData()
   }, [])
+
+  // Auto-load most recent distortion control after all data is available
+  useEffect(() => {
+    const autoLoadDistortionControl = async () => {
+      if (availableDistortionControls.length > 0 && 
+          availableCurves.length > 0 && 
+          availablePalettes.length > 0 && 
+          !selectedDistortionControl) {
+        
+        console.log('🎛️ All data loaded, auto-selecting most recent distortion control')
+        
+        const mostRecent = availableDistortionControls.sort((a, b) => 
+          new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+        )[0]
+        
+        if (mostRecent) {
+          await loadDistortionControl(mostRecent)
+        }
+      }
+    }
+    
+    autoLoadDistortionControl()
+  }, [availableDistortionControls, availableCurves, availablePalettes, selectedDistortionControl])
 
   // Mark as unsaved when parameters change
   useEffect(() => {
@@ -1414,7 +1445,7 @@ void main() {
                 </div>
 
                 <div className="form-group">
-                  <label>Color Palette:</label>
+                  <label>Palette:</label>
                   <select 
                     key={`palette-${selectedPalette?.id || 'none'}`}
                     value={selectedPalette?.id || ''} 
