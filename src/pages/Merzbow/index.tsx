@@ -156,6 +156,7 @@ const Merzbow: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingDP, setIsLoadingDP] = useState(false)
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
 
   // Collapsible sections state
@@ -270,8 +271,10 @@ const Merzbow: React.FC = () => {
     }
     
     setIsLoadingDP(true)
-    console.log(`\n🔄 ===== LOADING DISTORTION PROFILE: ${control.name} =====`)
-    console.log(`📋 Profile ID: ${control.id}`)
+    
+    try {
+      console.log(`\n🔄 ===== LOADING DISTORTION PROFILE: ${control.name} =====`)
+      console.log(`📋 Profile ID: ${control.id}`)
     
     // COMPLETE CACHE/STATE CLEARING
     console.log(`🧹 CLEARING ALL CACHED STATE...`)
@@ -423,6 +426,13 @@ const Merzbow: React.FC = () => {
     console.log(`🎨 Render will be triggered by useEffect in 200ms`)
     console.log(`===== END LOAD SUMMARY =====\n`)
     
+  } catch (error) {
+    console.error('❌ CRITICAL ERROR in loadDistortionControl:', error)
+    // Reset states on error to prevent hanging
+    setIsLoadingDP(false)
+    setIsProcessing(false)
+    setIsSaving(false)
+  } finally {
     setIsLoadingDP(false)
   }
 
@@ -817,28 +827,36 @@ const Merzbow: React.FC = () => {
     loadAllData()
   }, [])
 
-  // Auto-load most recent distortion control after all data is available
+  // Auto-load most recent distortion control after all data is available (ONE TIME ONLY)
   useEffect(() => {
     const autoLoadDistortionControl = async () => {
       if (availableDistortionControls.length > 0 && 
           availableCurves.length > 0 && 
           availablePalettes.length > 0 && 
-          !selectedDistortionControl) {
+          !selectedDistortionControl &&
+          !hasAutoLoaded &&
+          !isLoadingDP) {
         
-        console.log('🎛️ All data loaded, auto-selecting most recent distortion control')
+        console.log('🎛️ All data loaded, auto-selecting most recent distortion control (ONE TIME)')
+        setHasAutoLoaded(true) // Prevent multiple auto-loads
         
         const mostRecent = [...availableDistortionControls].sort((a, b) => 
           new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
         )[0]
         
         if (mostRecent) {
-          await loadDistortionControl(mostRecent)
+          try {
+            await loadDistortionControl(mostRecent)
+          } catch (error) {
+            console.error('❌ Auto-load failed:', error)
+            setIsLoadingDP(false) // Ensure loading state is reset
+          }
         }
       }
     }
     
     autoLoadDistortionControl()
-  }, [availableDistortionControls, availableCurves, availablePalettes, selectedDistortionControl])
+  }, [availableDistortionControls, availableCurves, availablePalettes, selectedDistortionControl, hasAutoLoaded, isLoadingDP])
 
   // Mark as unsaved when parameters change
   useEffect(() => {
