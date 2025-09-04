@@ -42,7 +42,83 @@ interface Palette {
   updatedAt?: string
 }
 
-// Curve Link Button Component
+// Manual Link Button Component - shows when curve or palette not linked
+interface LinkButtonProps {
+  selectedCurve: Curve | null
+  selectedPalette: Palette | null  
+  selectedDistortionControl: DistortionControl | null
+  onLink: () => Promise<void>
+}
+
+const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette, selectedDistortionControl, onLink }) => {
+  const [linkStatus, setLinkStatus] = useState({ curveLinked: false, paletteLinked: false })
+  const [isChecking, setIsChecking] = useState(false)
+  
+  // Check link status when selections change
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!selectedDistortionControl) {
+        setLinkStatus({ curveLinked: false, paletteLinked: false })
+        return
+      }
+      
+      setIsChecking(true)
+      try {
+        const response = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data && data.data.length > 0) {
+            const link = data.data[0]
+            const curveLinked = selectedCurve ? link.curveId === selectedCurve.id : false
+            const paletteLinked = selectedPalette ? link.paletteName === selectedPalette.name : false
+            setLinkStatus({ curveLinked, paletteLinked })
+          } else {
+            setLinkStatus({ curveLinked: false, paletteLinked: false })
+          }
+        }
+      } catch (error) {
+        console.error('Error checking link status:', error)
+        setLinkStatus({ curveLinked: false, paletteLinked: false })
+      } finally {
+        setIsChecking(false)
+      }
+    }
+    
+    checkStatus()
+  }, [selectedCurve?.id, selectedPalette?.name, selectedDistortionControl?.id])
+  
+  const needsLinking = (selectedCurve && !linkStatus.curveLinked) || (selectedPalette && !linkStatus.paletteLinked)
+  
+  if (!needsLinking || !selectedDistortionControl || (!selectedCurve && !selectedPalette)) {
+    return null
+  }
+  
+  return (
+    <div className="form-group">
+      <button 
+        onClick={onLink}
+        className="link-button"
+        disabled={isChecking}
+        style={{
+          backgroundColor: '#f4d03f',
+          color: '#333',
+          border: 'none',
+          borderRadius: '4px',
+          padding: '8px 16px',
+          fontSize: '14px',
+          fontWeight: '500',
+          cursor: 'pointer',
+          width: '100%'
+        }}
+      >
+        {isChecking ? 'Checking...' : 
+         `Link ${!linkStatus.curveLinked && selectedCurve ? 'Curve' : ''}${!linkStatus.curveLinked && !linkStatus.paletteLinked && selectedCurve && selectedPalette ? ' + ' : ''}${!linkStatus.paletteLinked && selectedPalette ? 'Palette' : ''} to DP`}
+      </button>
+    </div>
+  )
+}
+
+// Curve Link Button Component (UNUSED)
 const CurveLinkButton: React.FC<{
   curveName: string
   distortionControlId: string
@@ -642,6 +718,65 @@ const Merzbow: React.FC = () => {
       
     } catch (error) {
       console.error('❌ PALETTE LINK EXCEPTION:', error)
+    }
+  }
+
+  // Check if current selections are linked to the DP
+  const checkCurrentLinksStatus = async () => {
+    if (!selectedDistortionControl) return { curveLinked: false, paletteLinked: false }
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data && data.data.length > 0) {
+          const link = data.data[0]
+          const curveLinked = selectedCurve ? link.curveId === selectedCurve.id : false
+          const paletteLinked = selectedPalette ? link.paletteName === selectedPalette.name : false
+          return { curveLinked, paletteLinked }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking link status:', error)
+    }
+    return { curveLinked: false, paletteLinked: false }
+  }
+
+  // Link both curve and palette to current distortion control
+  const linkBothToDistortionControl = async () => {
+    if (!selectedDistortionControl || !selectedCurve || !selectedPalette) {
+      console.log(`❌ Cannot link: missing DP (${!!selectedDistortionControl}), curve (${!!selectedCurve}), or palette (${!!selectedPalette})`)
+      return
+    }
+    
+    try {
+      console.log(`🔗 LINKING BOTH: Curve "${selectedCurve.name}" + Palette "${selectedPalette.name}" → DP "${selectedDistortionControl.name}"`)
+      
+      const requestBody = {
+        curveId: selectedCurve.id,
+        distortionControlId: selectedDistortionControl.id,
+        paletteName: selectedPalette.name
+      }
+      console.log(`📦 Creating/updating link with both:`, JSON.stringify(requestBody, null, 2))
+      
+      const response = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ BOTH LINKED SUCCESSFULLY:`, JSON.stringify(data, null, 2))
+        console.log(`🎉 SUCCESS: Both curve and palette linked to DP`)
+      } else {
+        const errorData = await response.text()
+        console.error(`🚨 LINKING FAILED: ${response.status} ${response.statusText}`)
+        console.error(`🚨 Error details:`, errorData)
+        alert(`FAILED to link curve and palette: ${response.status} ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('❌ Link both exception:', error)
     }
   }
 
@@ -1705,11 +1840,7 @@ void main() {
                       console.log(`🎯 Selected curve: ${curve?.name || 'none'} (ID: ${curve?.id || 'none'})`)
                       setSelectedCurve(curve || null)
                       
-                      // TEMPORARILY DISABLED: Auto-link curve to current distortion control
-                      if (curve && selectedDistortionControl) {
-                        console.log(`🔗 Would auto-link curve "${curve.name}" (ID: ${curve.id}) to distortion control "${selectedDistortionControl.name}" (DISABLED FOR TESTING)`)
-                        // await linkCurveToDistortionControl(curve.id)
-                      }
+                      // No auto-linking - user will use manual link button
                     }}
                   >
                     <option value="">Default (0-255 ramp)</option>
@@ -1733,11 +1864,7 @@ void main() {
                       setSelectedPalette(palette || null)
                       console.log(`🎨 Palette state updated to: ${palette?.name || 'none'}`)
                       
-                      // TEMPORARILY DISABLED: Auto-link palette to current distortion control
-                      if (palette && selectedDistortionControl) {
-                        console.log(`🔗 Would auto-link palette "${palette.name}" to distortion control "${selectedDistortionControl.name}" (DISABLED FOR TESTING)`)
-                        // await linkPaletteToDistortionControlDirect(palette, selectedDistortionControl)
-                      }
+                      // No auto-linking - user will use manual link button
                     }}
                   >
                     <option value="">Default (Grayscale)</option>
@@ -1749,17 +1876,13 @@ void main() {
                   </select>
                 </div>
 
-                {/* Auto-linking enabled - no manual buttons needed */}
-                <div className="form-group" style={{ 
-                  padding: '10px', 
-                  background: '#444', 
-                  borderRadius: '6px', 
-                  fontSize: '12px', 
-                  color: '#ccc',
-                  fontStyle: 'italic'
-                }}>
-                  ✅ Auto-linking enabled: Selections automatically link to distortion profile
-                </div>
+                {/* Manual Link Button - appears when curve or palette not linked */}
+                <LinkButton 
+                  selectedCurve={selectedCurve}
+                  selectedPalette={selectedPalette}
+                  selectedDistortionControl={selectedDistortionControl}
+                  onLink={linkBothToDistortionControl}
+                />
               </div>
             )}
           </div>
