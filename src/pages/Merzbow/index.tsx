@@ -630,7 +630,38 @@ const Merzbow: React.FC = () => {
           throw new Error(`Palette linking failed: ${response.status} ${response.statusText}`)
         }
       } else {
-        console.error('❌ No existing links found for distortion control')
+        console.log('⚠️ No existing curve links found - need to create curve link first')
+        console.log(`🔗 Creating new curve+palette link for distortion control`)
+        
+        // Create a new link with both curve and palette if we have a selected curve
+        if (selectedCurve) {
+          const newLinkBody = {
+            curveId: selectedCurve.name,
+            distortionControlId: selectedDistortionControl.id,
+            paletteName: selectedPalette.name
+          }
+          console.log(`📦 Creating new curve+palette link:`, newLinkBody)
+          
+          const response = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newLinkBody)
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            console.log(`✅ NEW CURVE+PALETTE LINK CREATED:`, data)
+          } else {
+            const errorData = await response.text()
+            console.error(`🚨 FAILED TO CREATE NEW LINK: ${response.status} ${response.statusText}`)
+            console.error(`🚨 Error details:`, errorData)
+            alert(`FAILED to create new curve+palette link: ${response.status} ${response.statusText}`)
+            throw new Error(`New link creation failed: ${response.status} ${response.statusText}`)
+          }
+        } else {
+          console.error('❌ Cannot create palette link without a curve - please select a curve first')
+          alert('Please select a curve before linking a palette')
+        }
       }
       
     } catch (error) {
@@ -673,21 +704,32 @@ const Merzbow: React.FC = () => {
           body: JSON.stringify(addPaletteBody)
         })
       } else {
-        console.error('❌ No existing links found for direct palette linking')
-        return
-      }
-
-      console.log(`📡 Direct palette link response status:`, response.status)
-      
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`✅ DIRECT PALETTE LINK SUCCESSFUL:`, data)
-      } else {
-        const errorData = await response.text()
-        console.error(`🚨 CRITICAL DIRECT PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
-        console.error(`🚨 Error details:`, errorData)
-        alert(`FAILED to directly link palette "${palette.name}": ${response.status} ${response.statusText}`)
-        throw new Error(`Direct palette linking failed: ${response.status} ${response.statusText}`)
+        console.log('⚠️ No existing links found - creating new curve+palette link')
+        
+        // Create a new link with both curve and palette
+        const newLinkBody = {
+          curveId: distortionControl.name, // Use DP name as curve fallback
+          distortionControlId: distortionControl.id,
+          paletteName: palette.name
+        }
+        console.log(`📦 Creating new curve+palette link:`, newLinkBody)
+        
+        const response = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newLinkBody)
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log(`✅ NEW DIRECT LINK CREATED:`, data)
+        } else {
+          const errorData = await response.text()
+          console.error(`🚨 FAILED TO CREATE DIRECT LINK: ${response.status} ${response.statusText}`)
+          console.error(`🚨 Error details:`, errorData)
+          alert(`FAILED to create new link: ${response.status} ${response.statusText}`)
+          throw new Error(`Direct link creation failed: ${response.status} ${response.statusText}`)
+        }
       }
     } catch (error) {
       console.error('❌ DIRECT PALETTE LINK EXCEPTION:', error)
