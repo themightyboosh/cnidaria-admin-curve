@@ -153,6 +153,7 @@ const Merzbow: React.FC = () => {
   const [selectedPalette, setSelectedPalette] = useState<Palette | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
 
   // Collapsible sections state
@@ -399,7 +400,9 @@ const Merzbow: React.FC = () => {
 
   // Save current distortion control
   const saveDistortionControl = async () => {
-    if (!selectedDistortionControl) return
+    if (!selectedDistortionControl || isSaving) return
+    
+    setIsSaving(true)
     
     const updateData = {
       name: selectedDistortionControl.name,
@@ -431,9 +434,13 @@ const Merzbow: React.FC = () => {
         console.log('✅ Distortion control saved successfully')
         // Reload to get updated timestamp
         await loadDistortionControls()
+      } else {
+        console.error('❌ Failed to save distortion control:', response.statusText)
       }
     } catch (error) {
-      console.error('Failed to save distortion control:', error)
+      console.error('❌ Error saving distortion control:', error)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -597,7 +604,7 @@ const Merzbow: React.FC = () => {
     
     setIsProcessing(true)
     const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
 
     const width = canvas.width
@@ -803,14 +810,11 @@ const Merzbow: React.FC = () => {
       console.log(`🎨 EXECUTING RENDER: Starting processPattern()`)
       processPattern()
     }, 200) // Longer delay to prevent rapid-fire renders
-    return () => {
-      console.log(`🚫 RENDER CANCELLED: Timer cleared`)
-      clearTimeout(timer)
-    }
+    return () => clearTimeout(timer)
   }, [angularEnabled, angularFrequency, angularAmplitude, angularOffset, 
       fractalEnabled, fractalScale1, fractalScale2, fractalScale3, fractalStrength,
       distanceCalc, distanceModulus, curveScaling, checkerboardEnabled, checkerboardSteps,
-      centerOffsetX, centerOffsetY, selectedCurve, selectedPalette])
+      centerOffsetX, centerOffsetY, selectedCurve?.name, selectedPalette?.name])
 
   // Initialize canvas to fill viewport with any aspect ratio
   useEffect(() => {
@@ -1511,8 +1515,12 @@ void main() {
                 {/* Save Button */}
                 {hasUnsavedChanges && (
                   <div className="form-group">
-                    <button onClick={saveDistortionControl} className="save-button full-width">
-                      Save Changes
+                    <button 
+                      onClick={saveDistortionControl} 
+                      className="save-button full-width"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 )}
