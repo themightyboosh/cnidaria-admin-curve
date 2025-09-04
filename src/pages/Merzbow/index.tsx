@@ -628,6 +628,10 @@ const Merzbow: React.FC = () => {
           const data = await response.json()
           console.log(`✅ PALETTE ADDED TO LINK:`, JSON.stringify(data, null, 2))
           console.log(`🎉 SUCCESS: Palette "${selectedPalette.name}" linked to DP "${selectedDistortionControl.name}"`)
+          
+          // Refresh the DP to show the updated link
+          console.log(`🔄 Refreshing DP to show updated palette link...`)
+          await loadDistortionControl(selectedDistortionControl)
         } else {
           const errorData = await response.text()
           console.error(`🚨 CRITICAL PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
@@ -657,7 +661,12 @@ const Merzbow: React.FC = () => {
           
           if (response.ok) {
             const data = await response.json()
-            console.log(`✅ NEW CURVE+PALETTE LINK CREATED:`, data)
+            console.log(`✅ NEW CURVE+PALETTE LINK CREATED:`, JSON.stringify(data, null, 2))
+            console.log(`🎉 SUCCESS: New link created for curve "${selectedCurve.name}" + palette "${selectedPalette.name}"`)
+            
+            // Refresh the DP to show the new link
+            console.log(`🔄 Refreshing DP to show new curve+palette link...`)
+            await loadDistortionControl(selectedDistortionControl)
           } else {
             const errorData = await response.text()
             console.error(`🚨 FAILED TO CREATE NEW LINK: ${response.status} ${response.statusText}`)
@@ -729,7 +738,12 @@ const Merzbow: React.FC = () => {
         
         if (response.ok) {
           const data = await response.json()
-          console.log(`✅ NEW DIRECT LINK CREATED:`, data)
+          console.log(`✅ NEW DIRECT LINK CREATED:`, JSON.stringify(data, null, 2))
+          console.log(`🎉 SUCCESS: Direct link created for "${palette.name}" + "${distortionControl.name}"`)
+          
+          // Refresh the DP to show the new link
+          console.log(`🔄 Refreshing DP to show new direct link...`)
+          await loadDistortionControl(distortionControl)
         } else {
           const errorData = await response.text()
           console.error(`🚨 FAILED TO CREATE DIRECT LINK: ${response.status} ${response.statusText}`)
