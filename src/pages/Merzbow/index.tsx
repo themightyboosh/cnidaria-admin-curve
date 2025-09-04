@@ -350,6 +350,25 @@ const Merzbow: React.FC = () => {
           }
         } else {
           console.log(`⚠️ No links found for distortion control: ${control.name}`)
+          console.log(`🎯 Auto-selecting most recent curve and palette instead of defaults`)
+          
+          // Auto-select most recent curve
+          if (availableCurves.length > 0) {
+            const mostRecentCurve = [...availableCurves].sort((a, b) => 
+              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+            )[0]
+            console.log(`✅ Auto-selected most recent curve: ${mostRecentCurve.name}`)
+            setSelectedCurve(mostRecentCurve)
+          }
+          
+          // Auto-select most recent palette
+          if (availablePalettes.length > 0) {
+            const mostRecentPalette = [...availablePalettes].sort((a, b) => 
+              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+            )[0]
+            console.log(`✅ Auto-selected most recent palette: ${mostRecentPalette.name}`)
+            setSelectedPalette(mostRecentPalette)
+          }
         }
       }
     } catch (error) {
@@ -399,6 +418,38 @@ const Merzbow: React.FC = () => {
     if (!selectedDistortionControl || isSaving) return
     
     setIsSaving(true)
+    
+    // VALIDATION: Check that curve and palette links exist in distortion-control-links
+    console.log(`🔍 VALIDATING LINKS BEFORE SAVE...`)
+    
+    try {
+      const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
+      if (linksResponse.ok) {
+        const linksData = await linksResponse.json()
+        let curveLinked = false
+        let paletteLinked = false
+        
+        if (linksData.success && linksData.data && linksData.data.length > 0) {
+          for (const link of linksData.data) {
+            if (link.curveId === selectedCurve?.name) curveLinked = true
+            if (link.paletteName === selectedPalette?.name) paletteLinked = true
+          }
+        }
+        
+        console.log(`🔍 Link Validation Results:`)
+        console.log(`   🎯 Curve "${selectedCurve?.name || 'NONE'}" linked: ${curveLinked}`)
+        console.log(`   🎨 Palette "${selectedPalette?.name || 'NONE'}" linked: ${paletteLinked}`)
+        
+        if (selectedCurve && !curveLinked) {
+          console.warn(`⚠️ WARNING: Selected curve "${selectedCurve.name}" is not linked in distortion-control-links`)
+        }
+        if (selectedPalette && !paletteLinked) {
+          console.warn(`⚠️ WARNING: Selected palette "${selectedPalette.name}" is not linked in distortion-control-links`)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to validate links:', error)
+    }
     
     const updateData = {
       name: selectedDistortionControl.name,
@@ -655,14 +706,11 @@ const Merzbow: React.FC = () => {
       console.log(`📊 Curve width: ${selectedCurve['curve-width'] || 'unknown'}`)
     }
 
-    // Use selected curve data or default ramp
+    // Use selected curve data or null (no defaults)
     const curveData = selectedCurve ? {
       'curve-data': selectedCurve['curve-data'],
       'curve-width': selectedCurve['curve-width']
-    } : {
-      'curve-data': Array.from({ length: 256 }, (_, i) => i), // 0-255 ramp default
-      'curve-width': 256
-    }
+    } : null
 
     // Create image data for full canvas dimensions
     const imageData = ctx.createImageData(width, height)
@@ -737,9 +785,15 @@ const Merzbow: React.FC = () => {
           }
 
           // Apply curve scaling and calculate index position
-          const scaledFinalDistance = finalDistance * curveScaling
-          const indexPosition = Math.floor(Math.abs(scaledFinalDistance)) % curveData['curve-width']
-          let curveValue = curveData['curve-data'][indexPosition]
+          let curveValue = 0
+          if (curveData) {
+            const scaledFinalDistance = finalDistance * curveScaling
+            const indexPosition = Math.floor(Math.abs(scaledFinalDistance)) % curveData['curve-width']
+            curveValue = curveData['curve-data'][indexPosition]
+          } else {
+            // No curve selected - render black
+            curveValue = 0
+          }
 
           // Apply checkerboard pattern
           if (checkerboardEnabled) {
@@ -750,7 +804,7 @@ const Merzbow: React.FC = () => {
             }
           }
 
-          // Set pixel color using palette or default grayscale (8-bit, no alpha)
+          // Set pixel color using palette or black if no palette (8-bit, no alpha)
           if (selectedPalette && selectedPalette.hexColors) {
             const paletteIndex = Math.floor(curveValue) & 0xFF // Force 8-bit index
             const hexColor = selectedPalette.hexColors[paletteIndex] || '#000000'
@@ -765,11 +819,10 @@ const Merzbow: React.FC = () => {
             data[index + 2] = b
             data[index + 3] = 255 // Force opaque
           } else {
-            // Default grayscale (8-bit)
-            const color = Math.floor(curveValue) & 0xFF
-            data[index + 0] = color // R
-            data[index + 1] = color // G
-            data[index + 2] = color // B
+            // No palette selected - render black
+            data[index + 0] = 0 // R
+            data[index + 1] = 0 // G
+            data[index + 2] = 0 // B
             data[index + 3] = 255   // Force opaque
           }
 
