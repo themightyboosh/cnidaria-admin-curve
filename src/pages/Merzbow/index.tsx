@@ -851,23 +851,32 @@ const Merzbow: React.FC = () => {
   }
 
   // Export foundational curve-shader (GLSL only)
-  const exportCurveShader = () => {
+  const exportCurveShader = async () => {
     if (!selectedDistortionControl || !selectedCurve) {
       console.warn('⚠️ Need distortion control and curve to export curve-shader')
       return
     }
 
-    const shaderPackage = glslShaderGenerator.generateWebGLPackage({
-      shaderName: `CurveShader_${toKebabCase(selectedDistortionControl.name)}`,
-      distortionControl: selectedDistortionControl,
-      curve: selectedCurve,
-      palette: selectedPalette,
-      target: 'webgl',
-      includeComments: true
-    })
+    try {
+      setIsProcessing(true)
+      console.log('🎨 Starting curve-shader export...')
 
-    // Create foundational curve-shader file
-    const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
+      // Small delay to show progress
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      const shaderPackage = glslShaderGenerator.generateWebGLPackage({
+        shaderName: `CurveShader_${toKebabCase(selectedDistortionControl.name)}`,
+        distortionControl: selectedDistortionControl,
+        curve: selectedCurve,
+        palette: selectedPalette,
+        target: 'webgl',
+        includeComments: true
+      })
+
+      console.log('✅ Shader package generated')
+
+      // Create foundational curve-shader file
+      const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
 // Generated from Merzbow Pipeline F
 // Classification: curve-shader (foundational)
 // 
@@ -885,24 +894,30 @@ ${shaderPackage.fragmentShader}
 //
 // For complex materials, combine multiple curve-shaders in a higher-order shader.
 `
-    
-    const blob = new Blob([shaderContent], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    
-    link.href = url
-    link.download = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+      
+      const blob = new Blob([shaderContent], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      
+      link.href = url
+      link.download = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
 
-    console.log(`🎨 Exported foundational curve-shader: ${selectedDistortionControl.name}`)
-    console.log('📋 Curve-shader classification: FOUNDATIONAL')
-    console.log('  - Single pattern output')
-    console.log('  - Reusable in higher-order shaders')
-    console.log('  - Suitable for color, displacement, transparency')
-    console.log('  - Complete Pipeline F implementation')
+      console.log(`🎨 Exported foundational curve-shader: ${selectedDistortionControl.name}`)
+      console.log('📋 Curve-shader classification: FOUNDATIONAL')
+      console.log('  - Single pattern output')
+      console.log('  - Reusable in higher-order shaders')
+      console.log('  - Suitable for color, displacement, transparency')
+      console.log('  - Complete Pipeline F implementation')
+
+    } catch (error) {
+      console.error('❌ Curve-shader export failed:', error)
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   return (
@@ -1183,9 +1198,9 @@ ${shaderPackage.fragmentShader}
                     onClick={exportCurveShader} 
                     className="export-button unity"
                     style={{ width: '100%' }}
-                    disabled={!selectedDistortionControl || !selectedCurve}
+                    disabled={!selectedDistortionControl || !selectedCurve || isProcessing}
                   >
-                    Export Curve-Shader (GLSL)
+                    {isProcessing ? '🔄 Generating Shader...' : 'Export Curve-Shader (GLSL)'}
                   </button>
                 </div>
               </div>
