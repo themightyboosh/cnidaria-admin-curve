@@ -155,6 +155,7 @@ const Merzbow: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoadingDP, setIsLoadingDP] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
 
   // Collapsible sections state
@@ -263,6 +264,12 @@ const Merzbow: React.FC = () => {
 
   // Load distortion control into UI and find its linked curve
   const loadDistortionControl = async (control: DistortionControl) => {
+    if (isLoadingDP) {
+      console.log(`⏳ Already loading DP, skipping request for: ${control.name}`)
+      return
+    }
+    
+    setIsLoadingDP(true)
     console.log(`\n🔄 ===== LOADING DISTORTION PROFILE: ${control.name} =====`)
     console.log(`📋 Profile ID: ${control.id}`)
     
@@ -273,19 +280,19 @@ const Merzbow: React.FC = () => {
     console.log(`   🗑️ Clearing selectedDistortionControl (was: ${selectedDistortionControl?.name || 'none'})`)
     console.log(`   🗑️ Resetting all flags and states`)
     
-    // Clear ALL related state
+    // Clear related state BUT keep selectedDistortionControl stable for dropdown
     setSelectedCurve(null)
     setSelectedPalette(null)
-    setSelectedDistortionControl(null)
     setHasUnsavedChanges(false)
     setIsProcessing(false)
     setIsSaving(false)
     
-    // Force DOM update and state propagation
-    console.log(`⏱️ Waiting for complete state clear...`)
-    await new Promise(resolve => setTimeout(resolve, 150))
-    
+    // Set the new distortion control IMMEDIATELY to prevent dropdown dancing
     setSelectedDistortionControl(control)
+    
+    // Smaller delay just for curve/palette state clearing
+    console.log(`⏱️ Waiting for curve/palette state clear...`)
+    await new Promise(resolve => setTimeout(resolve, 50))
     setAngularEnabled(control['angular-distortion'])
     setFractalEnabled(control['fractal-distortion'])
     setCheckerboardEnabled(control['checkerboard-pattern'])
@@ -415,6 +422,8 @@ const Merzbow: React.FC = () => {
     console.log(`📏 Distance: ${control['distance-calculation']}, Modulus: ${control['distance-modulus']}, Scaling: ${control['curve-scaling']}`)
     console.log(`🎨 Render will be triggered by useEffect in 200ms`)
     console.log(`===== END LOAD SUMMARY =====\n`)
+    
+    setIsLoadingDP(false)
   }
 
   // Save current distortion control
@@ -818,7 +827,7 @@ const Merzbow: React.FC = () => {
         
         console.log('🎛️ All data loaded, auto-selecting most recent distortion control')
         
-        const mostRecent = availableDistortionControls.sort((a, b) => 
+        const mostRecent = [...availableDistortionControls].sort((a, b) => 
           new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
         )[0]
         
@@ -1537,15 +1546,20 @@ void main() {
                       const control = availableDistortionControls.find(c => c.id === e.target.value)
                       if (control) await loadDistortionControl(control)
                     }}
-                    disabled={isLoading}
+                    disabled={isLoading || isLoadingDP}
                   >
-                    <option value="">Select...</option>
+                    <option value="">{isLoadingDP ? 'Loading...' : 'Select...'}</option>
                     {availableDistortionControls.map(control => (
                       <option key={control.id} value={control.id}>
                         {control.name}
                       </option>
                     ))}
                   </select>
+                  {isLoadingDP && (
+                    <div style={{ fontSize: '12px', color: '#007bff', fontStyle: 'italic', marginTop: '4px' }}>
+                      ⚡ Loading distortion profile...
+                    </div>
+                  )}
                 </div>
 
 
