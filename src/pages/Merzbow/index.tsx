@@ -317,6 +317,31 @@ const Merzbow: React.FC = () => {
     } catch (error) {
       console.error('Failed to load linked curve:', error)
     }
+
+    // Also load linked palette for this distortion control
+    try {
+      console.log(`🎨 Looking for palette linked to distortion control: ${control.id}`)
+      
+      const response = await fetch(`${apiUrl}/api/palette-links/distortion/${control.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.hasLink) {
+          // Find the palette in our available palettes
+          const linkedPalette = availablePalettes.find(p => p.id === data.data.link.paletteId)
+          if (linkedPalette) {
+            console.log(`✅ Auto-loaded linked palette: ${linkedPalette.name}`)
+            setSelectedPalette(linkedPalette)
+          } else {
+            console.log(`⚠️ Linked palette ${data.data.link.paletteId} not found in available palettes`)
+          }
+        } else {
+          console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
+          // Don't clear current palette if no link found
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load linked palette:', error)
+    }
   }
 
   // Save current distortion control
