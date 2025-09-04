@@ -109,7 +109,7 @@
   color: #ffffff;
 }
 
-/* Button Styles */
+/* Button Styles - Match CurveBuilder */
 .manage-tags-btn {
   background-color: #444;
   color: #ffffff;
@@ -135,6 +135,7 @@
 .manage-tags-btn.active {
   background-color: #007acc;
   border-color: #0066aa;
+  color: #ffffff;
 }
 
 .manage-tags-btn.active:hover {
@@ -147,15 +148,17 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: #000;
+  background-color: #1a1a1a;
+  border: none;
 }
 
 .grid-canvas {
   width: 100%;
   height: 100%;
   position: relative;
-  background-color: #000;
+  background-color: #1a1a1a;
   overflow-y: auto;
+  border: none;
 }
 
 /* Loading States */
@@ -164,6 +167,214 @@
   padding: 20px;
   color: #888;
   font-style: italic;
+}
+
+/* User Management Styles */
+.user-table, .request-table, .invitation-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-row, .request-row, .invitation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background: #444;
+  border-radius: 6px;
+  border: 1px solid #555;
+}
+
+.user-info, .request-info, .invitation-info {
+  flex: 1;
+}
+
+.user-email, .request-email, .invitation-email {
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.user-details, .request-message, .invitation-details {
+  font-size: 13px;
+  color: #ccc;
+}
+
+.request-date {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.user-role, .user-actions, .request-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.role-select {
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+  min-width: 120px;
+  background-color: #333 !important;
+  border: 1px solid #666 !important;
+}
+
+.action-button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 70px;
+}
+
+.action-button.approve {
+  background-color: #4caf50;
+  color: white;
+}
+
+.action-button.approve:hover {
+  background-color: #45a049;
+}
+
+.action-button.deny, .action-button.revoke {
+  background-color: #f44336;
+  color: white;
+}
+
+.action-button.deny:hover, .action-button.revoke:hover {
+  background-color: #d32f2f;
+}
+
+.action-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+/* Role Cards */
+.role-definitions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.role-card {
+  background: #444;
+  border-radius: 8px;
+  padding: 15px;
+  border: 2px solid #555;
+}
+
+.role-card.superadmin {
+  border-color: #ff6b35;
+}
+
+.role-card.admin {
+  border-color: #007acc;
+}
+
+.role-card.beta-tester {
+  border-color: #ffd700;
+}
+
+.role-card.player {
+  border-color: #4caf50;
+}
+
+.role-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.role-header h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.role-count {
+  font-size: 12px;
+  color: #ccc;
+}
+
+.role-permissions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.permission-item {
+  font-size: 13px;
+  color: #ccc;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge.sent {
+  background-color: #2196f3;
+  color: white;
+}
+
+.status-badge.accepted {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-badge.expired {
+  background-color: #ff9800;
+  color: white;
+}
+
+/* System Status Grid */
+.system-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.system-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: #444;
+  border-radius: 6px;
+  border: 1px solid #555;
+}
+
+.system-label {
+  font-weight: 500;
+  color: #ccc;
+}
+
+.system-value {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.system-value.status-online {
+  color: #4caf50;
+}
+
+.system-value.status-offline {
+  color: #f44336;
+}
+
+.system-value.status-warning {
+  color: #ff9800;
 }
 
 /* Responsive Design */

@@ -154,6 +154,7 @@ const Merzbow: React.FC = () => {
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
     profile: true,
+    links: true,
     settings: true,
     angular: false,
     fractal: false,
@@ -880,8 +881,29 @@ const Merzbow: React.FC = () => {
                   </select>
                 </div>
 
+
+                {/* Save Button */}
+                {hasUnsavedChanges && (
+                  <div className="form-group">
+                    <button onClick={saveDistortionControl} className="save-button full-width">
+                      Save Changes
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Distortion Links Panel */}
+          <div className="info-section">
+            <h3 className="collapsible-header" onClick={() => toggleSection('links')}>
+              <span className="toggle-icon">{expandedSections.links ? '▼' : '▶'}</span>
+              Distortion Links
+            </h3>
+            {expandedSections.links && (
+              <div className="section-content">
                 <div className="form-group">
-                  <label>Curve Data:</label>
+                  <label>Curve:</label>
                   <select 
                     value={selectedCurve?.name || ''} 
                     onChange={(e) => {
@@ -934,15 +956,6 @@ const Merzbow: React.FC = () => {
                     />
                   )}
                 </div>
-
-                {/* Save Button */}
-                {hasUnsavedChanges && (
-                  <div className="form-group">
-                    <button onClick={saveDistortionControl} className="save-button full-width">
-                      Save Changes
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>

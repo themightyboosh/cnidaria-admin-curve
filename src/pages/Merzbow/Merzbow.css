@@ -103,7 +103,9 @@
   align-items: center;
   font-size: 13px;
   font-weight: 400;
-  padding: 4px 0;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .merzbow-viewport {
@@ -165,7 +167,7 @@
 
 .link-button {
   background-color: #daa520;
-  color: #000;
+  color: #ffffff;
   border: none;
   padding: 10px 20px;
   border-radius: 6px;
@@ -179,6 +181,7 @@
 
 .link-button:hover {
   background-color: #b8860b;
+  color: #ffffff;
 }
 
 .link-button:disabled {
