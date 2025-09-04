@@ -444,7 +444,7 @@ const Merzbow: React.FC = () => {
         
         if (linksData.success && linksData.data && linksData.data.length > 0) {
           for (const link of linksData.data) {
-            if (link.curveId === selectedCurve?.name) curveLinked = true
+            if (link.curveId === selectedCurve?.id) curveLinked = true
             if (link.paletteName === selectedPalette?.name) paletteLinked = true
           }
         }
@@ -461,7 +461,7 @@ const Merzbow: React.FC = () => {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                curveId: selectedCurve.name, 
+                curveId: selectedCurve.id, 
                 distortionControlId: selectedDistortionControl.id 
               })
             })
@@ -566,22 +566,36 @@ const Merzbow: React.FC = () => {
     return false
   }
 
-  // Link curve to current distortion control
-  const linkCurveToDistortionControl = async (curveName: string) => {
+  // Link curve to current distortion control (use curve ID for link table)
+  const linkCurveToDistortionControl = async (curveId: string) => {
     if (!selectedDistortionControl) return
     
     try {
+      const curve = availableCurves.find(c => c.id === curveId)
+      const curveName = curve?.name || curveId
+      
+      console.log(`🔗 LINKING CURVE: "${curveName}" (ID: ${curveId}) → "${selectedDistortionControl.name}"`)
+      
+      const requestBody = {
+        curveId: curveId, // Use curve ID for link table
+        distortionControlId: selectedDistortionControl.id
+      }
+      console.log(`📦 Creating curve link:`, JSON.stringify(requestBody, null, 2))
+      
       const response = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          curveId: curveName, 
-          distortionControlId: selectedDistortionControl.id 
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (response.ok) {
-        console.log(`✅ Linked ${curveName} to ${selectedDistortionControl.name}`)
+        const data = await response.json()
+        console.log(`✅ CURVE LINKED:`, JSON.stringify(data, null, 2))
+        console.log(`🎉 SUCCESS: Curve "${curveName}" linked to DP "${selectedDistortionControl.name}"`)
+      } else {
+        const errorData = await response.text()
+        console.error(`🚨 CURVE LINK FAILURE: ${response.status} ${response.statusText}`)
+        console.error(`🚨 Error details:`, errorData)
       }
     } catch (error) {
       console.error('Failed to link curve:', error)
@@ -1685,21 +1699,22 @@ void main() {
                 <div className="form-group">
                   <label>Curve:</label>
                   <select 
-                    value={selectedCurve?.name || ''} 
+                    value={selectedCurve?.id || ''} 
                     onChange={async (e) => {
-                      const curve = availableCurves.find(c => c.name === e.target.value)
+                      const curve = availableCurves.find(c => c.id === e.target.value)
+                      console.log(`🎯 Selected curve: ${curve?.name || 'none'} (ID: ${curve?.id || 'none'})`)
                       setSelectedCurve(curve || null)
                       
                       // Auto-link curve to current distortion control
                       if (curve && selectedDistortionControl) {
-                        console.log(`🔗 Auto-linking curve "${curve.name}" to distortion control "${selectedDistortionControl.name}"`)
-                        await linkCurveToDistortionControl(curve.name)
+                        console.log(`🔗 Auto-linking curve "${curve.name}" (ID: ${curve.id}) to distortion control "${selectedDistortionControl.name}"`)
+                        await linkCurveToDistortionControl(curve.id)
                       }
                     }}
                   >
                     <option value="">Default (0-255 ramp)</option>
                     {availableCurves.map(curve => (
-                      <option key={curve.name} value={curve.name}>
+                      <option key={curve.id} value={curve.id}>
                         {curve.name}
                       </option>
                     ))}
