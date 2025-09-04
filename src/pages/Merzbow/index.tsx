@@ -316,58 +316,44 @@ const Merzbow: React.FC = () => {
     setFractalStrength(control['fractal-strength'])
     setHasUnsavedChanges(false)
 
-    // Find and load linked curve
+    // Find and load linked curve and palette from consolidated distortion-control-links
     try {
-      console.log(`🔍 Looking for curves linked to distortion control: ${control.id}`)
+      console.log(`🔍 Looking for links to distortion control: ${control.id}`)
       
-      // We need to find which curve is linked to this distortion control
-      // Check all curves to see which one links to this distortion control
-      for (const curve of availableCurves) {
-        try {
-          const response = await fetch(`${apiUrl}/api/distortion-control-links/curve/${curve.name}`)
-          if (response.ok) {
-            const data = await response.json()
-            if (data.success && data.data.hasLink && data.data.distortionControl?.id === control.id) {
-              console.log(`✅ Found linked curve: ${curve.name} → ${control.name}`)
-              setSelectedCurve(curve)
-              return
-            }
-          }
-        } catch (error) {
-          console.warn(`Failed to check link for curve ${curve.name}:`, error)
-        }
-      }
-      
-      console.log(`⚠️ No linked curve found for distortion control: ${control.name}`)
-      // Don't clear the current curve selection if no link found
-      
-    } catch (error) {
-      console.error('Failed to load linked curve:', error)
-    }
-
-    // Find and load linked palette (using same pattern as curve discovery)
-    try {
-      console.log(`🎨 Looking for palette linked to distortion control: ${control.id}`)
-      
-      const response = await fetch(`${apiUrl}/api/palette-links/distortion/${control.id}`)
+      const response = await fetch(`${apiUrl}/api/distortion-control-links/control/${control.id}`)
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.data && data.data.hasLink && data.data.link) {
-          const linkedPaletteName = data.data.link.paletteName
-          const linkedPalette = availablePalettes.find(p => p.name === linkedPaletteName)
-          
-          if (linkedPalette) {
-            console.log(`✅ Found linked palette: ${linkedPalette.name} → ${control.name}`)
-            setSelectedPalette(linkedPalette)
-          } else {
-            console.log(`❌ Linked palette name "${linkedPaletteName}" not found in available palettes`)
+        if (data.success && data.data && data.data.length > 0) {
+          // Process all links for this distortion control
+          for (const link of data.data) {
+            // Load linked curve
+            if (link.curveId) {
+              const linkedCurve = availableCurves.find(c => c.name === link.curveId)
+              if (linkedCurve) {
+                console.log(`✅ Found linked curve: ${linkedCurve.name} → ${control.name}`)
+                setSelectedCurve(linkedCurve)
+              } else {
+                console.log(`❌ Linked curve "${link.curveId}" not found in available curves`)
+              }
+            }
+            
+            // Load linked palette
+            if (link.paletteName) {
+              const linkedPalette = availablePalettes.find(p => p.name === link.paletteName)
+              if (linkedPalette) {
+                console.log(`✅ Found linked palette: ${linkedPalette.name} → ${control.name}`)
+                setSelectedPalette(linkedPalette)
+              } else {
+                console.log(`❌ Linked palette "${link.paletteName}" not found in available palettes`)
+              }
+            }
           }
         } else {
-          console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
+          console.log(`⚠️ No links found for distortion control: ${control.name}`)
         }
       }
     } catch (error) {
-      console.error('Failed to load linked palette:', error)
+      console.error('Failed to load linked curve and palette:', error)
     }
 
     // VALIDATION: Check if loaded elements match user selection
@@ -492,39 +478,51 @@ const Merzbow: React.FC = () => {
     }
   }
 
-  // Link palette to current distortion control using generic API
+  // Link palette to current distortion control using consolidated API
   const linkPaletteToDistortionControl = async () => {
     if (!selectedDistortionControl || !selectedPalette) {
       console.log(`❌ Cannot link palette: missing distortion control (${!!selectedDistortionControl}) or palette (${!!selectedPalette})`)
       return
     }
     
+    // First, find the existing distortion-control-link for this curve
     try {
-      console.log(`🔗 LINKING PALETTE: "${selectedPalette.name}" (${selectedPalette.id}) → "${selectedDistortionControl.name}" (${selectedDistortionControl.id})`)
+      console.log(`🔗 LINKING PALETTE: "${selectedPalette.name}" → "${selectedDistortionControl.name}"`)
       
-      const requestBody = { 
-        objectType: 'distortion',
-        objectId: selectedDistortionControl.id,
-        paletteName: selectedPalette.name 
+      // Get the existing link (curve should already be linked)
+      const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
+      if (!linksResponse.ok) {
+        console.error('❌ Failed to get existing links')
+        return
       }
-      console.log(`📦 Link request body:`, requestBody)
       
-      const response = await fetch(`${apiUrl}/api/palette-links/link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      })
-
-      console.log(`📡 Palette link response status:`, response.status)
-      
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`✅ PALETTE LINK SUCCESSFUL:`, data)
-        console.log(`✅ Linked palette "${selectedPalette.name}" to distortion control "${selectedDistortionControl.name}"`)
+      const linksData = await linksResponse.json()
+      if (linksData.success && linksData.data && linksData.data.length > 0) {
+        // Use the first link (there should be one for the curve)
+        const existingLink = linksData.data[0]
+        
+        const requestBody = { 
+          linkId: existingLink.id,
+          paletteName: selectedPalette.name 
+        }
+        console.log(`📦 Adding palette to existing link:`, requestBody)
+        
+        const response = await fetch(`${apiUrl}/api/distortion-control-links/add-palette`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log(`✅ PALETTE ADDED TO LINK:`, data)
+        } else {
+          console.error('❌ Failed to add palette to link:', response.statusText)
+        }
       } else {
-        const errorData = await response.json()
-        console.error(`❌ PALETTE LINK FAILED:`, response.status, errorData)
+        console.error('❌ No existing links found for distortion control')
       }
+      
     } catch (error) {
       console.error('❌ PALETTE LINK EXCEPTION:', error)
     }
@@ -542,11 +540,32 @@ const Merzbow: React.FC = () => {
       }
       console.log(`📦 Direct link request body:`, requestBody)
       
-      const response = await fetch(`${apiUrl}/api/palette-links/link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      })
+      // Get existing link first
+      const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${distortionControl.id}`)
+      if (!linksResponse.ok) {
+        console.error('❌ Failed to get existing links for direct palette linking')
+        return
+      }
+      
+      const linksData = await linksResponse.json()
+      if (linksData.success && linksData.data && linksData.data.length > 0) {
+        const existingLink = linksData.data[0]
+        
+        const addPaletteBody = { 
+          linkId: existingLink.id,
+          paletteName: palette.name 
+        }
+        console.log(`📦 Adding palette to existing link:`, addPaletteBody)
+        
+        const response = await fetch(`${apiUrl}/api/distortion-control-links/add-palette`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(addPaletteBody)
+        })
+      } else {
+        console.error('❌ No existing links found for direct palette linking')
+        return
+      }
 
       console.log(`📡 Direct palette link response status:`, response.status)
       
