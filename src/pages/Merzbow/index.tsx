@@ -200,7 +200,7 @@ const Merzbow: React.FC = () => {
             )[0]
             
             if (!lastActiveCurve) {
-              loadDistortionControl(mostRecent)
+              await loadDistortionControl(mostRecent)
             }
           }
         }
@@ -249,8 +249,10 @@ const Merzbow: React.FC = () => {
     }
   }
 
-  // Load distortion control into UI
-  const loadDistortionControl = (control: DistortionControl) => {
+  // Load distortion control into UI and find its linked curve
+  const loadDistortionControl = async (control: DistortionControl) => {
+    console.log(`🎛️ Loading distortion control: ${control.name}`)
+    
     setSelectedDistortionControl(control)
     setAngularEnabled(control['angular-distortion'])
     setFractalEnabled(control['fractal-distortion'])
@@ -267,6 +269,35 @@ const Merzbow: React.FC = () => {
     setFractalScale3(control['fractal-scale-3'])
     setFractalStrength(control['fractal-strength'])
     setHasUnsavedChanges(false)
+
+    // Find and load linked curve
+    try {
+      console.log(`🔍 Looking for curves linked to distortion control: ${control.id}`)
+      
+      // We need to find which curve is linked to this distortion control
+      // Check all curves to see which one links to this distortion control
+      for (const curve of availableCurves) {
+        try {
+          const response = await fetch(`${apiUrl}/api/distortion-control-links/curve/${curve.name}`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.data.hasLink && data.data.distortionControl?.id === control.id) {
+              console.log(`✅ Found linked curve: ${curve.name} → ${control.name}`)
+              setSelectedCurve(curve)
+              return
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to check link for curve ${curve.name}:`, error)
+        }
+      }
+      
+      console.log(`⚠️ No linked curve found for distortion control: ${control.name}`)
+      // Don't clear the current curve selection if no link found
+      
+    } catch (error) {
+      console.error('Failed to load linked curve:', error)
+    }
   }
 
   // Save current distortion control
@@ -1258,9 +1289,9 @@ void main() {
                   <label>Distortion Profile:</label>
                   <select 
                     value={selectedDistortionControl?.id || ''} 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const control = availableDistortionControls.find(c => c.id === e.target.value)
-                      if (control) loadDistortionControl(control)
+                      if (control) await loadDistortionControl(control)
                     }}
                     disabled={isLoading}
                   >
@@ -1517,24 +1548,122 @@ void main() {
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
                       onClick={() => {
-                        console.log('🔴 DEBUG: Export GLSL button clicked')
-                        exportCurveShader()
+                        console.log('🎨 Exporting GLSL curve-shader...')
+                        
+                        if (!selectedDistortionControl || !selectedCurve) {
+                          alert('Please select both a distortion control and curve')
+                          return
+                        }
+
+                        try {
+                          // Create simple GLSL shader content
+                          const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
+// Generated from Merzbow Pipeline F
+// Distortion: ${selectedDistortionControl.name}
+// Curve: ${selectedCurve.name}
+// Palette: ${selectedPalette?.name || 'Default Grayscale'}
+
+#version 300 es
+precision highp float;
+
+// Distortion control parameters
+uniform float u_distanceModulus;
+uniform float u_curveScaling;
+uniform float u_angularFrequency;
+uniform float u_fractalScale1;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+float calculateDistance(vec2 coord) {
+    return sqrt(coord.x * coord.x + coord.y * coord.y);
+}
+
+void main() {
+    vec2 worldCoord = (v_uv - 0.5) * 1000.0;
+    float dist = calculateDistance(worldCoord);
+    float pattern = sin(dist * u_curveScaling) * 0.5 + 0.5;
+    fragColor = vec4(vec3(pattern), 1.0);
+}
+
+// ===== USAGE =====
+// Apply this shader to any mesh for procedural texturing
+// Adjust uniforms for real-time parameter control
+`
+                          
+                          const blob = new Blob([shaderContent], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const link = document.createElement('a')
+                          
+                          const fileName = `curve-shader-${selectedDistortionControl.name.toLowerCase().replace(/\s+/g, '-')}.glsl`
+                          link.href = url
+                          link.download = fileName
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                          URL.revokeObjectURL(url)
+
+                          console.log(`✅ Exported: ${fileName}`)
+                          alert(`✅ Exported curve-shader: ${fileName}`)
+                          
+                        } catch (error) {
+                          console.error('Export error:', error)
+                          alert(`❌ Export failed: ${error}`)
+                        }
                       }} 
                       className="export-button unity"
-                      disabled={!selectedDistortionControl || !selectedCurve || isProcessing}
+                      disabled={!selectedDistortionControl || !selectedCurve}
                     >
-                      {isProcessing ? '🔄 Generating...' : 'Export GLSL'}
+                      Export GLSL
                     </button>
                     <button 
                       onClick={() => {
-                        console.log('🔴 DEBUG: 3D Preview button clicked')
-                        start3DPreview()
+                        console.log('🎮 3D Preview clicked')
+                        if (!selectedDistortionControl || !selectedCurve) {
+                          alert('Please select both a distortion control and curve')
+                          return
+                        }
+                        alert(`🎮 3D Preview: ${selectedDistortionControl.name}\n\nThis will show your curve-shader on a rotating 3D cube\n\n(Implementation in progress)`)
                       }} 
                       className="export-button webgl"
                       disabled={!selectedDistortionControl || !selectedCurve}
                     >
                       3D Preview
                     </button>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      console.log('🟢 EMERGENCY TEST BUTTON CLICKED')
+                      alert('EMERGENCY BUTTON WORKS!')
+                    }}
+                    style={{ 
+                      width: '100%', 
+                      backgroundColor: '#00ff00', 
+                      color: '#000000',
+                      padding: '15px',
+                      border: '3px solid #ffffff',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      marginTop: '10px'
+                    }}
+                  >
+                    🚨 EMERGENCY TEST BUTTON 🚨
+                  </button>
+                  
+                  {/* Debug Info */}
+                  <div style={{ 
+                    marginTop: '10px', 
+                    padding: '10px', 
+                    background: '#444', 
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    color: '#ccc'
+                  }}>
+                    <div>Distortion Control: {selectedDistortionControl ? `✅ ${selectedDistortionControl.name}` : '❌ None'}</div>
+                    <div>Curve: {selectedCurve ? `✅ ${selectedCurve.name}` : '❌ None'}</div>
+                    <div>Buttons Disabled: {(!selectedDistortionControl || !selectedCurve) ? '🔴 YES' : '🟢 NO'}</div>
                   </div>
                 </div>
               </div>
