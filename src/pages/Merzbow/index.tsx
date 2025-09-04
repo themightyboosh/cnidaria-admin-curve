@@ -464,22 +464,15 @@ const Merzbow: React.FC = () => {
       throw new Error(error instanceof Error ? error.message : String(error))
     }
 
-    // VALIDATION: Check if loaded elements match user selection
+    // VALIDATION: Check if loaded elements match user selection (use control parameter, not state)
     console.log(`\n🔍 ===== VALIDATION & FINAL STATE =====`)
     console.log(`📋 User Selected: "${control.name}" (ID: ${control.id})`)
     console.log(`🎯 Loaded Curve: ${selectedCurve?.name || 'NONE'}`)
     console.log(`🎨 Loaded Palette: ${selectedPalette?.name || 'NONE'}`)
-    console.log(`🎛️ Current DP in State: ${selectedDistortionControl?.name || 'NONE'}`)
+    console.log(`🎛️ DP Being Loaded: ${control.name}`)
     
-    // Validate consistency
-    const isValid = selectedDistortionControl?.id === control.id
-    console.log(`✅ State Consistency: ${isValid ? 'VALID' : '❌ INVALID'}`)
-    
-    if (!isValid) {
-      console.error(`❌ VALIDATION FAILED: Selected DP mismatch!`)
-      console.error(`   Expected: ${control.name} (${control.id})`)
-      console.error(`   Got: ${selectedDistortionControl?.name} (${selectedDistortionControl?.id})`)
-    }
+    // Note: selectedDistortionControl state may not be updated yet due to React async updates
+    console.log(`✅ Loading DP: ${control.name} - state will update momentarily`)
     
     // Check if we're using the same palette as before
     const currentPaletteName = selectedPalette?.name
