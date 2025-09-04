@@ -195,6 +195,10 @@ const Merzbow: React.FC = () => {
   const [centerOffsetX, setCenterOffsetX] = useState(0)
   const [centerOffsetY, setCenterOffsetY] = useState(0)
 
+  // 3D Preview state
+  const [showPreview, setShowPreview] = useState(false)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+
   // Load available distortion controls from API
   const loadDistortionControls = async () => {
     setIsLoading(true)
@@ -852,8 +856,13 @@ const Merzbow: React.FC = () => {
 
   // Export foundational curve-shader (GLSL only)
   const exportCurveShader = async () => {
+    console.log('🔴 DEBUG: Export button clicked')
+    console.log('🔴 selectedDistortionControl:', selectedDistortionControl?.name)
+    console.log('🔴 selectedCurve:', selectedCurve?.name)
+
     if (!selectedDistortionControl || !selectedCurve) {
       console.warn('⚠️ Need distortion control and curve to export curve-shader')
+      alert('Please select both a distortion control and curve before exporting')
       return
     }
 
@@ -864,6 +873,8 @@ const Merzbow: React.FC = () => {
       // Small delay to show progress
       await new Promise(resolve => setTimeout(resolve, 100))
 
+      console.log('🔴 DEBUG: About to call glslShaderGenerator')
+      
       const shaderPackage = glslShaderGenerator.generateWebGLPackage({
         shaderName: `CurveShader_${toKebabCase(selectedDistortionControl.name)}`,
         distortionControl: selectedDistortionControl,
@@ -873,15 +884,16 @@ const Merzbow: React.FC = () => {
         includeComments: true
       })
 
-      console.log('✅ Shader package generated')
+      console.log('✅ Shader package generated:', shaderPackage)
 
       // Create foundational curve-shader file
       const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
 // Generated from Merzbow Pipeline F
 // Classification: curve-shader (foundational)
 // 
-// This is a base curve-shader that can be used in higher-order shaders
-// for color, mesh distortion, and transparency applications.
+// Distortion Control: ${selectedDistortionControl.name}
+// Curve: ${selectedCurve.name}
+// Palette: ${selectedPalette?.name || 'Default Grayscale'}
 //
 ${shaderPackage.fragmentShader}
 
@@ -895,29 +907,333 @@ ${shaderPackage.fragmentShader}
 // For complex materials, combine multiple curve-shaders in a higher-order shader.
 `
       
+      console.log('🔴 DEBUG: Creating download...')
       const blob = new Blob([shaderContent], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       
+      const fileName = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
+      console.log('🔴 DEBUG: Download filename:', fileName)
+      
       link.href = url
-      link.download = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
       console.log(`🎨 Exported foundational curve-shader: ${selectedDistortionControl.name}`)
-      console.log('📋 Curve-shader classification: FOUNDATIONAL')
-      console.log('  - Single pattern output')
-      console.log('  - Reusable in higher-order shaders')
-      console.log('  - Suitable for color, displacement, transparency')
-      console.log('  - Complete Pipeline F implementation')
+      alert(`✅ Exported curve-shader: ${fileName}`)
 
     } catch (error) {
       console.error('❌ Curve-shader export failed:', error)
+      alert(`❌ Export failed: ${error}`)
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  // 3D Preview with rotating cube
+  const start3DPreview = () => {
+    if (!selectedDistortionControl || !selectedCurve) {
+      alert('Please select both a distortion control and curve for 3D preview')
+      return
+    }
+
+    setShowPreview(true)
+    
+    // Initialize 3D preview in next frame
+    setTimeout(() => {
+      if (previewCanvasRef.current) {
+        init3DPreview()
+      }
+    }, 100)
+  }
+
+  const init3DPreview = () => {
+    const canvas = previewCanvasRef.current
+    if (!canvas || !selectedDistortionControl || !selectedCurve) return
+
+    const gl = canvas.getContext('webgl2')
+    if (!gl) {
+      alert('WebGL2 not supported for 3D preview')
+      return
+    }
+
+    console.log('🎮 Starting 3D curve-shader preview')
+
+    // Generate the GLSL fragment shader
+    const shaderPackage = glslShaderGenerator.generateWebGLPackage({
+      shaderName: `Preview_${selectedDistortionControl.name}`,
+      distortionControl: selectedDistortionControl,
+      curve: selectedCurve,
+      palette: selectedPalette,
+      target: 'webgl',
+      includeComments: false
+    })
+
+    // Simple vertex shader for cube
+    const vertexShader = `#version 300 es
+precision highp float;
+
+in vec3 a_position;
+in vec2 a_uv;
+
+uniform mat4 u_mvpMatrix;
+
+out vec2 v_uv;
+
+void main() {
+    v_uv = a_uv;
+    gl_Position = u_mvpMatrix * vec4(a_position, 1.0);
+}`
+
+    // Compile shaders
+    const vs = createShader(gl, gl.VERTEX_SHADER, vertexShader)
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, shaderPackage.fragmentShader)
+    
+    if (!vs || !fs) {
+      alert('Failed to compile shaders for 3D preview')
+      return
+    }
+
+    const program = createProgram(gl, vs, fs)
+    if (!program) {
+      alert('Failed to create shader program for 3D preview')
+      return
+    }
+
+    // Create cube geometry
+    const cubeVertices = new Float32Array([
+      // Front face
+      -1, -1,  1,  0, 0,
+       1, -1,  1,  1, 0,
+       1,  1,  1,  1, 1,
+      -1,  1,  1,  0, 1,
+      // Back face
+      -1, -1, -1,  1, 0,
+      -1,  1, -1,  1, 1,
+       1,  1, -1,  0, 1,
+       1, -1, -1,  0, 0,
+      // Top face
+      -1,  1, -1,  0, 1,
+      -1,  1,  1,  0, 0,
+       1,  1,  1,  1, 0,
+       1,  1, -1,  1, 1,
+      // Bottom face
+      -1, -1, -1,  0, 0,
+       1, -1, -1,  1, 0,
+       1, -1,  1,  1, 1,
+      -1, -1,  1,  0, 1,
+      // Right face
+       1, -1, -1,  1, 0,
+       1,  1, -1,  1, 1,
+       1,  1,  1,  0, 1,
+       1, -1,  1,  0, 0,
+      // Left face
+      -1, -1, -1,  0, 0,
+      -1, -1,  1,  1, 0,
+      -1,  1,  1,  1, 1,
+      -1,  1, -1,  0, 1
+    ])
+
+    const cubeIndices = new Uint16Array([
+      0,  1,  2,    0,  2,  3,    // front
+      4,  5,  6,    4,  6,  7,    // back
+      8,  9,  10,   8,  10, 11,   // top
+      12, 13, 14,   12, 14, 15,   // bottom
+      16, 17, 18,   16, 18, 19,   // right
+      20, 21, 22,   20, 22, 23    // left
+    ])
+
+    // Create buffers
+    const vertexBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, cubeVertices, gl.STATIC_DRAW)
+
+    const indexBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIndices, gl.STATIC_DRAW)
+
+    // Set up attributes
+    const positionLocation = gl.getAttribLocation(program, 'a_position')
+    const uvLocation = gl.getAttribLocation(program, 'a_uv')
+
+    gl.enableVertexAttribArray(positionLocation)
+    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 5 * 4, 0)
+
+    gl.enableVertexAttribArray(uvLocation)
+    gl.vertexAttribPointer(uvLocation, 2, gl.FLOAT, false, 5 * 4, 3 * 4)
+
+    // Get uniform locations
+    const mvpLocation = gl.getUniformLocation(program, 'u_mvpMatrix')
+    const resolutionLocation = gl.getUniformLocation(program, 'u_resolution')
+    const offsetLocation = gl.getUniformLocation(program, 'u_offset')
+    const scaleLocation = gl.getUniformLocation(program, 'u_scale')
+
+    // Set distortion control uniforms
+    setDistortionUniforms(gl, program, selectedDistortionControl)
+
+    let rotation = 0
+
+    const render = () => {
+      if (!gl || !canvas) return
+
+      rotation += 0.02
+
+      // Clear and setup
+      gl.viewport(0, 0, canvas.width, canvas.height)
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+      gl.enable(gl.DEPTH_TEST)
+      gl.useProgram(program)
+
+      // Create MVP matrix
+      const aspect = canvas.width / canvas.height
+      const perspective = createPerspectiveMatrix(45, aspect, 0.1, 100)
+      const view = createLookAtMatrix([0, 0, 5], [0, 0, 0], [0, 1, 0])
+      const model = createRotationMatrix(rotation, rotation * 0.7, 0)
+      const mvp = multiplyMatrices(perspective, multiplyMatrices(view, model))
+
+      // Set uniforms
+      gl.uniformMatrix4fv(mvpLocation, false, mvp)
+      gl.uniform2f(resolutionLocation, 512, 512)
+      gl.uniform2f(offsetLocation, centerOffsetX, centerOffsetY)
+      gl.uniform1f(scaleLocation, curveScaling)
+
+      // Draw cube
+      gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0)
+
+      if (showPreview) {
+        requestAnimationFrame(render)
+      }
+    }
+
+    render()
+  }
+
+  // Helper functions for 3D math
+  const createPerspectiveMatrix = (fov: number, aspect: number, near: number, far: number): Float32Array => {
+    const f = Math.tan(Math.PI * 0.5 - 0.5 * fov * Math.PI / 180)
+    const rangeInv = 1.0 / (near - far)
+    
+    return new Float32Array([
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (near + far) * rangeInv, -1,
+      0, 0, near * far * rangeInv * 2, 0
+    ])
+  }
+
+  const createLookAtMatrix = (eye: number[], target: number[], up: number[]): Float32Array => {
+    const zAxis = normalize(subtract(eye, target))
+    const xAxis = normalize(cross(up, zAxis))
+    const yAxis = normalize(cross(zAxis, xAxis))
+
+    return new Float32Array([
+      xAxis[0], xAxis[1], xAxis[2], 0,
+      yAxis[0], yAxis[1], yAxis[2], 0,
+      zAxis[0], zAxis[1], zAxis[2], 0,
+      eye[0], eye[1], eye[2], 1
+    ])
+  }
+
+  const createRotationMatrix = (x: number, y: number, z: number): Float32Array => {
+    const cx = Math.cos(x), sx = Math.sin(x)
+    const cy = Math.cos(y), sy = Math.sin(y)
+    const cz = Math.cos(z), sz = Math.sin(z)
+
+    return new Float32Array([
+      cy * cz, -cy * sz, sy, 0,
+      cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy, 0,
+      sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy, 0,
+      0, 0, 0, 1
+    ])
+  }
+
+  const multiplyMatrices = (a: Float32Array, b: Float32Array): Float32Array => {
+    const result = new Float32Array(16)
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        result[i * 4 + j] = 
+          a[i * 4 + 0] * b[0 * 4 + j] +
+          a[i * 4 + 1] * b[1 * 4 + j] +
+          a[i * 4 + 2] * b[2 * 4 + j] +
+          a[i * 4 + 3] * b[3 * 4 + j]
+      }
+    }
+    return result
+  }
+
+  const normalize = (v: number[]): number[] => {
+    const length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    return length > 0 ? [v[0] / length, v[1] / length, v[2] / length] : [0, 0, 0]
+  }
+
+  const subtract = (a: number[], b: number[]): number[] => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+  const cross = (a: number[], b: number[]): number[] => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ]
+
+  // WebGL helper functions
+  const createShader = (gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null => {
+    const shader = gl.createShader(type)
+    if (!shader) return null
+    
+    gl.shaderSource(shader, source)
+    gl.compileShader(shader)
+    
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.error('Shader compile error:', gl.getShaderInfoLog(shader))
+      gl.deleteShader(shader)
+      return null
+    }
+    
+    return shader
+  }
+
+  const createProgram = (gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram | null => {
+    const program = gl.createProgram()
+    if (!program) return null
+    
+    gl.attachShader(program, vs)
+    gl.attachShader(program, fs)
+    gl.linkProgram(program)
+    
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error('Program link error:', gl.getProgramInfoLog(program))
+      gl.deleteProgram(program)
+      return null
+    }
+    
+    return program
+  }
+
+  const setDistortionUniforms = (gl: WebGL2RenderingContext, program: WebGLProgram, distortion: DistortionControl) => {
+    const uniforms = [
+      ['u_angularEnabled', distortion['angular-distortion'] ? 1.0 : 0.0],
+      ['u_fractalEnabled', distortion['fractal-distortion'] ? 1.0 : 0.0],
+      ['u_checkerboardEnabled', distortion['checkerboard-pattern'] ? 1.0 : 0.0],
+      ['u_distanceModulus', distortion['distance-modulus']],
+      ['u_curveScaling', distortion['curve-scaling']],
+      ['u_checkerboardSteps', distortion['checkerboard-steps']],
+      ['u_angularFrequency', distortion['angular-frequency']],
+      ['u_angularAmplitude', distortion['angular-amplitude']],
+      ['u_angularOffset', distortion['angular-offset']],
+      ['u_fractalScale1', distortion['fractal-scale-1']],
+      ['u_fractalScale2', distortion['fractal-scale-2']],
+      ['u_fractalScale3', distortion['fractal-scale-3']],
+      ['u_fractalStrength', distortion['fractal-strength']],
+      ['u_time', Date.now() / 1000]
+    ]
+
+    uniforms.forEach(([name, value]) => {
+      const location = gl.getUniformLocation(program, name)
+      if (location) {
+        gl.uniform1f(location, value as number)
+      }
+    })
   }
 
   return (
@@ -1194,14 +1510,22 @@ ${shaderPackage.fragmentShader}
                       Export JPEG
                     </button>
                   </div>
-                  <button 
-                    onClick={exportCurveShader} 
-                    className="export-button unity"
-                    style={{ width: '100%' }}
-                    disabled={!selectedDistortionControl || !selectedCurve || isProcessing}
-                  >
-                    {isProcessing ? '🔄 Generating Shader...' : 'Export Curve-Shader (GLSL)'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      onClick={exportCurveShader} 
+                      className="export-button unity"
+                      disabled={!selectedDistortionControl || !selectedCurve || isProcessing}
+                    >
+                      {isProcessing ? '🔄 Generating...' : 'Export GLSL'}
+                    </button>
+                    <button 
+                      onClick={start3DPreview} 
+                      className="export-button webgl"
+                      disabled={!selectedDistortionControl || !selectedCurve}
+                    >
+                      3D Preview
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1215,6 +1539,29 @@ ${shaderPackage.fragmentShader}
           onMouseMove={handleMouseMove}
           onContextMenu={handleContextMenu}
         />
+
+        {/* 3D Preview Modal */}
+        {showPreview && (
+          <div className="preview-modal" onClick={() => setShowPreview(false)}>
+            <div className="preview-content" onClick={(e) => e.stopPropagation()}>
+              <div className="preview-header">
+                <h3>3D Curve-Shader Preview</h3>
+                <button onClick={() => setShowPreview(false)} className="close-button">×</button>
+              </div>
+              <canvas 
+                ref={previewCanvasRef}
+                width={600}
+                height={400}
+                className="preview-canvas"
+              />
+              <div className="preview-info">
+                <p>Pattern: <strong>{selectedDistortionControl?.name}</strong></p>
+                <p>Curve: <strong>{selectedCurve?.name}</strong></p>
+                <p>Palette: <strong>{selectedPalette?.name || 'Default Grayscale'}</strong></p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
