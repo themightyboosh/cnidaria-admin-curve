@@ -165,6 +165,18 @@
   background-color: #777;
 }
 
+.export-button.unity {
+  background: linear-gradient(135deg, #222c37, #1a252f);
+  color: #ffffff;
+  border: 2px solid #007acc;
+}
+
+.export-button.unity:hover {
+  background: linear-gradient(135deg, #1a252f, #0f1a22);
+  border-color: #0066aa;
+  transform: translateY(-1px);
+}
+
 .link-button {
   background-color: #daa520;
   color: #ffffff;

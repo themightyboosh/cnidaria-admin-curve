@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
+import { unityShaderGenerator } from '../../utils/unityShaderGenerator'
 import './Merzbow.css'
 
 interface DistortionControl {
@@ -848,6 +849,47 @@ const Merzbow: React.FC = () => {
     }, 'image/jpeg', 0.95)
   }
 
+  // Export Unity shader
+  const exportUnityShader = () => {
+    if (!selectedDistortionControl || !selectedCurve) {
+      console.warn('⚠️ Need distortion control and curve to export shader')
+      return
+    }
+
+    const shaderName = `Cnidaria/${toKebabCase(selectedDistortionControl.name)}`
+    
+    const shaderPackage = unityShaderGenerator.generateUnityPackage({
+      shaderName,
+      distortionControl: selectedDistortionControl,
+      curve: selectedCurve,
+      palette: selectedPalette,
+      includeComments: true,
+      optimizeForMobile: false
+    })
+
+    // Create and download shader file
+    const shaderContent = `${shaderPackage.shader}\n\n/*\n${shaderPackage.instructions}\n*/\n\n/*\n${shaderPackage.materialTemplate}\n*/`
+    const blob = new Blob([shaderContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    
+    link.href = url
+    link.download = `${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.shader`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    console.log(`🎮 Exported Unity shader: ${shaderName}`)
+    console.log('📋 Shader includes:')
+    console.log('  - Complete Pipeline F implementation')
+    console.log('  - All 17 distance calculation methods')
+    console.log('  - Fractal and angular distortion')
+    console.log('  - Procedural curve generation')
+    console.log('  - Embedded color palette')
+    console.log('  - Standalone (no external textures needed)')
+  }
+
   return (
     <div className="app">
       <Header title="Cnidaria" currentPage="Merzbow" />
@@ -1113,12 +1155,22 @@ const Merzbow: React.FC = () => {
             </h3>
             {expandedSections.export && (
               <div className="section-content">
-                <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={exportAsPNG} className="export-button">
-                    Export PNG
-                  </button>
-                  <button onClick={exportAsJPEG} className="export-button secondary">
-                    Export JPEG
+                <div className="form-group">
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                    <button onClick={exportAsPNG} className="export-button">
+                      Export PNG
+                    </button>
+                    <button onClick={exportAsJPEG} className="export-button secondary">
+                      Export JPEG
+                    </button>
+                  </div>
+                  <button 
+                    onClick={exportUnityShader} 
+                    className="export-button unity"
+                    style={{ width: '100%' }}
+                    disabled={!selectedDistortionControl || !selectedCurve}
+                  >
+                    Export Unity Shader
                   </button>
                 </div>
               </div>
