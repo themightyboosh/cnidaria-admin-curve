@@ -12,6 +12,11 @@ export interface GLSLExportOptions {
   palette: Palette | null
   target: 'webgl' | 'unity' | 'unreal' | 'generic'
   includeComments: boolean
+  // Nesting options
+  enableNesting?: boolean
+  nestingLayers?: number
+  nestingBlendMode?: 'multiply' | 'add' | 'overlay' | 'screen' | 'mix'
+  nestingScales?: number[]
 }
 
 export class GLSLShaderGenerator {
@@ -89,6 +94,27 @@ vec3 samplePalette(float curveValue) {
     curveValue = clamp(curveValue, 0.0, 1.0);
 ${colorSamples}
     return vec3(curveValue, curveValue, curveValue); // Fallback
+}
+
+// Blend mode functions for nesting
+vec3 blendMultiply(vec3 base, vec3 overlay) {
+    return base * overlay;
+}
+
+vec3 blendAdd(vec3 base, vec3 overlay) {
+    return clamp(base + overlay, 0.0, 1.0);
+}
+
+vec3 blendOverlay(vec3 base, vec3 overlay) {
+    return mix(2.0 * base * overlay, 1.0 - 2.0 * (1.0 - base) * (1.0 - overlay), step(0.5, base));
+}
+
+vec3 blendScreen(vec3 base, vec3 overlay) {
+    return 1.0 - (1.0 - base) * (1.0 - overlay);
+}
+
+vec3 blendMix(vec3 base, vec3 overlay, float factor) {
+    return mix(base, overlay, factor);
 }`
   }
 
@@ -222,6 +248,7 @@ vec3 processCoordinate(vec2 worldCoord) {
     return samplePalette(curveValue);
 }
 
+${options.enableNesting ? this.generateNestedProcessing(options) : `
 void main() {
     // Convert UV to world coordinates
     vec2 worldCoord = (v_uv - 0.5) * u_resolution * u_scale;
@@ -230,7 +257,7 @@ void main() {
     vec3 color = processCoordinate(worldCoord);
     
     fragColor = vec4(color, 1.0);
-}
+}`}
 
 ${includeComments ? `
 /*
@@ -404,6 +431,45 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Sample palette and output
     let color = samplePalette(curveValue);
     outputTexture[index] = vec4<f32>(color, 1.0);
+}`
+  }
+}
+
+  /**
+   * Generate nested pattern processing
+   */
+  private generateNestedProcessing(options: GLSLExportOptions): string {
+    const { nestingLayers = 3, nestingBlendMode = 'multiply', nestingScales = [1.0, 0.5, 0.25] } = options
+
+    return `
+void main() {
+    vec2 worldCoord = (v_uv - 0.5) * u_resolution * u_scale;
+    
+    // Generate multiple layers at different scales
+    vec3 layer1 = processCoordinate(worldCoord * ${nestingScales[0] || 1.0});
+    vec3 layer2 = processCoordinate(worldCoord * ${nestingScales[1] || 0.5});
+    vec3 layer3 = processCoordinate(worldCoord * ${nestingScales[2] || 0.25});
+    
+    // Combine layers using blend mode
+    vec3 combined = layer1;
+    ${nestingBlendMode === 'multiply' ? `
+    combined = blendMultiply(combined, layer2);
+    combined = blendMultiply(combined, layer3);
+    ` : nestingBlendMode === 'add' ? `
+    combined = blendAdd(combined, layer2);
+    combined = blendAdd(combined, layer3);
+    ` : nestingBlendMode === 'overlay' ? `
+    combined = blendOverlay(combined, layer2);
+    combined = blendOverlay(combined, layer3);
+    ` : nestingBlendMode === 'screen' ? `
+    combined = blendScreen(combined, layer2);
+    combined = blendScreen(combined, layer3);
+    ` : `
+    combined = blendMix(combined, layer2, 0.5);
+    combined = blendMix(combined, layer3, 0.3);
+    `}
+    
+    fragColor = vec4(combined, 1.0);
 }`
   }
 }
