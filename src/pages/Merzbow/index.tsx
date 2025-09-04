@@ -436,25 +436,10 @@ const Merzbow: React.FC = () => {
           }
         } else {
           console.log(`⚠️ No links found for distortion control: ${control.name}`)
-          console.log(`🎯 Auto-selecting most recent curve and palette instead of defaults`)
-          
-          // Auto-select most recent curve
-          if (availableCurves.length > 0) {
-            const mostRecentCurve = [...availableCurves].sort((a, b) => 
-              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
-            )[0]
-            console.log(`✅ Auto-selected most recent curve: ${mostRecentCurve.name}`)
-            setSelectedCurve(mostRecentCurve)
-          }
-          
-          // Auto-select most recent palette
-          if (availablePalettes.length > 0) {
-            const mostRecentPalette = [...availablePalettes].sort((a, b) => 
-              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
-            )[0]
-            console.log(`✅ Auto-selected most recent palette: ${mostRecentPalette.name}`)
-            setSelectedPalette(mostRecentPalette)
-          }
+          console.log(`🎯 Keeping current user selections (no auto-selection on DP switch)`)
+          console.log(`   Current curve: ${selectedCurve?.name || 'none'}`)
+          console.log(`   Current palette: ${selectedPalette?.name || 'none'}`)
+          console.log(`💡 User can manually link current selections using the link button`)
         }
       }
     } catch (error) {
