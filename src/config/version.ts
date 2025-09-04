@@ -3,7 +3,7 @@
  * This file is automatically updated by the semantic versioning workflow
  */
 
-export const VERSION = '0.0.5'
+export const VERSION = '0.0.6'
 
 export const VERSION_INFO = {
   version: VERSION,
