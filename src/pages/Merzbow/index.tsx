@@ -263,16 +263,27 @@ const Merzbow: React.FC = () => {
 
   // Load distortion control into UI and find its linked curve
   const loadDistortionControl = async (control: DistortionControl) => {
-    console.log(`🎛️ Loading distortion control: ${control.name}`)
+    console.log(`\n🔄 ===== LOADING DISTORTION PROFILE: ${control.name} =====`)
+    console.log(`📋 Profile ID: ${control.id}`)
     
-    // CLEAR DOM FIRST - Reset all selections
-    console.log(`🧹 Clearing current selections before loading new DP`)
+    // COMPLETE CACHE/STATE CLEARING
+    console.log(`🧹 CLEARING ALL CACHED STATE...`)
+    console.log(`   🗑️ Clearing selectedCurve (was: ${selectedCurve?.name || 'none'})`)
+    console.log(`   🗑️ Clearing selectedPalette (was: ${selectedPalette?.name || 'none'})`)
+    console.log(`   🗑️ Clearing selectedDistortionControl (was: ${selectedDistortionControl?.name || 'none'})`)
+    console.log(`   🗑️ Resetting all flags and states`)
+    
+    // Clear ALL related state
     setSelectedCurve(null)
     setSelectedPalette(null)
+    setSelectedDistortionControl(null)
     setHasUnsavedChanges(false)
+    setIsProcessing(false)
+    setIsSaving(false)
     
-    // Small delay to ensure DOM clears
-    await new Promise(resolve => setTimeout(resolve, 50))
+    // Force DOM update and state propagation
+    console.log(`⏱️ Waiting for complete state clear...`)
+    await new Promise(resolve => setTimeout(resolve, 150))
     
     setSelectedDistortionControl(control)
     setAngularEnabled(control['angular-distortion'])
@@ -396,7 +407,14 @@ const Merzbow: React.FC = () => {
     }
 
     // Don't trigger immediate redraw - let the useEffect handle it
-    console.log(`🎨 Distortion profile loaded: ${control.name} (render will be triggered by useEffect)`)
+    console.log(`\n✅ ===== DISTORTION PROFILE LOAD COMPLETE =====`)
+    console.log(`📋 Loaded Profile: "${control.name}" (ID: ${control.id})`)
+    console.log(`🎯 Final selectedCurve: ${selectedCurve?.name || 'NONE'}`)
+    console.log(`🎨 Final selectedPalette: ${selectedPalette?.name || 'NONE'}`)
+    console.log(`🔧 Angular: ${control['angular-distortion']}, Fractal: ${control['fractal-distortion']}, Checkerboard: ${control['checkerboard-pattern']}`)
+    console.log(`📏 Distance: ${control['distance-calculation']}, Modulus: ${control['distance-modulus']}, Scaling: ${control['curve-scaling']}`)
+    console.log(`🎨 Render will be triggered by useEffect in 200ms`)
+    console.log(`===== END LOAD SUMMARY =====\n`)
   }
 
   // Save current distortion control
@@ -611,8 +629,21 @@ const Merzbow: React.FC = () => {
     const width = canvas.width
     const height = canvas.height
     
-    console.log(`🔧 Processing Merzbow pattern: ${width}×${height}`)
-    console.log(`🔍 RENDER DEBUG: selectedCurve=${selectedCurve?.name || 'none'}, selectedPalette=${selectedPalette?.name || 'none'}`)
+    console.log(`\n🎨 ===== STARTING RENDER =====`)
+    console.log(`🔧 Canvas: ${width}×${height}`)
+    console.log(`🎯 Using Curve: ${selectedCurve?.name || 'DEFAULT RAMP (0-255)'}`)
+    console.log(`🎨 Using Palette: ${selectedPalette?.name || 'DEFAULT GRAYSCALE'}`)
+    console.log(`🎛️ Distortion Profile: ${selectedDistortionControl?.name || 'none'}`)
+    
+    if (selectedPalette) {
+      console.log(`🌈 Palette colors: ${selectedPalette.hexColors?.length || 0} colors`)
+      console.log(`🌈 First few colors: ${selectedPalette.hexColors?.slice(0, 5).join(', ') || 'none'}`)
+    }
+    
+    if (selectedCurve) {
+      console.log(`📊 Curve data: ${selectedCurve['curve-data']?.length || 0} points`)
+      console.log(`📊 Curve width: ${selectedCurve['curve-width'] || 'unknown'}`)
+    }
 
     // Use selected curve data or default ramp
     const curveData = selectedCurve ? {
@@ -746,12 +777,17 @@ const Merzbow: React.FC = () => {
     console.log(`🎨 Drawing imageData to canvas: ${width}×${height}`)
     ctx.putImageData(imageData, 0, 0)
 
-    // Verify canvas content
+    // Verify canvas content and log final render results
     const testPixel = ctx.getImageData(width/2, height/2, 1, 1).data
     console.log(`🔍 Canvas center pixel RGBA: [${testPixel[0]}, ${testPixel[1]}, ${testPixel[2]}, ${testPixel[3]}]`)
+    
+    console.log(`✅ RENDER COMPLETE`)
+    console.log(`   🎯 Rendered with curve: ${selectedCurve?.name || 'default ramp'}`)
+    console.log(`   🎨 Rendered with palette: ${selectedPalette?.name || 'default grayscale'}`)
+    console.log(`   🎛️ Using profile: ${selectedDistortionControl?.name || 'none'}`)
+    console.log(`===== END RENDER =====\n`)
 
     setIsProcessing(false)
-    console.log('✅ Merzbow pattern complete')
   }
 
   // Load data on mount in proper sequence
