@@ -629,9 +629,8 @@ const Merzbow: React.FC = () => {
           console.log(`✅ PALETTE ADDED TO LINK:`, JSON.stringify(data, null, 2))
           console.log(`🎉 SUCCESS: Palette "${selectedPalette.name}" linked to DP "${selectedDistortionControl.name}"`)
           
-          // Refresh the DP to show the updated link
-          console.log(`🔄 Refreshing DP to show updated palette link...`)
-          await loadDistortionControl(selectedDistortionControl)
+          // Don't refresh DP - keep user's current selection active
+          console.log(`✅ Palette link updated in database - keeping current UI selection`)
         } else {
           const errorData = await response.text()
           console.error(`🚨 CRITICAL PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
@@ -664,9 +663,8 @@ const Merzbow: React.FC = () => {
             console.log(`✅ NEW CURVE+PALETTE LINK CREATED:`, JSON.stringify(data, null, 2))
             console.log(`🎉 SUCCESS: New link created for curve "${selectedCurve.name}" + palette "${selectedPalette.name}"`)
             
-            // Refresh the DP to show the new link
-            console.log(`🔄 Refreshing DP to show new curve+palette link...`)
-            await loadDistortionControl(selectedDistortionControl)
+            // Don't refresh DP - keep user's current selection active
+            console.log(`✅ New link created in database - keeping current UI selection`)
           } else {
             const errorData = await response.text()
             console.error(`🚨 FAILED TO CREATE NEW LINK: ${response.status} ${response.statusText}`)
@@ -741,9 +739,8 @@ const Merzbow: React.FC = () => {
           console.log(`✅ NEW DIRECT LINK CREATED:`, JSON.stringify(data, null, 2))
           console.log(`🎉 SUCCESS: Direct link created for "${palette.name}" + "${distortionControl.name}"`)
           
-          // Refresh the DP to show the new link
-          console.log(`🔄 Refreshing DP to show new direct link...`)
-          await loadDistortionControl(distortionControl)
+          // Don't refresh DP - keep user's current selection active
+          console.log(`✅ Direct link created in database - keeping current UI selection`)
         } else {
           const errorData = await response.text()
           console.error(`🚨 FAILED TO CREATE DIRECT LINK: ${response.status} ${response.statusText}`)
