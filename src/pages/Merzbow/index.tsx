@@ -428,8 +428,8 @@ const Merzbow: React.FC = () => {
     
     setIsSaving(true)
     
-    // VALIDATION: Check that curve and palette links exist in distortion-control-links
-    console.log(`🔍 VALIDATING LINKS BEFORE SAVE...`)
+    // VALIDATION & AUTO-LINKING: Check links exist, create missing ones
+    console.log(`🔍 VALIDATING & AUTO-LINKING BEFORE SAVE...`)
     
     try {
       const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
@@ -449,19 +449,57 @@ const Merzbow: React.FC = () => {
         console.log(`   🎯 Curve "${selectedCurve?.name || 'NONE'}" linked: ${curveLinked}`)
         console.log(`   🎨 Palette "${selectedPalette?.name || 'NONE'}" linked: ${paletteLinked}`)
         
+        // AUTO-LINK missing curve
         if (selectedCurve && !curveLinked) {
-          console.error(`🚨 CRITICAL ERROR: Selected curve "${selectedCurve.name}" is NOT linked in distortion-control-links`)
-          console.error(`🚨 This will cause data inconsistency - save aborted`)
-          setIsSaving(false)
-          alert(`ERROR: Curve "${selectedCurve.name}" is not properly linked to this distortion profile. Please link the curve first.`)
-          return
+          console.log(`🔗 Auto-linking missing curve: "${selectedCurve.name}" → "${selectedDistortionControl.name}"`)
+          try {
+            const linkCurveResponse = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                curveId: selectedCurve.name, 
+                distortionControlId: selectedDistortionControl.id 
+              })
+            })
+            
+            if (linkCurveResponse.ok) {
+              console.log(`✅ Auto-linked curve successfully`)
+            } else {
+              console.error(`❌ Failed to auto-link curve:`, linkCurveResponse.statusText)
+            }
+          } catch (error) {
+            console.error(`❌ Error auto-linking curve:`, error)
+          }
         }
+        
+        // AUTO-LINK missing palette
         if (selectedPalette && !paletteLinked) {
-          console.error(`🚨 CRITICAL ERROR: Selected palette "${selectedPalette.name}" is NOT linked in distortion-control-links`)
-          console.error(`🚨 This will cause data inconsistency - save aborted`)
-          setIsSaving(false)
-          alert(`ERROR: Palette "${selectedPalette.name}" is not properly linked to this distortion profile. Please link the palette first.`)
-          return
+          console.log(`🎨 Auto-linking missing palette: "${selectedPalette.name}" → "${selectedDistortionControl.name}"`)
+          try {
+            // Find existing link to add palette to
+            if (linksData.success && linksData.data && linksData.data.length > 0) {
+              const existingLink = linksData.data[0] // Use first link
+              
+              const addPaletteResponse = await fetch(`${apiUrl}/api/distortion-control-links/add-palette`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  linkId: existingLink.id,
+                  paletteName: selectedPalette.name 
+                })
+              })
+              
+              if (addPaletteResponse.ok) {
+                console.log(`✅ Auto-linked palette successfully`)
+              } else {
+                console.error(`❌ Failed to auto-link palette:`, addPaletteResponse.statusText)
+              }
+            } else {
+              console.error(`❌ Cannot auto-link palette - no existing distortion-control-links found`)
+            }
+          } catch (error) {
+            console.error(`❌ Error auto-linking palette:`, error)
+          }
         }
       }
     } catch (error) {
