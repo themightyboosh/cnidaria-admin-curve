@@ -538,8 +538,8 @@ const Merzbow: React.FC = () => {
       if (response.ok) {
         setHasUnsavedChanges(false)
         console.log('✅ Distortion control saved successfully')
-        // Reload to get updated timestamp
-        await loadDistortionControls()
+        // Don't reload distortion controls to avoid triggering auto-selection
+        console.log('💾 Save complete - keeping current UI state stable')
       } else {
         console.error('❌ Failed to save distortion control:', response.statusText)
       }
@@ -1705,10 +1705,10 @@ void main() {
                       console.log(`🎯 Selected curve: ${curve?.name || 'none'} (ID: ${curve?.id || 'none'})`)
                       setSelectedCurve(curve || null)
                       
-                      // Auto-link curve to current distortion control
+                      // TEMPORARILY DISABLED: Auto-link curve to current distortion control
                       if (curve && selectedDistortionControl) {
-                        console.log(`🔗 Auto-linking curve "${curve.name}" (ID: ${curve.id}) to distortion control "${selectedDistortionControl.name}"`)
-                        await linkCurveToDistortionControl(curve.id)
+                        console.log(`🔗 Would auto-link curve "${curve.name}" (ID: ${curve.id}) to distortion control "${selectedDistortionControl.name}" (DISABLED FOR TESTING)`)
+                        // await linkCurveToDistortionControl(curve.id)
                       }
                     }}
                   >
@@ -1728,13 +1728,15 @@ void main() {
                     value={selectedPalette?.id || ''} 
                     onChange={async (e) => {
                       const palette = availablePalettes.find(p => p.id === e.target.value)
+                      console.log(`🎨 USER SELECTED PALETTE: ${palette?.name || 'none'} (ID: ${palette?.id || 'none'})`)
+                      console.log(`🎨 Previous palette was: ${selectedPalette?.name || 'none'}`)
                       setSelectedPalette(palette || null)
-                      console.log(`🎨 Selected palette: ${palette?.name || 'none'}`)
+                      console.log(`🎨 Palette state updated to: ${palette?.name || 'none'}`)
                       
-                      // Auto-link palette to current distortion control
+                      // TEMPORARILY DISABLED: Auto-link palette to current distortion control
                       if (palette && selectedDistortionControl) {
-                        console.log(`🔗 Auto-linking palette "${palette.name}" to distortion control "${selectedDistortionControl.name}"`)
-                        await linkPaletteToDistortionControlDirect(palette, selectedDistortionControl)
+                        console.log(`🔗 Would auto-link palette "${palette.name}" to distortion control "${selectedDistortionControl.name}" (DISABLED FOR TESTING)`)
+                        // await linkPaletteToDistortionControlDirect(palette, selectedDistortionControl)
                       }
                     }}
                   >
