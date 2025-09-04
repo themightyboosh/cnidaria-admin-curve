@@ -89,22 +89,40 @@ const CurveLinkButton: React.FC<{
   )
 }
 
-// Palette Link Button Component (Simplified - no API calls for now)
+// Palette Link Button Component (Using generic palette-links API)
 const PaletteLinkButton: React.FC<{
   distortionControlId: string
   paletteId: string
   paletteName: string
   onLink: () => void
 }> = ({ distortionControlId, paletteId, paletteName, onLink }) => {
-  const [isLinked, setIsLinked] = useState(false) // Simplified: always show for now
+  const [isLinked, setIsLinked] = useState<boolean | null>(null)
   const [isLinking, setIsLinking] = useState(false)
+
+  useEffect(() => {
+    const checkLink = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/palette-links/distortion/${distortionControlId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const linked = data.success && data.data.hasLink && data.data.link?.paletteId === paletteId
+          setIsLinked(linked)
+        } else {
+          setIsLinked(false)
+        }
+      } catch (error) {
+        console.error('Failed to check palette link:', error)
+        setIsLinked(false)
+      }
+    }
+    checkLink()
+  }, [distortionControlId, paletteId])
 
   const handleLink = async () => {
     setIsLinking(true)
     try {
       await onLink()
       setIsLinked(true)
-      console.log(`✅ Linked palette ${paletteName} to distortion control`)
     } catch (error) {
       console.error('Failed to link palette:', error)
     } finally {
@@ -112,7 +130,8 @@ const PaletteLinkButton: React.FC<{
     }
   }
 
-  if (isLinked) return <div style={{ color: '#4caf50' }}>🎨 {paletteName} Linked</div>
+  if (isLinked === null) return <div>Checking link...</div>
+  if (isLinked) return null // Hide when linked
 
   return (
     <button onClick={handleLink} disabled={isLinking} className="link-button">
@@ -378,13 +397,29 @@ const Merzbow: React.FC = () => {
     }
   }
 
-  // Link palette to current distortion control (simplified)
+  // Link palette to current distortion control using generic API
   const linkPaletteToDistortionControl = async () => {
     if (!selectedDistortionControl || !selectedPalette) return
     
-    console.log(`🎨 Palette linking: ${selectedPalette.name} → ${selectedDistortionControl.name}`)
-    // For now, just log the linking - API implementation pending
-    await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
+    try {
+      const response = await fetch(`${apiUrl}/api/palette-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          objectType: 'distortion',
+          objectId: selectedDistortionControl.id,
+          paletteId: selectedPalette.id 
+        })
+      })
+
+      if (response.ok) {
+        console.log(`🎨 Linked palette ${selectedPalette.name} to distortion control ${selectedDistortionControl.name}`)
+      } else {
+        console.error('Failed to link palette:', response.status)
+      }
+    } catch (error) {
+      console.error('Failed to link palette:', error)
+    }
   }
 
 
