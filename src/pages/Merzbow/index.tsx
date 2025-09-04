@@ -260,7 +260,10 @@ const Merzbow: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to load palettes:', error)
+      console.error('🚨 CRITICAL FAILURE loading palettes from API:', error)
+      console.error('🚨 Application cannot function without palette data')
+      alert(`CRITICAL ERROR: Failed to load palettes from API. Application may not function properly.`)
+      throw error
     }
   }
 
@@ -344,7 +347,10 @@ const Merzbow: React.FC = () => {
                 console.log(`✅ Found linked palette: ${linkedPalette.name} → ${control.name}`)
                 setSelectedPalette(linkedPalette)
               } else {
-                console.log(`❌ Linked palette "${link.paletteName}" not found in available palettes`)
+                console.error(`🚨 CRITICAL PALETTE ERROR: Linked palette "${link.paletteName}" not found in available palettes`)
+                console.error(`🚨 Available palettes: ${availablePalettes.map(p => p.name).join(', ')}`)
+                console.error(`🚨 This indicates a broken link in distortion-control-links collection`)
+                throw new Error(`Palette link broken: "${link.paletteName}" not found`)
               }
             }
           }
@@ -372,7 +378,10 @@ const Merzbow: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to load linked curve and palette:', error)
+      console.error('🚨 CRITICAL ERROR loading linked curve and palette:', error)
+      console.error('🚨 This indicates a serious data integrity issue')
+      alert(`CRITICAL ERROR loading links for "${control.name}": ${error.message}`)
+      throw error
     }
 
     // VALIDATION: Check if loaded elements match user selection
@@ -441,10 +450,18 @@ const Merzbow: React.FC = () => {
         console.log(`   🎨 Palette "${selectedPalette?.name || 'NONE'}" linked: ${paletteLinked}`)
         
         if (selectedCurve && !curveLinked) {
-          console.warn(`⚠️ WARNING: Selected curve "${selectedCurve.name}" is not linked in distortion-control-links`)
+          console.error(`🚨 CRITICAL ERROR: Selected curve "${selectedCurve.name}" is NOT linked in distortion-control-links`)
+          console.error(`🚨 This will cause data inconsistency - save aborted`)
+          setIsSaving(false)
+          alert(`ERROR: Curve "${selectedCurve.name}" is not properly linked to this distortion profile. Please link the curve first.`)
+          return
         }
         if (selectedPalette && !paletteLinked) {
-          console.warn(`⚠️ WARNING: Selected palette "${selectedPalette.name}" is not linked in distortion-control-links`)
+          console.error(`🚨 CRITICAL ERROR: Selected palette "${selectedPalette.name}" is NOT linked in distortion-control-links`)
+          console.error(`🚨 This will cause data inconsistency - save aborted`)
+          setIsSaving(false)
+          alert(`ERROR: Palette "${selectedPalette.name}" is not properly linked to this distortion profile. Please link the palette first.`)
+          return
         }
       }
     } catch (error) {
@@ -568,7 +585,11 @@ const Merzbow: React.FC = () => {
           const data = await response.json()
           console.log(`✅ PALETTE ADDED TO LINK:`, data)
         } else {
-          console.error('❌ Failed to add palette to link:', response.statusText)
+          const errorData = await response.text()
+          console.error(`🚨 CRITICAL PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
+          console.error(`🚨 Error details:`, errorData)
+          alert(`FAILED to link palette "${selectedPalette.name}": ${response.status} ${response.statusText}`)
+          throw new Error(`Palette linking failed: ${response.status} ${response.statusText}`)
         }
       } else {
         console.error('❌ No existing links found for distortion control')
@@ -624,8 +645,11 @@ const Merzbow: React.FC = () => {
         const data = await response.json()
         console.log(`✅ DIRECT PALETTE LINK SUCCESSFUL:`, data)
       } else {
-        const errorData = await response.json()
-        console.error(`❌ DIRECT PALETTE LINK FAILED:`, response.status, errorData)
+        const errorData = await response.text()
+        console.error(`🚨 CRITICAL DIRECT PALETTE LINK FAILURE: ${response.status} ${response.statusText}`)
+        console.error(`🚨 Error details:`, errorData)
+        alert(`FAILED to directly link palette "${palette.name}": ${response.status} ${response.statusText}`)
+        throw new Error(`Direct palette linking failed: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
       console.error('❌ DIRECT PALETTE LINK EXCEPTION:', error)
