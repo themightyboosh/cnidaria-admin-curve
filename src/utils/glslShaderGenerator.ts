@@ -473,4 +473,4 @@ void main() {
   }
 }
 
-export const glslShaderGenerator = new GLSLShaderGenerator()`
+export const glslShaderGenerator = new GLSLShaderGenerator()
