@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
 import { unityShaderGenerator } from '../../utils/unityShaderGenerator'
+import { glslShaderGenerator } from '../../utils/glslShaderGenerator'
 import './Merzbow.css'
 
 interface DistortionControl {
@@ -890,6 +891,38 @@ const Merzbow: React.FC = () => {
     console.log('  - Standalone (no external textures needed)')
   }
 
+  // Export WebGL GLSL shader
+  const exportWebGLShader = () => {
+    if (!selectedDistortionControl || !selectedCurve) {
+      console.warn('⚠️ Need distortion control and curve to export WebGL shader')
+      return
+    }
+
+    const shaderPackage = glslShaderGenerator.generateWebGLPackage({
+      shaderName: `${selectedDistortionControl.name} WebGL`,
+      distortionControl: selectedDistortionControl,
+      curve: selectedCurve,
+      palette: selectedPalette,
+      target: 'webgl',
+      includeComments: true
+    })
+
+    // Create and download shader files
+    const shaderContent = `// Vertex Shader\n${shaderPackage.vertexShader}\n\n// Fragment Shader\n${shaderPackage.fragmentShader}\n\n// JavaScript Setup\n${shaderPackage.uniformSetup}`
+    const blob = new Blob([shaderContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    
+    link.href = url
+    link.download = `${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}-webgl.glsl`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    console.log(`🌐 Exported WebGL GLSL shader for ${selectedDistortionControl.name}`)
+  }
+
   return (
     <div className="app">
       <Header title="Cnidaria" currentPage="Merzbow" />
@@ -1164,14 +1197,22 @@ const Merzbow: React.FC = () => {
                       Export JPEG
                     </button>
                   </div>
-                  <button 
-                    onClick={exportUnityShader} 
-                    className="export-button unity"
-                    style={{ width: '100%' }}
-                    disabled={!selectedDistortionControl || !selectedCurve}
-                  >
-                    Export Unity Shader
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      onClick={exportUnityShader} 
+                      className="export-button unity"
+                      disabled={!selectedDistortionControl || !selectedCurve}
+                    >
+                      Unity Shader
+                    </button>
+                    <button 
+                      onClick={exportWebGLShader} 
+                      className="export-button webgl"
+                      disabled={!selectedDistortionControl || !selectedCurve}
+                    >
+                      WebGL GLSL
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

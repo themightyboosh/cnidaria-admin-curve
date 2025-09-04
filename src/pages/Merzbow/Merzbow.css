@@ -177,6 +177,18 @@
   transform: translateY(-1px);
 }
 
+.export-button.webgl {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: #ffffff;
+  border: 2px solid #ff6b35;
+}
+
+.export-button.webgl:hover {
+  background: linear-gradient(135deg, #e55a2b, #e8841a);
+  border-color: #e55a2b;
+  transform: translateY(-1px);
+}
+
 .link-button {
   background-color: #daa520;
   color: #ffffff;
