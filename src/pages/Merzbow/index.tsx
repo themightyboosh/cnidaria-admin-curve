@@ -393,11 +393,8 @@ const Merzbow: React.FC = () => {
       console.error('❌ PALETTE LOADING EXCEPTION:', error)
     }
 
-    // Trigger immediate redraw with new distortion profile settings
-    console.log(`🎨 Triggering redraw for new distortion profile: ${control.name}`)
-    setTimeout(() => {
-      processPattern()
-    }, 100) // Small delay to ensure state updates are complete
+    // Don't trigger immediate redraw - let the useEffect handle it
+    console.log(`🎨 Distortion profile loaded: ${control.name} (render will be triggered by useEffect)`)
   }
 
   // Save current distortion control
@@ -607,6 +604,7 @@ const Merzbow: React.FC = () => {
     const height = canvas.height
     
     console.log(`🔧 Processing Merzbow pattern: ${width}×${height}`)
+    console.log(`🔍 RENDER DEBUG: selectedCurve=${selectedCurve?.name || 'none'}, selectedPalette=${selectedPalette?.name || 'none'}`)
 
     // Use selected curve data or default ramp
     const curveData = selectedCurve ? {
@@ -737,7 +735,12 @@ const Merzbow: React.FC = () => {
     }
 
     // Draw at full resolution directly
+    console.log(`🎨 Drawing imageData to canvas: ${width}×${height}`)
     ctx.putImageData(imageData, 0, 0)
+
+    // Verify canvas content
+    const testPixel = ctx.getImageData(width/2, height/2, 1, 1).data
+    console.log(`🔍 Canvas center pixel RGBA: [${testPixel[0]}, ${testPixel[1]}, ${testPixel[2]}, ${testPixel[3]}]`)
 
     setIsProcessing(false)
     console.log('✅ Merzbow pattern complete')
@@ -793,12 +796,17 @@ const Merzbow: React.FC = () => {
       fractalEnabled, fractalScale1, fractalScale2, fractalScale3, fractalStrength,
       distanceCalc, distanceModulus, curveScaling, checkerboardEnabled, checkerboardSteps])
 
-  // Auto-update when parameters change
+  // SINGLE RENDER TRIGGER - only place processPattern() is called
   useEffect(() => {
+    console.log(`🔄 RENDER TRIGGER: Parameters changed, scheduling render in 200ms`)
     const timer = setTimeout(() => {
+      console.log(`🎨 EXECUTING RENDER: Starting processPattern()`)
       processPattern()
-    }, 100)
-    return () => clearTimeout(timer)
+    }, 200) // Longer delay to prevent rapid-fire renders
+    return () => {
+      console.log(`🚫 RENDER CANCELLED: Timer cleared`)
+      clearTimeout(timer)
+    }
   }, [angularEnabled, angularFrequency, angularAmplitude, angularOffset, 
       fractalEnabled, fractalScale1, fractalScale2, fractalScale3, fractalStrength,
       distanceCalc, distanceModulus, curveScaling, checkerboardEnabled, checkerboardSteps,
@@ -816,7 +824,7 @@ const Merzbow: React.FC = () => {
       canvas.height = window.innerHeight - 85  // Full height minus header
       
       console.log(`📐 Canvas: ${canvas.width}×${canvas.height} (aspect: ${(canvas.width/canvas.height).toFixed(2)})`)
-      processPattern()
+      // Don't render immediately on resize - let the useEffect handle it
     }
     
     updateCanvasSize()
