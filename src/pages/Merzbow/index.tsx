@@ -158,6 +158,7 @@ const Merzbow: React.FC = () => {
   const [isLoadingDP, setIsLoadingDP] = useState(false)
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
   const [lastActiveCurve, setLastActiveCurve] = useState<string | null>(null)
+  const [previousPaletteName, setPreviousPaletteName] = useState<string | null>(null)
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
@@ -283,6 +284,9 @@ const Merzbow: React.FC = () => {
     console.log(`   🗑️ Clearing selectedDistortionControl (was: ${selectedDistortionControl?.name || 'none'})`)
     console.log(`   🗑️ Resetting all flags and states`)
     
+    // Store previous palette name for comparison
+    setPreviousPaletteName(selectedPalette?.name || null)
+    
     // Clear related state BUT keep selectedDistortionControl stable for dropdown
     setSelectedCurve(null)
     setSelectedPalette(null)
@@ -349,14 +353,14 @@ const Merzbow: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data && data.data.hasLink && data.data.link) {
-          const linkedPaletteId = data.data.link.paletteId
-          const linkedPalette = availablePalettes.find(p => p.id === linkedPaletteId)
+          const linkedPaletteName = data.data.link.paletteName
+          const linkedPalette = availablePalettes.find(p => p.name === linkedPaletteName)
           
           if (linkedPalette) {
             console.log(`✅ Found linked palette: ${linkedPalette.name} → ${control.name}`)
             setSelectedPalette(linkedPalette)
           } else {
-            console.log(`❌ Linked palette ID "${linkedPaletteId}" not found in available palettes`)
+            console.log(`❌ Linked palette name "${linkedPaletteName}" not found in available palettes`)
           }
         } else {
           console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
@@ -384,8 +388,9 @@ const Merzbow: React.FC = () => {
     }
     
     // Check if we're using the same palette as before
-    const previousPaletteName = selectedPalette?.name
-    console.log(`🎨 Palette Check: Current="${previousPaletteName}", Previous=unknown`)
+    const currentPaletteName = selectedPalette?.name
+    const isSamePalette = currentPaletteName === previousPaletteName
+    console.log(`🎨 Palette Check: Current="${currentPaletteName}", Previous="${previousPaletteName}", Same=${isSamePalette}`)
     
     console.log(`🔧 Settings: Angular=${control['angular-distortion']}, Fractal=${control['fractal-distortion']}, Checkerboard=${control['checkerboard-pattern']}`)
     console.log(`📏 Distance: ${control['distance-calculation']}, Modulus=${control['distance-modulus']}, Scaling=${control['curve-scaling']}`)
@@ -500,7 +505,7 @@ const Merzbow: React.FC = () => {
       const requestBody = { 
         objectType: 'distortion',
         objectId: selectedDistortionControl.id,
-        paletteId: selectedPalette.id 
+        paletteName: selectedPalette.name 
       }
       console.log(`📦 Link request body:`, requestBody)
       
@@ -533,7 +538,7 @@ const Merzbow: React.FC = () => {
       const requestBody = { 
         objectType: 'distortion',
         objectId: distortionControl.id,
-        paletteId: palette.id 
+        paletteName: palette.name 
       }
       console.log(`📦 Direct link request body:`, requestBody)
       
