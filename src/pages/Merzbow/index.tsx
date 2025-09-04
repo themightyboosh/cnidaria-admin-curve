@@ -263,6 +263,15 @@ const Merzbow: React.FC = () => {
   const loadDistortionControl = async (control: DistortionControl) => {
     console.log(`🎛️ Loading distortion control: ${control.name}`)
     
+    // CLEAR DOM FIRST - Reset all selections
+    console.log(`🧹 Clearing current selections before loading new DP`)
+    setSelectedCurve(null)
+    setSelectedPalette(null)
+    setHasUnsavedChanges(false)
+    
+    // Small delay to ensure DOM clears
+    await new Promise(resolve => setTimeout(resolve, 50))
+    
     setSelectedDistortionControl(control)
     setAngularEnabled(control['angular-distortion'])
     setFractalEnabled(control['fractal-distortion'])
@@ -310,6 +319,7 @@ const Merzbow: React.FC = () => {
     }
 
     // Also load linked palette for this distortion control
+    console.log(`🎨 STARTING PALETTE LOADING SECTION`)
     try {
       console.log(`\n🔍 ===== PALETTE LINKING DEBUG =====`)
       console.log(`🎨 Loading palette for distortion control: "${control.name}" (ID: ${control.id})`)
@@ -470,26 +480,71 @@ const Merzbow: React.FC = () => {
 
   // Link palette to current distortion control using generic API
   const linkPaletteToDistortionControl = async () => {
-    if (!selectedDistortionControl || !selectedPalette) return
+    if (!selectedDistortionControl || !selectedPalette) {
+      console.log(`❌ Cannot link palette: missing distortion control (${!!selectedDistortionControl}) or palette (${!!selectedPalette})`)
+      return
+    }
     
     try {
+      console.log(`🔗 LINKING PALETTE: "${selectedPalette.name}" (${selectedPalette.id}) → "${selectedDistortionControl.name}" (${selectedDistortionControl.id})`)
+      
+      const requestBody = { 
+        objectType: 'distortion',
+        objectId: selectedDistortionControl.id,
+        paletteId: selectedPalette.id 
+      }
+      console.log(`📦 Link request body:`, requestBody)
+      
       const response = await fetch(`${apiUrl}/api/palette-links/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          objectType: 'distortion',
-          objectId: selectedDistortionControl.id,
-          paletteId: selectedPalette.id 
-        })
+        body: JSON.stringify(requestBody)
       })
 
+      console.log(`📡 Palette link response status:`, response.status)
+      
       if (response.ok) {
-        console.log(`🎨 Linked palette ${selectedPalette.name} to distortion control ${selectedDistortionControl.name}`)
+        const data = await response.json()
+        console.log(`✅ PALETTE LINK SUCCESSFUL:`, data)
+        console.log(`✅ Linked palette "${selectedPalette.name}" to distortion control "${selectedDistortionControl.name}"`)
       } else {
-        console.error('Failed to link palette:', response.status)
+        const errorData = await response.json()
+        console.error(`❌ PALETTE LINK FAILED:`, response.status, errorData)
       }
     } catch (error) {
-      console.error('Failed to link palette:', error)
+      console.error('❌ PALETTE LINK EXCEPTION:', error)
+    }
+  }
+
+  // Direct palette linking (bypasses state race condition)
+  const linkPaletteToDistortionControlDirect = async (palette: Palette, distortionControl: DistortionControl) => {
+    try {
+      console.log(`🔗 DIRECT LINKING PALETTE: "${palette.name}" (${palette.id}) → "${distortionControl.name}" (${distortionControl.id})`)
+      
+      const requestBody = { 
+        objectType: 'distortion',
+        objectId: distortionControl.id,
+        paletteId: palette.id 
+      }
+      console.log(`📦 Direct link request body:`, requestBody)
+      
+      const response = await fetch(`${apiUrl}/api/palette-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log(`📡 Direct palette link response status:`, response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ DIRECT PALETTE LINK SUCCESSFUL:`, data)
+      } else {
+        const errorData = await response.json()
+        console.error(`❌ DIRECT PALETTE LINK FAILED:`, response.status, errorData)
+      }
+    } catch (error) {
+      console.error('❌ DIRECT PALETTE LINK EXCEPTION:', error)
     }
   }
 
@@ -1502,7 +1557,7 @@ void main() {
                       // Auto-link palette to current distortion control
                       if (palette && selectedDistortionControl) {
                         console.log(`🔗 Auto-linking palette "${palette.name}" to distortion control "${selectedDistortionControl.name}"`)
-                        await linkPaletteToDistortionControl()
+                        await linkPaletteToDistortionControlDirect(palette, selectedDistortionControl)
                       }
                     }}
                   >
