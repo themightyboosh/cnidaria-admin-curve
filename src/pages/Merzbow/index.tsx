@@ -1589,6 +1589,10 @@ void main() {
     }
 
     console.log('🎮 Starting 3D curve-shader preview')
+    console.log('📊 Canvas size:', canvas.width, 'x', canvas.height)
+    console.log('🎛️ DP:', selectedDistortionControl.name)
+    console.log('🎯 Curve:', selectedCurve.name)
+    console.log('🎨 Palette:', selectedPalette?.name || 'none')
 
     // Generate the GLSL fragment shader
     const shaderPackage = glslShaderGenerator.generateWebGLPackage({
@@ -1711,6 +1715,7 @@ void main() {
 
       // Clear and setup
       gl.viewport(0, 0, canvas.width, canvas.height)
+      gl.clearColor(0.1, 0.1, 0.1, 1.0) // Dark gray background
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
       gl.enable(gl.DEPTH_TEST)
       gl.useProgram(program)
@@ -1731,11 +1736,18 @@ void main() {
       // Draw cube
       gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0)
 
+      // Check for WebGL errors
+      const error = gl.getError()
+      if (error !== gl.NO_ERROR) {
+        console.error('WebGL error during render:', error)
+      }
+
       if (showPreview) {
         requestAnimationFrame(render)
       }
     }
 
+    console.log('🎮 Starting render loop...')
     render()
   }
 
@@ -2337,12 +2349,13 @@ void main() {
                     </button>
                     <button 
                       onClick={() => {
-                        console.log('🎮 3D Preview clicked')
                         if (!selectedDistortionControl || !selectedCurve) {
                           alert('Please select both a distortion control and curve')
                           return
                         }
-                        alert(`🎮 3D Preview: ${selectedDistortionControl.name}\n\nThis will show your curve-shader on a rotating 3D cube\n\n(Implementation in progress)`)
+                        setShowPreview(true)
+                        // Initialize 3D preview after modal opens
+                        setTimeout(() => init3DPreview(), 100)
                       }} 
                       className="export-button webgl"
                       disabled={!selectedDistortionControl || !selectedCurve}
