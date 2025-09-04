@@ -88,8 +88,10 @@ const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette,
   }, [selectedCurve?.id, selectedPalette?.name, selectedDistortionControl?.id])
   
   const needsLinking = (selectedCurve && !linkStatus.curveLinked) || (selectedPalette && !linkStatus.paletteLinked)
+  const bothLinked = selectedCurve && selectedPalette && linkStatus.curveLinked && linkStatus.paletteLinked
   
-  if (!needsLinking || !selectedDistortionControl || (!selectedCurve && !selectedPalette)) {
+  // Hide button if both are linked, no DP selected, or no curve/palette selected
+  if (bothLinked || !needsLinking || !selectedDistortionControl || (!selectedCurve && !selectedPalette)) {
     return null
   }
   
@@ -111,8 +113,7 @@ const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette,
           width: '100%'
         }}
       >
-        {isChecking ? 'Checking...' : 
-         `Link ${!linkStatus.curveLinked && selectedCurve ? 'Curve' : ''}${!linkStatus.curveLinked && !linkStatus.paletteLinked && selectedCurve && selectedPalette ? ' + ' : ''}${!linkStatus.paletteLinked && selectedPalette ? 'Palette' : ''} to DP`}
+        {isChecking ? 'Checking...' : 'Link Curve and Palette'}
       </button>
     </div>
   )
@@ -610,6 +611,33 @@ const Merzbow: React.FC = () => {
           )
         )
         console.log('🔄 Updated local DP cache with saved data')
+        
+        // Auto-link current curve and palette when saving
+        if (selectedCurve && selectedPalette) {
+          console.log('🔗 Auto-linking curve and palette on save...')
+          try {
+            const linkBody = {
+              curveId: selectedCurve.id,
+              distortionControlId: selectedDistortionControl.id,
+              paletteName: selectedPalette.name
+            }
+            
+            const linkResponse = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(linkBody)
+            })
+            
+            if (linkResponse.ok) {
+              const linkData = await linkResponse.json()
+              console.log('✅ Auto-linked curve and palette on save:', linkData)
+            } else {
+              console.error('❌ Failed to auto-link on save:', linkResponse.statusText)
+            }
+          } catch (linkError) {
+            console.error('❌ Error auto-linking on save:', linkError)
+          }
+        }
       } else {
         const errorData = await response.text()
         console.error('❌ SAVE FAILED:', response.status, response.statusText)
