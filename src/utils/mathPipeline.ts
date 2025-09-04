@@ -217,9 +217,8 @@ export function applyMathPipeline(
   // Step 6: Lookup: v = curve-data[idx] (0..255)
   const v = curve['curve-data'][idx] | 0; // 0..255
   
-  // Compute percentages using actual curve height
-  const curveHeight = curve['curve-height'] || CONFIG.DEFAULT_CURVE_HEIGHT;
-  const valuePct = v / curveHeight;
+  // Compute percentages  
+  const valuePct = v / CONFIG.CURVE_HEIGHT;
   const indexPct = curveWidth > 1 ? idx / (curveWidth - 1) : 0;
   
   return { value: v, index: idx, valuePct, indexPct };

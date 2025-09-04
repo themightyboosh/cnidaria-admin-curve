@@ -135,6 +135,110 @@ export class WebGPUService {
   }
 
   /**
+   * NEW: Real-time grid processing optimized for interactive views
+   * 
+   * Optimized for smaller grids with faster processing times
+   * Perfect for 128x128 grids that need sub-100ms response times
+   */
+  async processGridCoordinates(
+    curve: CurveData,
+    bounds: { minX: number; maxX: number; minY: number; maxY: number },
+    gpuExpression: string
+  ): Promise<Map<string, { indexValue: number; indexPosition: number }>> {
+    const width = bounds.maxX - bounds.minX + 1
+    const height = bounds.maxY - bounds.minY + 1
+    const centerX = (bounds.minX + bounds.maxX) / 2
+    const centerY = (bounds.minY + bounds.maxY) / 2
+
+    console.log(`🔥 Real-time grid processing: ${width}×${height} grid, center: (${centerX}, ${centerY})`)
+    
+    // Ensure service is initialized for this curve's settings
+    const distanceCalc = curve['curve-distance-calc'] || 'radial'
+    await this.initialize(gpuExpression, distanceCalc)
+
+    // Process coordinates
+    const result = await this.processCoordinates(width, height, curve, 1.0, centerX, centerY)
+
+    // Convert to grid coordinate format
+    const gridResults = new Map<string, { indexValue: number; indexPosition: number }>()
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = y * width + x
+        const worldX = bounds.minX + x
+        const worldY = bounds.minY + y
+        const key = `${worldX}_${worldY}`
+        
+        const indexValue = Math.round(result.values[index])
+        const indexPosition = Math.floor((result.coordinates[index * 2] + result.coordinates[index * 2 + 1]) * curve['curve-index-scaling']) % curve['curve-width']
+        
+        gridResults.set(key, { indexValue, indexPosition })
+      }
+    }
+
+    console.log(`✅ Real-time grid processing complete: ${gridResults.size} coordinates`)
+    return gridResults
+  }
+
+  /**
+   * NEW: Streaming/chunked processing for large datasets
+   * 
+   * Processes coordinates in chunks to avoid blocking the main thread
+   * Useful for very large grids or background processing
+   */
+  async processGridStreaming(
+    curve: CurveData,
+    bounds: { minX: number; maxX: number; minY: number; maxY: number },
+    gpuExpression: string,
+    chunkSize: number = 64,
+    onChunkComplete?: (chunk: Map<string, { indexValue: number; indexPosition: number }>) => void
+  ): Promise<Map<string, { indexValue: number; indexPosition: number }>> {
+    const width = bounds.maxX - bounds.minX + 1
+    const height = bounds.maxY - bounds.minY + 1
+    const totalCoordinates = width * height
+
+    console.log(`🌊 Streaming grid processing: ${width}×${height} in ${chunkSize}×${chunkSize} chunks`)
+
+    const allResults = new Map<string, { indexValue: number; indexPosition: number }>()
+    let processedChunks = 0
+    const totalChunks = Math.ceil(width / chunkSize) * Math.ceil(height / chunkSize)
+
+    // Process in chunks
+    for (let chunkY = bounds.minY; chunkY <= bounds.maxY; chunkY += chunkSize) {
+      for (let chunkX = bounds.minX; chunkX <= bounds.maxX; chunkX += chunkSize) {
+        const chunkBounds = {
+          minX: chunkX,
+          maxX: Math.min(chunkX + chunkSize - 1, bounds.maxX),
+          minY: chunkY,
+          maxY: Math.min(chunkY + chunkSize - 1, bounds.maxY)
+        }
+
+        // Process this chunk
+        const chunkResults = await this.processGridCoordinates(curve, chunkBounds, gpuExpression)
+        
+        // Add to overall results
+        chunkResults.forEach((value, key) => {
+          allResults.set(key, value)
+        })
+
+        processedChunks++
+        console.log(`🌊 Processed chunk ${processedChunks}/${totalChunks}: ${chunkResults.size} coordinates`)
+
+        // Notify chunk completion
+        if (onChunkComplete) {
+          onChunkComplete(chunkResults)
+        }
+
+        // Small delay to avoid blocking main thread
+        await new Promise(resolve => setTimeout(resolve, 1))
+      }
+    }
+
+    console.log(`✅ Streaming processing complete: ${allResults.size} total coordinates`)
+    return allResults
+  }
+
+  /**
    * Sort matrix data by distance from center
    */
   async sortMatrixByDistance(

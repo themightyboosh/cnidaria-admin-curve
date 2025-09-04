@@ -1,7 +1,11 @@
 /**
  * Curve Data Service
  * Handles fetching and managing curve data for SVG grid visualization
+ * Updated for Phase 2.2: Now uses shared coordinate service
  */
+
+import { coordinateService } from './coordinateService'
+import { CoordinateResult, ViewportBounds } from '../types/coordinateTypes'
 
 export interface CurveDataCell {
   rectangleId: string;
@@ -29,35 +33,25 @@ class CurveDataService {
   private isLoading = false;
 
   /**
-   * Fetch curve data for a grid area
+   * Fetch curve data for a grid area using shared coordinate service
    */
-  async fetchCurveData(curveId: string, x1: number, y1: number, x2: number, y2: number): Promise<CurveDataResponse> {
+  async fetchCurveData(curveId: string, x1: number, y1: number, x2: number, y2: number): Promise<Map<string, CoordinateResult>> {
     try {
       this.isLoading = true;
-      console.log(`📊 Fetching curve data for area: (${x1}, ${y1}) to (${x2}, ${y2})`);
+      console.log(`📊 Requesting coordinates via shared service: (${x1}, ${y1}) to (${x2}, ${y2})`);
 
-      const response = await fetch(
-        `${this.apiUrl}/api/curves/${curveId}/process?x=${x1}&y=${y1}&x2=${x2}&y2=${y2}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept-Encoding': 'gzip, deflate'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch curve data: ${response.status} ${response.statusText}`);
-      }
-
-      const data: CurveDataResponse = await response.json();
-      console.log(`✅ Fetched curve data: ${Object.keys(data)[0]}`);
+      // Use shared coordinate service instead of direct API calls
+      const bounds = { minX: x1, maxX: x2, minY: y1, maxY: y2 }
+      const results = await coordinateService.getCoordinates(curveId, bounds, {
+        enablePrefetch: true,
+        prefetchBuffer: 5
+      })
       
-      return data;
+      console.log(`✅ Received ${results.size} coordinates from shared service`);
+      return results;
 
     } catch (error) {
-      console.error('❌ Failed to fetch curve data:', error);
+      console.error('❌ Failed to get coordinates from shared service:', error);
       throw error;
     } finally {
       this.isLoading = false;

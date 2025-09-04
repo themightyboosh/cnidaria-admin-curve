@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { apiUrl } from '../../config/environments'
+import { coordinateService } from '../../services/coordinateService'
 import { indexToThreeColor } from '../../utils/colorSpectrum'
 
 interface ThreeJSGridProps {
@@ -56,54 +56,32 @@ const ThreeJSGrid: React.FC<ThreeJSGridProps> = ({ selectedCurve, cellSize, colo
     console.log(`Grid offset: (${offsetX}, ${offsetY})`)
     
     try {
-      // Call API for entire 256x256 grid
-      const response = await fetch(
-        `${apiUrl}/curves/${selectedCurve.id}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept-Encoding': 'gzip, deflate'
-          }
-        }
+      // Use shared coordinate service for 3D terrain processing
+      const coordinateResults = await coordinateService.getCoordinatesForMatrix(
+        selectedCurve.id,
+        dataGridSize,
+        dataGridSize,
+        (bounds.minX + bounds.maxX) / 2,
+        (bounds.minY + bounds.maxY) / 2,
+        { enablePrefetch: true, prefetchBuffer: 10 }
       )
       
-      if (response.ok) {
-        const data = await response.json()
-        
-        // The API returns data in format: {"curve-name": [results]}
-        const curveName = Object.keys(data)[0]
-        const results = data[curveName]
-        
-        if (results && Array.isArray(results)) {
-          console.log(`Received ${results.length} coordinates for 128x128 grid`)
-          console.log('Sample results:', results.slice(0, 5))
-          
-          // Create height map from results, also store index position for color mapping
-          const heightMap = new Map<string, number>()
-          const indexMap = new Map<string, number>()
-          results.forEach((result: ProcessedCoordinate, index: number) => {
-            const [x, y] = result["cell-coordinates"]
-            const indexValue = result["index-value"]
-            const indexPosition = result["index-position"] // Use actual curve index position
-            heightMap.set(`${x}_${y}`, indexValue)
-            indexMap.set(`${x}_${y}`, indexPosition)
-          })
-          
-          console.log('Height map size:', heightMap.size)
-          console.log('Sample height map entries:', Array.from(heightMap.entries()).slice(0, 5))
-          
-          // Update mesh with new height data
-          updateMeshHeights(heightMap, bounds, indexMap, selectedCurve["curve-width"])
-          
-        } else {
-          console.error('Invalid 3D API response format')
-          console.error('Got:', data)
-        }
-      } else {
-        const errorText = await response.text()
-        console.error('3D API request failed:', response.status, response.statusText, errorText)
-      }
+      console.log(`Processed ${coordinateResults.size} coordinates for 3D grid via shared service`)
+      
+      // Create height map from processed results
+      const heightMap = new Map<string, number>()
+      const indexMap = new Map<string, number>()
+      
+      coordinateResults.forEach((result, key) => {
+        heightMap.set(key, result.indexValue)
+        indexMap.set(key, result.indexPosition)
+      })
+      
+      console.log('Height map size:', heightMap.size)
+      console.log('Sample height map entries:', Array.from(heightMap.entries()).slice(0, 5))
+      
+      // Update mesh with new height data
+      updateMeshHeights(heightMap, bounds, indexMap, selectedCurve["curve-width"])
     } catch (error) {
       console.error('Failed to process 3D coordinates:', error)
     } finally {

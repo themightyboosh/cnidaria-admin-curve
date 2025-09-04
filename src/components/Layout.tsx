@@ -43,8 +43,8 @@ const Layout: React.FC<LayoutProps> = ({ className = '' }) => {
 
   const pageInfo = getPageInfo()
 
-  // For CurveBuilder, TagManager, and WorldView, render without layout wrapper to allow full control
-  if (location.pathname.startsWith('/curves') || location.pathname.startsWith('/tags') || location.pathname.startsWith('/world-view')) {
+  // For CurveBuilder, TagManager, WorldView, and Merzbow, render without layout wrapper to allow full control
+  if (location.pathname.startsWith('/curves') || location.pathname.startsWith('/tags') || location.pathname.startsWith('/world-view') || location.pathname.startsWith('/merzbow')) {
     return <Outlet />
   }
 

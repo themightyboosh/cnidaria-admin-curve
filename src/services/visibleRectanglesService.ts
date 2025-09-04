@@ -1,3 +1,6 @@
+import { coordinateService } from './coordinateService'
+import { CoordinateResult, ViewportBounds as IViewportBounds } from '../types/coordinateTypes'
+
 interface VisibleRectangle {
   worldX: number
   worldY: number
@@ -86,12 +89,14 @@ class VisibleRectanglesService {
     const bounds = this.getVisibleBounds()
     
     try {
-      // Call API to get curve data for the entire visible area
-      const response = await fetch(`${this.apiUrl}/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
-      const data = await response.json()
+      // Use shared coordinate service instead of direct API calls
+      const coordinateResults = await coordinateService.getCoordinates(curveId, bounds, {
+        enablePrefetch: true,
+        prefetchBuffer: 3
+      })
       
-      // Update visible rectangles with curve data
-      this.updateWithCurveData(data)
+      // Update visible rectangles with coordinate data
+      this.updateWithNormalizedCurveData(coordinateResults)
       
       console.log(`✅ Loaded curve data for ${this.visibleRectangles.size} visible rectangles`)
     } catch (error) {
@@ -267,24 +272,23 @@ class VisibleRectanglesService {
   // Fetch curve data for specific bounds
   private async fetchCurveDataForBounds(bounds: ViewportBounds, curveId: string, targetRectangles: VisibleRectangle[]): Promise<void> {
     try {
-      const response = await fetch(`${this.apiUrl}/api/curves/${curveId}/process?x=${bounds.minX}&y=${bounds.minY}&x2=${bounds.maxX}&y2=${bounds.maxY}`)
-      const data = await response.json()
+      // Use shared coordinate service
+      const coordinateResults = await coordinateService.getCoordinates(curveId, bounds)
       
-      const curveName = Object.keys(data)[0]
-      if (!data[curveName]) return
-
-      const curveData = data[curveName]
-      
-      // Update target rectangles with curve data
+      // Update target rectangles with coordinate data
       for (const rectangle of targetRectangles) {
-        const key = `${rectangle.worldX},${rectangle.worldY}`
-        if (curveData[key]) {
-          rectangle.curveValue = curveData[key].value
-          rectangle.indexPosition = curveData[key].index
+        const key = `${rectangle.worldX}_${rectangle.worldY}`
+        const coordinateResult = coordinateResults.get(key)
+        
+        if (coordinateResult) {
+          rectangle.curveValue = coordinateResult.indexValue
+          rectangle.indexPosition = coordinateResult.indexPosition
         }
       }
+      
+      console.log(`✅ Updated ${targetRectangles.length} rectangles via shared coordinate service`)
     } catch (error) {
-      console.error('❌ Failed to fetch curve data for bounds:', error)
+      console.error('❌ Failed to get coordinates from shared service:', error)
     }
   }
 

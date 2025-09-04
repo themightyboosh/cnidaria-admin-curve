@@ -10,6 +10,7 @@
 import { WebGPUService } from './webgpuService'
 import { apiUrl } from '../config/environments'
 import { CoordinateResult } from '../types/coordinateTypes'
+import { unifiedCoordinateCache } from './unifiedCoordinateCache'
 
 export interface CurveData {
   id: string
@@ -47,7 +48,6 @@ export class GlobalCoordinateProcessor {
   private webgpuService: WebGPUService | null = null
   private coordinateNoisePatterns: Map<string, CoordinateNoisePattern> = new Map()
   private curvesCache: Map<string, CurveData> = new Map()
-  private coordinateCache: Map<string, Map<string, CoordinateResult>> = new Map()
   private isInitialized = false
   private webgpuAvailable = false
 
@@ -112,27 +112,47 @@ export class GlobalCoordinateProcessor {
       scale = 1.0
     } = options
 
-    // Generate cache key
-    const cacheKey = `${curveId}_${x1}_${y1}_${x2}_${y2}_${scale}`
+    // Load curve data to get distance settings
+    const curve = await this.loadCurve(curveId)
     
-    // Check cache first
-    if (enableCaching && this.coordinateCache.has(cacheKey)) {
-      console.log(`💾 Using cached coordinates for ${cacheKey}`)
-      return this.coordinateCache.get(cacheKey)!
+    // Invalidate cache if curve or distance settings changed
+    unifiedCoordinateCache.invalidateForCurveChange(
+      curveId,
+      curve['coordinate-noise'] || 'none',
+      curve['curve-distance-calc'] || 'radial', 
+      curve['distance-modulus'] || 0
+    )
+    
+    // Check cache for existing coordinates in this bounds
+    const bounds = { minX: x1, maxX: x2, minY: y1, maxY: y2 }
+    const cachedResults = unifiedCoordinateCache.getBounds(bounds)
+    const totalRequested = (x2 - x1 + 1) * (y2 - y1 + 1)
+    
+    // If we have all coordinates cached, return them
+    if (cachedResults.size === totalRequested) {
+      console.log(`💾 All ${totalRequested} coordinates found in cache`)
+      return cachedResults
     }
+    
+    console.log(`💾 Cache partial hit: ${cachedResults.size}/${totalRequested} coordinates cached`)
 
     console.log(`🌍 GLOBAL coordinate processing: ${curveId} (${x1}, ${y1}) to (${x2}, ${y2})`)
 
     try {
       let results: Map<string, CoordinateResult>
 
-      // For now, use CPU processing as WebGPU integration needs more work
-      console.log('🧮 Using CPU processing')
-      results = await this.processWithCPU(curveId, x1, y1, x2, y2, scale)
+                // Use WebGPU for real-time processing when available
+      if (this.webgpuAvailable && useWebGPU && !forceCPU) {
+        console.log('🔥 Using WebGPU real-time processing')
+        results = await this.processWithWebGPU(curve, x1, y1, x2, y2, scale)
+      } else {
+        console.log('🧮 Using CPU processing')
+        results = await this.processWithCPU(curve, x1, y1, x2, y2, scale)
+      }
 
-      // Cache results
+      // Cache all processed results
       if (enableCaching) {
-        this.coordinateCache.set(cacheKey, results)
+        unifiedCoordinateCache.setBounds(results)
       }
 
       console.log(`✅ GLOBAL processing complete: ${results.size} coordinates`)
@@ -145,19 +165,65 @@ export class GlobalCoordinateProcessor {
   }
 
   /**
-   * CPU coordinate processing
+   * WebGPU coordinate processing for real-time performance
    */
-  private async processWithCPU(
-    curveId: string,
+  private async processWithWebGPU(
+    curve: CurveData,
     x1: number,
     y1: number,
     x2: number,
     y2: number,
     scale: number
   ): Promise<Map<string, CoordinateResult>> {
-    // Load curve data
-    const curve = await this.loadCurve(curveId)
-    
+    // Get coordinate noise pattern
+    const noisePattern = this.coordinateNoisePatterns.get(curve['coordinate-noise'])
+    if (!noisePattern && curve['coordinate-noise'] !== 'none') {
+      console.warn(`⚠️ Unknown coordinate noise: ${curve['coordinate-noise']}, using fallback`)
+    }
+
+    // Validate gpuExpression
+    if (noisePattern && (!noisePattern.gpuExpression || noisePattern.gpuExpression.trim() === '')) {
+      throw new Error(`Coordinate noise '${curve['coordinate-noise']}' has empty gpuExpression field`)
+    }
+
+    const bounds = { minX: x1, maxX: x2, minY: y1, maxY: y2 }
+    const gpuExpression = noisePattern?.gpuExpression || 'sqrt(x * x + y * y)'
+
+    // Initialize WebGPU service if needed
+    if (!this.webgpuService) {
+      this.webgpuService = new WebGPUService()
+    }
+
+    // Use enhanced WebGPU service for real-time grid processing
+    const webgpuResults = await this.webgpuService.processGridCoordinates(curve, bounds, gpuExpression)
+
+    // Convert to CoordinateResult format
+    const results = new Map<string, CoordinateResult>()
+    webgpuResults.forEach((value, key) => {
+      const [x, y] = key.split('_').map(Number)
+      results.set(key, {
+        x,
+        y,
+        indexValue: value.indexValue,
+        indexPosition: value.indexPosition,
+        curveValue: value.indexValue
+      })
+    })
+
+    return results
+  }
+
+  /**
+   * CPU coordinate processing with proper distance-calc and distance-modulus support
+   */
+  private async processWithCPU(
+    curve: CurveData,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    scale: number
+  ): Promise<Map<string, CoordinateResult>> {
     // Get coordinate noise pattern
     const noisePattern = this.coordinateNoisePatterns.get(curve['coordinate-noise'])
     if (noisePattern && (!noisePattern.gpuExpression || noisePattern.gpuExpression.trim() === '')) {
@@ -165,13 +231,41 @@ export class GlobalCoordinateProcessor {
     }
     
     const results = new Map<string, CoordinateResult>()
+    const distanceCalc = curve['curve-distance-calc'] || 'radial'
+    const distanceModulus = curve['distance-modulus'] || 0
+    
+    console.log(`🧮 Processing with distance-calc: ${distanceCalc}, distance-modulus: ${distanceModulus}`)
     
     for (let y = y1; y <= y2; y++) {
       for (let x = x1; x <= x2; x++) {
         const key = `${x}_${y}`
         
-        // Simple distance calculation (can be enhanced with actual noise processing)
-        const distance = Math.sqrt(x * x + y * y)
+        // Apply coordinate noise transformation (simplified for CPU)
+        // TODO: Implement actual noise function evaluation
+        let transformedX = x
+        let transformedY = y
+        
+        // Calculate distance using curve-distance-calc method
+        let distance: number
+        switch (distanceCalc) {
+          case 'cartesian-x':
+            distance = Math.abs(transformedX)
+            break
+          case 'cartesian-y':
+            distance = Math.abs(transformedY)
+            break
+          case 'radial':
+          default:
+            distance = Math.sqrt(transformedX * transformedX + transformedY * transformedY)
+            break
+        }
+        
+        // Apply distance-modulus if specified
+        if (distanceModulus > 0) {
+          distance = distance % distanceModulus
+        }
+        
+        // Apply curve index scaling and get curve value
         const scaledDistance = distance * curve['curve-index-scaling'] * scale
         const indexPosition = Math.floor(scaledDistance) % curve['curve-width']
         const indexValue = curve['curve-data'][indexPosition] || 0
@@ -296,12 +390,15 @@ export class GlobalCoordinateProcessor {
     cachedCurves: number
     cachedCoordinates: number
     noisePatterns: number
+    cacheHitRate: number
   } {
+    const cacheStats = unifiedCoordinateCache.getStats()
     return {
       webgpuAvailable: this.webgpuAvailable,
       cachedCurves: this.curvesCache.size,
-      cachedCoordinates: this.coordinateCache.size,
-      noisePatterns: this.coordinateNoisePatterns.size
+      cachedCoordinates: cacheStats.size,
+      noisePatterns: this.coordinateNoisePatterns.size,
+      cacheHitRate: cacheStats.hitRate
     }
   }
 }

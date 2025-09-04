@@ -49,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({
     { href: 'https://github.com/themightyboosh/', icon: iconRepo as unknown as string, title: 'REPO MAN', subtitle: 'get some github lub', target: '_blank' as const },
     { href: '#', icon: iconTags as unknown as string, title: 'TAG MANAGER', subtitle: 'describe a thing' },
     { href: '#', icon: iconLoom as unknown as string, title: 'SEMANTIC LOOM', subtitle: 'AI synthetic poetic myth maker' },
-    { href: '#', icon: iconMerzbow as unknown as string, title: 'MERZBOW', subtitle: 'manage the noise formulas' },
+    { href: '/merzbow', icon: iconMerzbow as unknown as string, title: 'MERZBOW', subtitle: 'fractal pattern generator' },
     { href: '#', icon: iconRainbow as unknown as string, title: 'RAINBOW', subtitle: 'manage the color pallettes' },
     { href: '/config', icon: iconConfig as unknown as string, title: 'CONFIG & CONTROL', subtitle: 'manage settings and server configs' },
     { href: '#', icon: iconObjects as unknown as string, title: 'OBJECTS', subtitle: 'where the things are' },
