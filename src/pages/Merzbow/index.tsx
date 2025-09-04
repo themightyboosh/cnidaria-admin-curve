@@ -331,14 +331,15 @@ const Merzbow: React.FC = () => {
           const link = data.data[0]
           console.log(`🔗 Processing single link for DP:`, JSON.stringify(link, null, 2))
           
-          // Load linked curve
+          // Load linked curve (link uses curve ID, find by ID in available curves)
           if (link.curveId) {
-            const linkedCurve = availableCurves.find(c => c.name === link.curveId)
+            const linkedCurve = availableCurves.find(c => c.id === link.curveId)
             if (linkedCurve) {
-              console.log(`✅ Found linked curve: ${linkedCurve.name} → ${control.name}`)
+              console.log(`✅ Found linked curve: ${linkedCurve.name} (ID: ${linkedCurve.id}) → ${control.name}`)
               setSelectedCurve(linkedCurve)
             } else {
-              console.log(`❌ Linked curve "${link.curveId}" not found in available curves`)
+              console.log(`❌ Linked curve ID "${link.curveId}" not found in available curves`)
+              console.log(`🔍 Available curve IDs: ${availableCurves.map(c => c.id).join(', ')}`)
             }
           }
           
@@ -597,11 +598,11 @@ const Merzbow: React.FC = () => {
     try {
       console.log(`🔗 LINKING PALETTE: "${selectedPalette.name}" → "${selectedDistortionControl.name}" (single-link model)`)
       
-      // Use the main link API which now handles single link per DP
+      // Use the main link API which now handles single link per DP (IDs for linking)
       const requestBody = {
-        curveId: selectedCurve?.name || 'default-curve', // Use selected curve or fallback
+        curveId: selectedCurve?.id || 'default-curve', // Use curve ID for link table
         distortionControlId: selectedDistortionControl.id,
-        paletteName: selectedPalette.name
+        paletteName: selectedPalette.name // Palette name (as agreed)
       }
       console.log(`📦 Creating/updating single link:`, JSON.stringify(requestBody, null, 2))
       
@@ -635,11 +636,11 @@ const Merzbow: React.FC = () => {
     try {
       console.log(`🔗 DIRECT LINKING PALETTE: "${palette.name}" → "${distortionControl.name}" (single-link model)`)
       
-      // Use main link API which handles single link per DP with overwriting
+      // Use main link API which handles single link per DP with overwriting (IDs for linking)
       const requestBody = {
-        curveId: selectedCurve?.name || 'default-curve', // Use current curve or fallback
+        curveId: selectedCurve?.id || 'default-curve', // Use curve ID for link table
         distortionControlId: distortionControl.id,
-        paletteName: palette.name
+        paletteName: palette.name // Palette name (as agreed)
       }
       console.log(`📦 Direct single link update:`, JSON.stringify(requestBody, null, 2))
       
