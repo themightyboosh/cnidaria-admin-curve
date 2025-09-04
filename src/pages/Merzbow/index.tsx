@@ -162,9 +162,9 @@ const Merzbow: React.FC = () => {
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
-    profile: true,
-    links: true,
-    settings: true,
+    profile: true,    // Top panel starts open
+    links: false,     // All other panels start closed
+    settings: false,
     angular: false,
     fractal: false,
     export: false
