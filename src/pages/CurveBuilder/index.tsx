@@ -77,6 +77,7 @@ function CurveBuilder() {
   const [editingCurve, setEditingCurve] = useState<Curve | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isAutoSaving, setIsAutoSaving] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
     selection: true,
     view: true,
@@ -1130,6 +1131,7 @@ function CurveBuilder() {
   // Helper function to save a single curve field
   const saveCurveField = async (field: string, value: any): Promise<boolean> => {
     if (!selectedCurve) return false
+    setIsAutoSaving(true)
     try {
       const response = await fetch(`${apiUrl}/api/curves/${selectedCurve.id}`, {
         method: 'PUT',
@@ -1156,6 +1158,8 @@ function CurveBuilder() {
     } catch (error) {
       console.error(`❌ Error auto-saving ${field}:`, error)
       return false
+    } finally {
+      setIsAutoSaving(false)
     }
   }
 
@@ -1260,6 +1264,18 @@ function CurveBuilder() {
                          ? 'Name Conflict' 
                          : 'Save'}
                     </button>
+                  )}
+                  
+                  {/* Auto-save Indicator */}
+                  {isAutoSaving && (
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#007bff',
+                      fontStyle: 'italic',
+                      padding: '4px 0'
+                    }}>
+                      ⚡ Auto-saving...
+                    </div>
                   )}
                   
                   {/* Delete Button */}
