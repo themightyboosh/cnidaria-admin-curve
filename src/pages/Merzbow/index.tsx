@@ -321,11 +321,18 @@ const Merzbow: React.FC = () => {
     // Also load linked palette for this distortion control
     try {
       console.log(`🎨 Looking for palette linked to distortion control: ${control.id}`)
+      console.log(`🎨 Available palettes:`, availablePalettes.map(p => p.id))
       
       const response = await fetch(`${apiUrl}/api/palette-links/distortion/${control.id}`)
+      console.log(`🎨 Palette link response status:`, response.status)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log(`🎨 Palette link data:`, data)
+        
         if (data.success && data.data.hasLink) {
+          console.log(`🎨 Found linked palette ID:`, data.data.link.paletteId)
+          
           // Find the palette in our available palettes
           const linkedPalette = availablePalettes.find(p => p.id === data.data.link.paletteId)
           if (linkedPalette) {
@@ -333,11 +340,14 @@ const Merzbow: React.FC = () => {
             setSelectedPalette(linkedPalette)
           } else {
             console.log(`⚠️ Linked palette ${data.data.link.paletteId} not found in available palettes`)
+            console.log(`⚠️ Available palette IDs:`, availablePalettes.map(p => `${p.id} (${p.name})`))
           }
         } else {
           console.log(`⚠️ No palette linked to distortion control: ${control.name}`)
           // Don't clear current palette if no link found
         }
+      } else {
+        console.log(`⚠️ Palette link API error:`, response.status)
       }
     } catch (error) {
       console.error('Failed to load linked palette:', error)
@@ -1406,10 +1416,12 @@ void main() {
                 <div className="form-group">
                   <label>Color Palette:</label>
                   <select 
+                    key={`palette-${selectedPalette?.id || 'none'}`}
                     value={selectedPalette?.id || ''} 
                     onChange={(e) => {
                       const palette = availablePalettes.find(p => p.id === e.target.value)
                       setSelectedPalette(palette || null)
+                      console.log(`🎨 Manually selected palette: ${palette?.name || 'none'}`)
                     }}
                   >
                     <option value="">Default (Grayscale)</option>
