@@ -691,60 +691,83 @@ const Merzbow: React.FC = () => {
     e.preventDefault() // Prevent context menu when right-clicking for scaling
   }
 
-  // Export canvas in various formats
-  const exportImage = (format: string, quality: number = 1.0) => {
+  // Helper function to convert string to kebab-case
+  const toKebabCase = (str: string) => {
+    return str
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+  }
+
+  // Generate filename based on distortion profile and curve
+  const generateFileName = (isTile: boolean = false) => {
+    const distortionName = selectedDistortionControl?.name || 'default-distortion'
+    const curveName = selectedCurve?.name || 'default-curve'
+    
+    const baseName = `${toKebabCase(distortionName)}-${toKebabCase(curveName)}`
+    const suffix = isTile ? '-tile' : ''
+    
+    return `${baseName}${suffix}.png`
+  }
+
+  // Export PNG with smart tiling for distance modulus
+  const exportAsPNG = () => {
     if (!canvasRef.current) return
     
     const canvas = canvasRef.current
-    const link = document.createElement('a')
-    const timestamp = Date.now()
+    let exportCanvas = canvas
+    let fileName = generateFileName()
     
-    let mimeType: string
-    let extension: string
-    
-    switch (format) {
-      case 'png':
-        mimeType = 'image/png'
-        extension = 'png'
-        quality = 1.0 // PNG doesn't use quality parameter
-        break
-      case 'jpeg':
-        mimeType = 'image/jpeg'
-        extension = 'jpg'
-        break
-      case 'webp':
-        mimeType = 'image/webp'
-        extension = 'webp'
-        break
-      default:
-        mimeType = 'image/png'
-        extension = 'png'
-        quality = 1.0
+    // If distance modulus > 0, create a tile
+    if (distanceModulus > 0) {
+      const tileSize = distanceModulus
+      const tileCanvas = document.createElement('canvas')
+      tileCanvas.width = tileSize
+      tileCanvas.height = tileSize
+      const tileCtx = tileCanvas.getContext('2d')
+      
+      if (tileCtx) {
+        // Find the center of the original canvas
+        const centerX = canvas.width / 2
+        const centerY = canvas.height / 2
+        
+        // Extract a square tile from the center
+        const sourceX = centerX - tileSize / 2
+        const sourceY = centerY - tileSize / 2
+        
+        tileCtx.drawImage(
+          canvas,
+          sourceX, sourceY, tileSize, tileSize, // source
+          0, 0, tileSize, tileSize // destination
+        )
+        
+        exportCanvas = tileCanvas
+        fileName = generateFileName(true)
+        
+        console.log(`🔲 Creating ${tileSize}×${tileSize} tile from pattern center`)
+      }
     }
     
-    // Convert to blob
-    canvas.toBlob((blob) => {
+    // Export the canvas (original or tile)
+    exportCanvas.toBlob((blob) => {
       if (blob) {
         const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
         link.href = url
-        link.download = `merzbow-pattern-${timestamp}.${extension}`
+        link.download = fileName
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
-        console.log(`📸 Exported as ${format.toUpperCase()} (${(blob.size / 1024).toFixed(1)}KB)`)
+        
+        const sizeKB = (blob.size / 1024).toFixed(1)
+        const dimensions = `${exportCanvas.width}×${exportCanvas.height}`
+        console.log(`📸 Exported PNG: ${fileName} (${dimensions}, ${sizeKB}KB)`)
       }
-    }, mimeType, quality)
+    }, 'image/png', 1.0)
   }
-
-  // Export as PNG with transparency
-  const exportAsPNG = () => exportImage('png')
-  
-  // Export as high-quality JPEG
-  const exportAsJPEG = () => exportImage('jpeg', 0.95)
-  
-  // Export as WebP
-  const exportAsWebP = () => exportImage('webp', 0.9)
 
   return (
     <div className="app">
@@ -863,17 +886,9 @@ const Merzbow: React.FC = () => {
                 💾 Save Changes
               </button>
             )}
-            <div className="export-dropdown">
-              <button onClick={exportAsPNG} className="export-button">
-                📸 PNG
-              </button>
-              <button onClick={exportAsJPEG} className="export-button secondary">
-                📸 JPEG
-              </button>
-              <button onClick={exportAsWebP} className="export-button secondary">
-                📸 WebP
-              </button>
-            </div>
+            <button onClick={exportAsPNG} className="export-button">
+              📸 Export PNG
+            </button>
           </div>
 
           {/* Link Buttons */}
