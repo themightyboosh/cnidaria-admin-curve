@@ -364,7 +364,7 @@ const Merzbow: React.FC = () => {
           // Auto-select most recent curve
           if (availableCurves.length > 0) {
             const mostRecentCurve = [...availableCurves].sort((a, b) => 
-              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
             )[0]
             console.log(`✅ Auto-selected most recent curve: ${mostRecentCurve.name}`)
             setSelectedCurve(mostRecentCurve)
@@ -373,7 +373,7 @@ const Merzbow: React.FC = () => {
           // Auto-select most recent palette
           if (availablePalettes.length > 0) {
             const mostRecentPalette = [...availablePalettes].sort((a, b) => 
-              new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime()
+              new Date((b as any).updatedAt || '').getTime() - new Date((a as any).updatedAt || '').getTime()
             )[0]
             console.log(`✅ Auto-selected most recent palette: ${mostRecentPalette.name}`)
             setSelectedPalette(mostRecentPalette)
@@ -383,8 +383,8 @@ const Merzbow: React.FC = () => {
     } catch (error) {
       console.error('🚨 CRITICAL ERROR loading linked curve and palette:', error)
       console.error('🚨 This indicates a serious data integrity issue')
-      alert(`CRITICAL ERROR loading links for "${control.name}": ${error.message}`)
-      throw error
+      alert(`CRITICAL ERROR loading links for "${control.name}": ${error instanceof Error ? error.message : String(error)}`)
+      throw new Error(error instanceof Error ? error.message : String(error))
     }
 
     // VALIDATION: Check if loaded elements match user selection
@@ -1550,7 +1550,7 @@ void main() {
     uniforms.forEach(([name, value]) => {
       const location = gl.getUniformLocation(program, name)
       if (location !== null) {
-        gl.uniform1f(location, value as number)
+        gl.uniform1f(location, Number(value))
         console.log(`  ✅ ${name}: ${value}`)
       } else {
         console.warn(`  ❌ Uniform '${name}' not found in shader (optimized out?)`)
