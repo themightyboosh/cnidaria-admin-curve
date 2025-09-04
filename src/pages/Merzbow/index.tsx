@@ -239,10 +239,10 @@ const Merzbow: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDuplicating, setIsDuplicating] = useState(false)
 
-  // Collapsible sections state
+  // Collapsible sections state - only top panel open by default
   const [expandedSections, setExpandedSections] = useState({
-    profile: true,    // Top panel starts open
-    links: false,     // All other panels start closed
+    profile: true,    // Distortion Profile panel open
+    links: false,     // All other panels closed
     settings: false,
     angular: false,
     fractal: false,
