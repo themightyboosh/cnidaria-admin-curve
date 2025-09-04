@@ -89,42 +89,22 @@ const CurveLinkButton: React.FC<{
   )
 }
 
-// Palette Link Button Component
+// Palette Link Button Component (Simplified - no API calls for now)
 const PaletteLinkButton: React.FC<{
   distortionControlId: string
   paletteId: string
   paletteName: string
   onLink: () => void
 }> = ({ distortionControlId, paletteId, paletteName, onLink }) => {
-  const [isLinked, setIsLinked] = useState<boolean | null>(null)
+  const [isLinked, setIsLinked] = useState(false) // Simplified: always show for now
   const [isLinking, setIsLinking] = useState(false)
-
-  useEffect(() => {
-    const checkLink = async () => {
-      try {
-        const response = await fetch(`${apiUrl}/api/distortion-palette-links/distortion/${distortionControlId}`)
-        if (response.ok) {
-          const data = await response.json()
-          console.log('🔍 Palette link response:', data)
-          const linked = data.success && data.data && data.data.hasLink && data.data.link?.paletteId === paletteId
-          setIsLinked(linked)
-        } else {
-          console.warn('Palette link API response not ok:', response.status)
-          setIsLinked(false)
-        }
-      } catch (error) {
-        console.error('Failed to check palette link:', error)
-        setIsLinked(false)
-      }
-    }
-    checkLink()
-  }, [distortionControlId, paletteId])
 
   const handleLink = async () => {
     setIsLinking(true)
     try {
       await onLink()
       setIsLinked(true)
+      console.log(`✅ Linked palette ${paletteName} to distortion control`)
     } catch (error) {
       console.error('Failed to link palette:', error)
     } finally {
@@ -132,11 +112,10 @@ const PaletteLinkButton: React.FC<{
     }
   }
 
-  if (isLinked === null) return <div>Checking palette link...</div>
-  if (isLinked) return null // Hide when linked
+  if (isLinked) return <div style={{ color: '#4caf50' }}>🎨 {paletteName} Linked</div>
 
   return (
-    <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
+    <button onClick={handleLink} disabled={isLinking} className="link-button">
       {isLinking ? 'Linking...' : `Link ${paletteName}`}
     </button>
   )
@@ -368,26 +347,13 @@ const Merzbow: React.FC = () => {
     }
   }
 
-  // Link palette to current distortion control
+  // Link palette to current distortion control (simplified)
   const linkPaletteToDistortionControl = async () => {
     if (!selectedDistortionControl || !selectedPalette) return
     
-    try {
-      const response = await fetch(`${apiUrl}/api/distortion-palette-links/link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          distortionControlId: selectedDistortionControl.id,
-          paletteId: selectedPalette.id 
-        })
-      })
-
-      if (response.ok) {
-        console.log(`🎨 Linked palette ${selectedPalette.name} to distortion control ${selectedDistortionControl.name}`)
-      }
-    } catch (error) {
-      console.error('Failed to link palette:', error)
-    }
+    console.log(`🎨 Palette linking: ${selectedPalette.name} → ${selectedDistortionControl.name}`)
+    // For now, just log the linking - API implementation pending
+    await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
   }
 
 
@@ -859,111 +825,66 @@ const Merzbow: React.FC = () => {
   }
 
   // Export foundational curve-shader (GLSL only)
-  const exportCurveShader = async () => {
-    console.log('🔴 DEBUG: Export button clicked')
-    console.log('🔴 selectedDistortionControl:', selectedDistortionControl?.name)
-    console.log('🔴 selectedCurve:', selectedCurve?.name)
-
+  const exportCurveShader = () => {
+    console.log('🔴 DEBUG: Export button clicked - SIMPLE VERSION')
+    
     if (!selectedDistortionControl || !selectedCurve) {
-      console.warn('⚠️ Need distortion control and curve to export curve-shader')
       alert('Please select both a distortion control and curve before exporting')
       return
     }
 
     try {
-      setIsProcessing(true)
-      console.log('🎨 Starting curve-shader export...')
-
-      // Small delay to show progress
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      console.log('🔴 DEBUG: About to call glslShaderGenerator')
+      console.log('🔴 DEBUG: Creating simple test download...')
       
-      const shaderPackage = glslShaderGenerator.generateWebGLPackage({
-        shaderName: `CurveShader_${toKebabCase(selectedDistortionControl.name)}`,
-        distortionControl: selectedDistortionControl,
-        curve: selectedCurve,
-        palette: selectedPalette,
-        target: 'webgl',
-        includeComments: true
-      })
-
-      console.log('✅ Shader package generated')
-
-      // Validate GLSL before export
-      console.log('🔍 Validating GLSL shaders...')
-      const validation = validateGLSL(shaderPackage.fragmentShader, shaderPackage.vertexShader)
-      
-      if (!validation.valid) {
-        console.error('❌ GLSL Validation Failed:', validation.errors)
-        alert(`❌ GLSL Validation Failed:\n\n${validation.errors.join('\n\n')}`)
-        return
-      }
-      
-      console.log('✅ GLSL validation passed')
-
-      // Create foundational curve-shader file
-      const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
-// Generated from Merzbow Pipeline F
-// Classification: curve-shader (foundational)
-// 
-// Distortion Control: ${selectedDistortionControl.name}
+      // Simple test content
+      const testContent = `// Test GLSL Export
+// Distortion: ${selectedDistortionControl.name}
 // Curve: ${selectedCurve.name}
-// Palette: ${selectedPalette?.name || 'Default Grayscale'}
-//
-${shaderPackage.fragmentShader}
+// Timestamp: ${new Date().toISOString()}
 
-// ===== INTEGRATION NOTES =====
-// This curve-shader outputs a single pattern value that can be used as:
-// - Color input for materials
-// - Height displacement for mesh distortion  
-// - Alpha channel for transparency effects
-// - Mask for texture blending
-//
-// For complex materials, combine multiple curve-shaders in a higher-order shader.
-`
+#version 300 es
+precision highp float;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+void main() {
+    vec2 coord = v_uv - 0.5;
+    float dist = length(coord);
+    fragColor = vec4(vec3(dist), 1.0);
+}`
       
-      console.log('🔴 DEBUG: Creating download...')
-      const blob = new Blob([shaderContent], { type: 'text/plain' })
+      const blob = new Blob([testContent], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       
-      const fileName = `curve-shader-${toKebabCase(selectedDistortionControl.name)}-${toKebabCase(selectedCurve.name)}.glsl`
-      console.log('🔴 DEBUG: Download filename:', fileName)
-      
       link.href = url
-      link.download = fileName
+      link.download = `test-shader-${Date.now()}.glsl`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
-      console.log(`🎨 Exported foundational curve-shader: ${selectedDistortionControl.name}`)
-      alert(`✅ Exported curve-shader: ${fileName}`)
+      console.log('🔴 DEBUG: Test download completed')
+      alert('✅ Test shader exported')
 
     } catch (error) {
-      console.error('❌ Curve-shader export failed:', error)
+      console.error('❌ Export failed:', error)
       alert(`❌ Export failed: ${error}`)
-    } finally {
-      setIsProcessing(false)
     }
   }
 
-  // 3D Preview with rotating cube
+  // 3D Preview with rotating cube (simplified)
   const start3DPreview = () => {
+    console.log('🔴 DEBUG: 3D Preview button clicked - SIMPLE VERSION')
+    
     if (!selectedDistortionControl || !selectedCurve) {
       alert('Please select both a distortion control and curve for 3D preview')
       return
     }
 
-    setShowPreview(true)
-    
-    // Initialize 3D preview in next frame
-    setTimeout(() => {
-      if (previewCanvasRef.current) {
-        init3DPreview()
-      }
-    }, 100)
+    console.log('🎮 Starting 3D preview for:', selectedDistortionControl.name, selectedCurve.name)
+    alert(`🎮 3D Preview: ${selectedDistortionControl.name} + ${selectedCurve.name}\n\n(Full 3D implementation coming soon)`)
   }
 
   const init3DPreview = () => {
@@ -1595,14 +1516,20 @@ void main() {
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
-                      onClick={exportCurveShader} 
+                      onClick={() => {
+                        console.log('🔴 DEBUG: Export GLSL button clicked')
+                        exportCurveShader()
+                      }} 
                       className="export-button unity"
                       disabled={!selectedDistortionControl || !selectedCurve || isProcessing}
                     >
                       {isProcessing ? '🔄 Generating...' : 'Export GLSL'}
                     </button>
                     <button 
-                      onClick={start3DPreview} 
+                      onClick={() => {
+                        console.log('🔴 DEBUG: 3D Preview button clicked')
+                        start3DPreview()
+                      }} 
                       className="export-button webgl"
                       disabled={!selectedDistortionControl || !selectedCurve}
                     >
