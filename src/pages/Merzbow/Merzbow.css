@@ -55,7 +55,7 @@
 .toggle-icon {
   margin-right: 8px;
   font-size: 12px;
-  color: #007acc;
+  color: #ffffff;
 }
 
 .section-content {
@@ -91,7 +91,19 @@
 }
 
 .form-group input[type="checkbox"] {
-  margin-right: 8px;
+  margin-left: 8px;
+  margin-right: 0;
+  transform: scale(0.9);
+}
+
+/* Special styling for checkbox labels */
+.form-group label.checkbox-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 4px 0;
 }
 
 .merzbow-viewport {
@@ -118,6 +130,11 @@
 
 .save-button:hover {
   background-color: #005a9e;
+}
+
+.save-button.full-width {
+  width: 100%;
+  min-width: auto;
 }
 
 .export-button {
@@ -147,7 +164,7 @@
 }
 
 .link-button {
-  background-color: #ffd700;
+  background-color: #daa520;
   color: #000;
   border: none;
   padding: 10px 20px;
@@ -161,7 +178,7 @@
 }
 
 .link-button:hover {
-  background-color: #ffb347;
+  background-color: #b8860b;
 }
 
 .link-button:disabled {

@@ -5,6 +5,7 @@ import { getPaletteByName, getPaletteOptions, type PaletteColor } from '../utils
 import { getWebGPUService, type WebGPUServiceStats } from '../services/webgpuService';
 import { getWebGPUCapabilities } from '../utils/webgpuDetection';
 import { getGPUConfig } from '../utils/webgpuConfig';
+import { unifiedCoordinateProcessor, type ProcessingParams } from '../services/unifiedCoordinateProcessor';
 import InfiniteWorldStreamer from './InfiniteWorldStreamer';
 
 // Extend Window interface for resize timeout
@@ -444,76 +445,96 @@ self.onmessage = (e) => {
   const startGeneration = useCallback(async () => {
     if (isGenerating) return;
 
-    const bypassMode = coordinateNoise === null;
-    console.log('🚀 Starting WebGPU PNG generation with:');
-    console.log('  Curve:', (curve as any).name || (curve as any)['curve-name'], 'coordinate-noise:', (coordinateNoise as any)?.name || 'bypass');
-    console.log('  Mode:', bypassMode ? 'BYPASS (steps 2→6)' : 'NORMAL (7-step)');
-    console.log('  Noise expression:', bypassMode ? 'default radial' : coordinateNoise.gpuExpression);
-    console.log('  Palette:', selectedPalette);
+    console.log('🚀 Starting Unified Pipeline PNG generation');
 
     try {
       const imageSize = getImageSize();
       setIsGenerating(true);
-      setProgress({ done: 0, total: imageSize * imageSize, percentage: 0, stage: 'Initializing WebGPU...' });
+      setProgress({ done: 0, total: imageSize * imageSize, percentage: 0, stage: 'Loading processing context...' });
       
+      const curveName = (curve as any).name || (curve as any)['curve-name'];
+      
+      // Load complete processing context using unified pipeline
+      const context = await unifiedCoordinateProcessor.loadProcessingContext(curveName);
+      
+      if (!context.curve) {
+        throw new Error(`Failed to load curve data for ${curveName}`);
+      }
+
+      console.log('🎛️ Processing context loaded:', {
+        curve: context.curve.name,
+        distortionControl: context.distortionControl?.name || 'default',
+        palette: context.palette?.name || 'grayscale'
+      });
+
       // Update last generation params
       setLastGenerationParams({
-        curveId: (curve as any)['name'] || (curve as any)['curve-name'],
-        noiseId: coordinateNoise?.name || 'bypass-mode',
-        noiseCalc: curve['noise-calc'] || 'radial',
-        palette: selectedPalette,
+        curveId: curveName,
+        noiseId: context.distortionControl?.name || 'default-distortion',
+        noiseCalc: context.distortionControl?.['distance-calculation'] || 'radial',
+        palette: context.palette?.name || 'default',
         imageSize: imageSize
       });
 
-      const palette = getPaletteByName(selectedPalette);
-      const webgpuService = getWebGPUService();
-      
-      // Prepare curve data for WebGPU
-      const curveData = {
-        'curve-data': curve['curve-data'],
-        'curve-width': curve['curve-width'],
-        'curve-index-scaling': curve['curve-index-scaling'],
-        'coordinate-noise': curve['coordinate-noise'],
-        'curve-distance-calc': (curve['curve-distance-calc'] || 'radial') as 'radial' | 'cartesian-x' | 'cartesian-y'
+      setProgress({ done: 0, total: imageSize * imageSize, percentage: 0, stage: 'Generating image data...' });
+
+      // Generate image using unified pipeline
+      const processingParams: ProcessingParams = {
+        curve: context.curve,
+        distortionControl: context.distortionControl,
+        palette: context.palette
       };
 
-      // Use passthrough expression for bypass mode so steps 3-5 are skipped
-      // Shader treats noise_value == x as a no-op and returns original coord/distance
-      const gpuExpression = coordinateNoise?.gpuExpression || 'x';
-      
-      // Process complete image with progress tracking
-      const result = await webgpuService.processCompleteImage(
-        curveData,
-        palette,
-        gpuExpression,
-        imageSize,
-        imageSize,
-        3.0, // 300% zoom scale
-        0, 0,
-        (stage: string, progressPercent: number) => {
-          const totalPixels = imageSize * imageSize;
-          const done = Math.round((progressPercent / 100) * totalPixels);
-          setProgress({ 
-            done, 
-            total: totalPixels, 
-            percentage: progressPercent,
-            stage: coordinateNoise ? stage : `${stage} (Bypass Mode)`
-          });
+      // Generate with progress updates
+      const startTime = Date.now();
+      const updateInterval = Math.max(1, Math.floor(imageSize * imageSize / 100)); // 100 updates max
+      let processedPixels = 0;
+
+      const imageData = new ImageData(imageSize, imageSize);
+      const data = imageData.data;
+
+      for (let y = 0; y < imageSize; y++) {
+        for (let x = 0; x < imageSize; x++) {
+          const pixelIndex = (y * imageSize + x) * 4;
+          
+          // Convert to world coordinates
+          const worldX = (x - imageSize / 2) * 3.0 // 300% zoom scale
+          const worldY = (y - imageSize / 2) * 3.0
+
+          const result = unifiedCoordinateProcessor.processCoordinate(worldX, worldY, processingParams);
+          
+          data[pixelIndex + 0] = result.color.r;
+          data[pixelIndex + 1] = result.color.g;
+          data[pixelIndex + 2] = result.color.b;
+          data[pixelIndex + 3] = result.color.a;
+
+          processedPixels++;
+          
+          // Update progress periodically
+          if (processedPixels % updateInterval === 0) {
+            const percentage = (processedPixels / (imageSize * imageSize)) * 100;
+            setProgress({ 
+              done: processedPixels, 
+              total: imageSize * imageSize, 
+              percentage: percentage,
+              stage: 'Processing coordinates...'
+            });
+            
+            // Allow UI updates
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
         }
-      );
+      }
 
-      console.log('✅ WebGPU generation complete:', result.stats);
-
-      // Create ImageData and generate PNG
-      const imageData = result.result.imageData;
-      const rgbaArray = new Uint8Array(result.result.rgbaData);
+      console.log('✅ Unified Pipeline generation complete');
+      setProgress({ done: imageSize * imageSize, total: imageSize * imageSize, percentage: 100, stage: 'Displaying image...' });
       
-      // Generate PNG using UPNG
-      const png = UPNG.encode([rgbaArray.buffer], imageData.width, imageData.height, 0);
-      const blob = new Blob([png], { type: 'image/png' });
-      const pngUrl = URL.createObjectURL(blob);
+      // Display the generated image
+      displayImageOnCanvas(imageData);
+      setLastGenerationTime(Date.now());
+      setError(null);
       
-      // Create canvas for display
+      // Create data URL for display
       const canvas = document.createElement('canvas');
       canvas.width = imageData.width;
       canvas.height = imageData.height;
@@ -522,19 +543,26 @@ self.onmessage = (e) => {
         ctx.putImageData(imageData, 0, 0);
         const dataUrl = canvas.toDataURL('image/png');
         setGeneratedImage(dataUrl);
+        
+        // Create blob for download
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const pngUrl = URL.createObjectURL(blob);
+            setDownloadUrl(pngUrl);
+          }
+        }, 'image/png');
       }
       
-      setDownloadUrl(pngUrl);
-      setProgress({ done: result.stats.pixelsProcessed, total: result.stats.pixelsProcessed, percentage: 100, stage: 'Complete!' });
+      setProgress({ done: imageSize * imageSize, total: imageSize * imageSize, percentage: 100, stage: 'Complete!' });
       
     } catch (error) {
-      console.error('❌ WebGPU generation failed:', error);
-      onError?.(error instanceof Error ? error.message : 'WebGPU generation failed');
+      console.error('❌ Unified Pipeline generation failed:', error);
+      onError?.(error instanceof Error ? error.message : 'Unified Pipeline generation failed');
       setProgress({ done: 0, total: 0, percentage: 0, stage: 'Error' });
     } finally {
       setIsGenerating(false);
     }
-  }, [curve, coordinateNoise, selectedPalette, isGenerating, onError]);
+  }, [curve, coordinateNoise, selectedPalette, isGenerating, onError, getImageSize, displayImageOnCanvas]);
 
   // Handle palette change (recolor only if we have a previous result)
   const handlePaletteChange = useCallback((newPalette: string) => {

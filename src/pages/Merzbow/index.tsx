@@ -82,7 +82,7 @@ const CurveLinkButton: React.FC<{
 
   return (
     <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
-      {isLinking ? '🔗 Linking...' : `🔗 Link to ${curveName}`}
+      {isLinking ? 'Linking...' : `Link to ${curveName}`}
     </button>
   )
 }
@@ -91,8 +91,9 @@ const CurveLinkButton: React.FC<{
 const PaletteLinkButton: React.FC<{
   distortionControlId: string
   paletteId: string
+  paletteName: string
   onLink: () => void
-}> = ({ distortionControlId, paletteId, onLink }) => {
+}> = ({ distortionControlId, paletteId, paletteName, onLink }) => {
   const [isLinked, setIsLinked] = useState<boolean | null>(null)
   const [isLinking, setIsLinking] = useState(false)
 
@@ -130,7 +131,7 @@ const PaletteLinkButton: React.FC<{
 
   return (
     <button onClick={handleLink} disabled={isLinking} className="link-button yellow">
-      {isLinking ? '🎨 Linking...' : '🎨 Link Palette'}
+      {isLinking ? 'Linking...' : `Link ${paletteName}`}
     </button>
   )
 }
@@ -533,28 +534,27 @@ const Merzbow: React.FC = () => {
             }
           }
 
-          // Set pixel color using palette or default grayscale
+          // Set pixel color using palette or default grayscale (8-bit, no alpha)
           if (selectedPalette && selectedPalette.hexColors) {
-            const paletteIndex = Math.floor(curveValue)
+            const paletteIndex = Math.floor(curveValue) & 0xFF // Force 8-bit index
             const hexColor = selectedPalette.hexColors[paletteIndex] || '#000000'
             
-            // Parse hex color (supports both #RRGGBB and #RRGGBBAA)
-            const r = parseInt(hexColor.slice(1, 3), 16)
-            const g = parseInt(hexColor.slice(3, 5), 16)
-            const b = parseInt(hexColor.slice(5, 7), 16)
-            const a = hexColor.length === 9 ? parseInt(hexColor.slice(7, 9), 16) : 255
+            // Parse hex color and force 8-bit values (ignore alpha)
+            const r = parseInt(hexColor.slice(1, 3), 16) & 0xFF
+            const g = parseInt(hexColor.slice(3, 5), 16) & 0xFF
+            const b = parseInt(hexColor.slice(5, 7), 16) & 0xFF
             
             data[index + 0] = r
             data[index + 1] = g
             data[index + 2] = b
-            data[index + 3] = a
+            data[index + 3] = 255 // Force opaque
           } else {
-            // Default grayscale
-            const color = Math.floor(curveValue)
+            // Default grayscale (8-bit)
+            const color = Math.floor(curveValue) & 0xFF
             data[index + 0] = color // R
             data[index + 1] = color // G
             data[index + 2] = color // B
-            data[index + 3] = 255   // A
+            data[index + 3] = 255   // Force opaque
           }
 
         } catch (error) {
@@ -929,10 +929,20 @@ const Merzbow: React.FC = () => {
                     <PaletteLinkButton 
                       distortionControlId={selectedDistortionControl.id}
                       paletteId={selectedPalette.id}
+                      paletteName={selectedPalette.name}
                       onLink={() => linkPaletteToDistortionControl()}
                     />
                   )}
                 </div>
+
+                {/* Save Button */}
+                {hasUnsavedChanges && (
+                  <div className="form-group">
+                    <button onClick={saveDistortionControl} className="save-button full-width">
+                      Save Changes
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -945,13 +955,6 @@ const Merzbow: React.FC = () => {
             </h3>
             {expandedSections.settings && (
               <div className="section-content">
-                {/* Save Button */}
-                {hasUnsavedChanges && (
-                  <button onClick={saveDistortionControl} className="save-button" style={{ marginBottom: '15px' }}>
-                    Save Changes
-                  </button>
-                )}
-
                 {/* Name Editor */}
                 {selectedDistortionControl && (
                   <div className="form-group">
@@ -971,23 +974,23 @@ const Merzbow: React.FC = () => {
                 )}
 
                 <div className="form-group">
-                  <label>
-                    <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
+                  <label className="checkbox-label">
                     Angular Distortion
+                    <input type="checkbox" checked={angularEnabled} onChange={(e) => setAngularEnabled(e.target.checked)} />
                   </label>
                 </div>
                 
                 <div className="form-group">
-                  <label>
-                    <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
+                  <label className="checkbox-label">
                     Fractal Distortion
+                    <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)} />
                   </label>
                 </div>
                 
                 <div className="form-group">
-                  <label>
-                    <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
+                  <label className="checkbox-label">
                     Checkerboard Pattern
+                    <input type="checkbox" checked={checkerboardEnabled} onChange={(e) => setCheckerboardEnabled(e.target.checked)} />
                   </label>
                 </div>
 

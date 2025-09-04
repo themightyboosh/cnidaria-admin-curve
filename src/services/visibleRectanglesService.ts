@@ -1,5 +1,6 @@
 import { coordinateService } from './coordinateService'
 import { CoordinateResult, ViewportBounds as IViewportBounds } from '../types/coordinateTypes'
+import { unifiedCoordinateProcessor, type ProcessingParams } from './unifiedCoordinateProcessor'
 
 interface VisibleRectangle {
   worldX: number
@@ -89,18 +90,54 @@ class VisibleRectanglesService {
     const bounds = this.getVisibleBounds()
     
     try {
-      // Use shared coordinate service instead of direct API calls
-      const coordinateResults = await coordinateService.getCoordinates(curveId, bounds, {
-        enablePrefetch: true,
-        prefetchBuffer: 3
+      console.log(`🎛️ Loading curve data using unified pipeline for ${curveId}`)
+      
+      // Load processing context for this curve
+      const context = await unifiedCoordinateProcessor.loadProcessingContext(curveId)
+      
+      if (!context.curve) {
+        throw new Error(`Failed to load curve data for ${curveId}`)
+      }
+
+      console.log('🎛️ Processing context loaded:', {
+        curve: context.curve.name,
+        distortionControl: context.distortionControl?.name || 'default',
+        palette: context.palette?.name || 'grayscale'
       })
+
+      // Prepare coordinates for processing
+      const coordinates: Array<{ x: number; y: number }> = []
+      for (const [_, rect] of this.visibleRectangles) {
+        coordinates.push({ x: rect.worldX, y: rect.worldY })
+      }
+
+      // Process all coordinates using unified pipeline
+      const processingParams: ProcessingParams = {
+        curve: context.curve,
+        distortionControl: context.distortionControl,
+        palette: context.palette
+      }
+
+      const results = await unifiedCoordinateProcessor.processCoordinates(coordinates, processingParams)
       
-      // Update visible rectangles with coordinate data
-      this.updateWithNormalizedCurveData(coordinateResults)
+      // Update visible rectangles with results
+      for (const [key, rect] of this.visibleRectangles) {
+        const coordKey = `${rect.worldX},${rect.worldY}`
+        const result = results.get(coordKey)
+        
+        if (result) {
+          rect.curveValue = result.curveValue
+          rect.indexPosition = Math.floor(result.curveValue)
+          rect.fillR = result.color.r
+          rect.fillG = result.color.g
+          rect.fillB = result.color.b
+        }
+      }
       
-      console.log(`✅ Loaded curve data for ${this.visibleRectangles.size} visible rectangles`)
+      console.log(`✅ Loaded curve data using unified pipeline for ${results.size} coordinates`)
     } catch (error) {
       console.error('❌ Failed to load curve data:', error)
+      throw error
     }
   }
 

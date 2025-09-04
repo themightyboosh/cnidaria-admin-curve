@@ -759,25 +759,25 @@ const WorldView: React.FC = () => {
         const curves = curvesData.data?.curves || []
         console.log('📈 Found curves:', curves.length)
 
-        // Fetch coordinate noise patterns
-        const noiseResponse = await fetch(`${apiUrl}/api/coordinate-noise`)
-        if (!noiseResponse.ok) {
-          throw new Error(`Failed to fetch coordinate noise: ${noiseResponse.status}`)
+        // Fetch distortion controls (replacing coordinate noise)
+        const distortionResponse = await fetch(`${apiUrl}/api/distortion-controls/firebase`)
+        if (!distortionResponse.ok) {
+          throw new Error(`Failed to fetch distortion controls: ${distortionResponse.status}`)
         }
-        const noiseData = await noiseResponse.json()
-        console.log('🎲 Noise response:', noiseData)
+        const distortionData = await distortionResponse.json()
+        console.log('🎛️ Distortion controls response:', distortionData)
         
-        if (!noiseData.success) {
-          throw new Error('API returned error for coordinate noise')
+        if (!distortionData.success) {
+          throw new Error('API returned error for distortion controls')
         }
 
-        const coordinateNoise = noiseData.data?.coordinateNoise || {}
-        console.log('🎯 Found noise patterns:', Object.keys(coordinateNoise).length)
+        const distortionControls = distortionData.data?.distortionControls || []
+        console.log('🎯 Found distortion controls:', distortionControls.length)
 
         setState(prev => ({
           ...prev,
           curves,
-          coordinateNoise,
+          coordinateNoise: distortionControls, // Replace with distortion controls
           isLoading: false
         }))
 
