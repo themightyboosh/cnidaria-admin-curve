@@ -2173,8 +2173,8 @@ void main() {
                 </div>
 
                 <div className="form-group">
-                  <label>Checkerboard Steps:</label>
-                  <input type="number" value={checkerboardSteps} min="1" max="200" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value) || 50)} />
+                  <label>Checkerboard Steps: {checkerboardSteps}</label>
+                  <input type="range" value={checkerboardSteps} min="0" max="511" step="1" onChange={(e) => setCheckerboardSteps(parseFloat(e.target.value))} />
                 </div>
 
                 <div className="form-group">
