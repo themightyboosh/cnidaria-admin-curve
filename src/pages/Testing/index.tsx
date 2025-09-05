@@ -1427,26 +1427,27 @@ fn main(input: VertexInput) -> VertexOutput {
       console.log(`📊 Created normalized curve texture: 256×1 R8 (from ${curveData.length} source values)`)
     }
     
-    // Create palette data texture (256x1, RGB format)
+    // Create palette data texture (256x1, RGBA format for WebGPU compatibility)
     let paletteTexture = null
     if (paletteData && paletteData.length > 0) {
-      const paletteBytes = new Uint8Array(256 * 3) // RGB, no alpha
+      const paletteBytes = new Uint8Array(256 * 4) // RGBA with alpha
       for (let i = 0; i < 256; i++) {
-        const color = i < paletteData.length ? paletteData[i] : { r: 0.7, g: 0.7, b: 0.7 }
-        paletteBytes[i * 3] = Math.floor(color.r * 255)     // R
-        paletteBytes[i * 3 + 1] = Math.floor(color.g * 255) // G  
-        paletteBytes[i * 3 + 2] = Math.floor(color.b * 255) // B
+        const color = i < paletteData.length ? paletteData[i] : { r: 0.7, g: 0.7, b: 0.7, a: 1.0 }
+        paletteBytes[i * 4] = Math.floor(color.r * 255)     // R
+        paletteBytes[i * 4 + 1] = Math.floor(color.g * 255) // G  
+        paletteBytes[i * 4 + 2] = Math.floor(color.b * 255) // B
+        paletteBytes[i * 4 + 3] = Math.floor((color.a !== undefined ? color.a : 1.0) * 255) // A
       }
       
       paletteTexture = new BABYLON.RawTexture(
         paletteBytes,
         256, 1, // 256x1 texture
-        BABYLON.Engine.TEXTUREFORMAT_RGB, // RGB channels
+        BABYLON.Engine.TEXTUREFORMAT_RGBA, // RGBA format (WebGPU compatible)
         scene,
         false, false, // No mipmap, no invert
         BABYLON.Texture.NEAREST_SAMPLINGMODE // Exact pixel sampling
       )
-      console.log('🎨 Created palette data texture: 256x1 RGB8')
+      console.log('🎨 Created palette data texture: 256x1 RGBA8')
     }
     
     return { curveTexture, paletteTexture }
