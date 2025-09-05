@@ -910,6 +910,8 @@ void main() {
       console.log('⏭️ Babylon scene already initialized; skipping duplicate init')
       return
     }
+    // Mark as initializing immediately to prevent parallel inits
+    hasInitializedRef.current = true
 
     try {
       console.log('🎮 Initializing Babylon.js scene with WebGPU...')
@@ -938,8 +940,9 @@ void main() {
       canvas.className = 'babylon-canvas'
       canvas.width = width
       canvas.height = height
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
+      // IMPORTANT: keep CSS pixel size in sync to avoid WebGPU resolve-target size mismatch
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
       canvas.style.display = 'block'
       canvas.style.margin = '0'
       canvas.style.padding = '0'
@@ -1023,12 +1026,16 @@ void main() {
       const handleResize = () => {
         if (container && engine) {
           const newRect = container.getBoundingClientRect()
-          canvas.width = newRect.width
-          canvas.height = newRect.height
-          canvas.style.width = `${newRect.width}px`
-          canvas.style.height = `${newRect.height}px`
-          engine.setSize(newRect.width, newRect.height)
-          engine.resize()
+          const newW = Math.max(Math.floor(newRect.width), 1)
+          const newH = Math.max(Math.floor(newRect.height), 1)
+          if (canvas.width !== newW || canvas.height !== newH) {
+            canvas.width = newW
+            canvas.height = newH
+            canvas.style.width = `${newW}px`
+            canvas.style.height = `${newH}px`
+            engine.setSize(newW, newH)
+            engine.resize()
+          }
           console.log(`📐 Resized to: ${newRect.width}x${newRect.height}`)
         }
       }
