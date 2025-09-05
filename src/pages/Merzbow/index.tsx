@@ -844,6 +844,15 @@ void main() {
         // Reload DPs to get the new one
         await loadDistortionControls()
         
+        // AUTO-GENERATE SHADER for new DP
+        console.log('🎨 Auto-generating shader for new distortion profile...')
+        try {
+          await generateAndLinkShader(data.data)
+        } catch (shaderError) {
+          console.error('❌ Error auto-generating shader for new DP:', shaderError)
+          // Don't fail the creation if shader generation fails
+        }
+        
         // Auto-link latest curve and palette to new DP
         const newDP = availableDistortionControls.find(dp => dp.name === newName)
         if (newDP && availableCurves.length > 0 && availablePalettes.length > 0) {
@@ -941,6 +950,15 @@ void main() {
         
         // Reload DPs to get the new one
         await loadDistortionControls()
+        
+        // AUTO-GENERATE SHADER for duplicated DP
+        console.log('🎨 Auto-generating shader for duplicated distortion profile...')
+        try {
+          await generateAndLinkShader(newDPData.data)
+        } catch (shaderError) {
+          console.error('❌ Error auto-generating shader for duplicated DP:', shaderError)
+          // Don't fail the duplication if shader generation fails
+        }
         
         // Find the new DP and duplicate its link relationships
         const newDP = availableDistortionControls.find(dp => dp.name === copyName)
