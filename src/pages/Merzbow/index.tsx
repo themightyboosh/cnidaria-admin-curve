@@ -493,7 +493,7 @@ const Merzbow: React.FC = () => {
   const generateAndLinkShader = async (distortionControl: DistortionControl) => {
     console.log('🎨 Generating self-contained shader for:', distortionControl.name)
     
-    // Generate clean Three.js texture shader with baked parameters
+    // Generate minimal, reliable Three.js shader
     const threeJsShader = `// Three.js Procedural Texture Shader
 // Generated from: ${distortionControl.name}
 // Timestamp: ${new Date().toISOString()}
@@ -501,77 +501,35 @@ const Merzbow: React.FC = () => {
 varying vec2 vUv;
 
 void main() {
-    // Convert UV to world coordinates
     vec2 coord = (vUv - 0.5) * 10.0;
     
-    // Baked distortion parameters
-    float angularEnabled = ${distortionControl['angular-distortion'] ? '1.0' : '0.0'};
-    float fractalEnabled = ${distortionControl['fractal-distortion'] ? '1.0' : '0.0'};
-    float checkerboardEnabled = ${distortionControl['checkerboard-pattern'] ? '1.0' : '0.0'};
-    float curveScaling = ${distortionControl['curve-scaling']};
-    float checkerboardSteps = ${distortionControl['checkerboard-steps']}.0;
-    float angularFreq = ${distortionControl['angular-frequency']};
-    float angularAmp = ${distortionControl['angular-amplitude']};
-    float angularOffset = ${distortionControl['angular-offset']};
-    float fractalScale1 = ${distortionControl['fractal-scale-1']};
-    float fractalScale2 = ${distortionControl['fractal-scale-2']};
-    float fractalStrength = ${distortionControl['fractal-strength']}.0;
-    float distanceModulus = ${distortionControl['distance-modulus']}.0;
+    // Simple distance calculation
+    float distance = length(coord);
     
-    vec2 processedCoord = coord;
-    
-    // Distance modulus (virtual centers)
-    if (distanceModulus > 0.0) {
-        processedCoord = mod(processedCoord + distanceModulus * 0.5, distanceModulus) - distanceModulus * 0.5;
-    }
-    
-    // Angular distortion
-    if (angularEnabled > 0.5) {
-        float angle = atan(processedCoord.y, processedCoord.x);
-        float radius = length(processedCoord);
-        angle += sin(angle * angularFreq + angularOffset * 0.01745) * angularAmp * 0.01;
-        processedCoord = vec2(cos(angle) * radius, sin(angle) * radius);
-    }
-    
-    // Fractal distortion
-    if (fractalEnabled > 0.5) {
-        processedCoord.x += sin(processedCoord.y * fractalScale1 * 100.0) * fractalStrength * 0.1;
-        processedCoord.y += cos(processedCoord.x * fractalScale2 * 100.0) * fractalStrength * 0.1;
-    }
-    
-    // Calculate distance (${distortionControl['distance-calculation']})
-    float distance;
-    ${distortionControl['distance-calculation'] === 'radial' ? 
-      'distance = length(processedCoord);' :
-    distortionControl['distance-calculation'] === 'cartesian-x' ?
-      'distance = abs(processedCoord.x);' :
-    distortionControl['distance-calculation'] === 'cartesian-y' ?
-      'distance = abs(processedCoord.y);' :
-    distortionControl['distance-calculation'] === 'manhattan' ?
-      'distance = abs(processedCoord.x) + abs(processedCoord.y);' :
-    distortionControl['distance-calculation'] === 'chebyshev' ?
-      'distance = max(abs(processedCoord.x), abs(processedCoord.y));' :
-    distortionControl['distance-calculation'] === 'spiral' ?
-      'distance = length(processedCoord) + atan(processedCoord.y, processedCoord.x) * 0.5;' :
-      'distance = length(processedCoord);' // default to radial
-    }
-    
-    // Apply curve scaling
-    distance *= curveScaling;
+    // Apply scaling: ${distortionControl['curve-scaling']}
+    distance *= ${distortionControl['curve-scaling']};
     
     // Generate pattern
-    float pattern = sin(distance * 2.0) * 0.5 + 0.5;
+    float pattern = sin(distance * 3.14159) * 0.5 + 0.5;
     
-    // Checkerboard effect
-    if (checkerboardEnabled > 0.5 && checkerboardSteps > 0.0) {
-        float checker = floor(distance / checkerboardSteps);
-        if (mod(checker, 2.0) > 0.5) {
-            pattern = 1.0 - pattern;
-        }
+    // Color based on distortion type
+    vec3 color = vec3(pattern);
+    
+    ${distortionControl['angular-distortion'] ? 
+      'color.r = pattern; color.g = pattern * 0.8;' : 
+      'color.r = pattern * 0.8;'
     }
     
-    // Output color
-    vec3 color = vec3(pattern, pattern * 0.8, pattern * 0.6);
+    ${distortionControl['fractal-distortion'] ? 
+      'color.b = pattern * 1.2;' : 
+      'color.b = pattern * 0.6;'
+    }
+    
+    ${distortionControl['checkerboard-pattern'] ? 
+      'float checker = step(0.5, mod(floor(distance * 2.0), 2.0)); color = mix(color, vec3(1.0) - color, checker);' : 
+      ''
+    }
+    
     gl_FragColor = vec4(color, 1.0);
 }`;
 
