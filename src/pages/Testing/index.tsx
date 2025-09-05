@@ -14,8 +14,7 @@ interface Shader {
 }
 
 const Testing: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const threejsCanvasRef = useRef<HTMLCanvasElement>(null)
+  const threejsContainerRef = useRef<HTMLDivElement>(null)
   const [testMessage, setTestMessage] = useState('Testing page loaded')
   const [availableShaders, setAvailableShaders] = useState<Shader[]>([])
   const [selectedShader, setSelectedShader] = useState<Shader | null>(null)
@@ -58,28 +57,7 @@ const Testing: React.FC = () => {
     // Initialize Three.js scene
     setTimeout(() => {
       initThreeJsScene()
-    }, 100) // Small delay to ensure canvas is mounted
-    
-    // Simple canvas test
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        // Clear canvas
-        ctx.fillStyle = '#1a1a1a'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        
-        // Draw test pattern
-        ctx.fillStyle = '#00ff00'
-        ctx.fillRect(50, 50, 100, 100)
-        
-        ctx.fillStyle = '#ffffff'
-        ctx.font = '20px Arial'
-        ctx.fillText('Testing Canvas', 200, 100)
-        
-        console.log('✅ Canvas test pattern drawn')
-      }
-    }
+    }, 100) // Small delay to ensure container is mounted
     
     // Cleanup Three.js on unmount
     return () => {
@@ -94,20 +72,34 @@ const Testing: React.FC = () => {
 
   // Initialize Three.js scene for shader preview
   const initThreeJsScene = async () => {
-    const canvas = threejsCanvasRef.current
-    if (!canvas) return
+    const container = threejsContainerRef.current
+    if (!container) return
 
     try {
       console.log('🎮 Initializing Three.js scene for shader preview...')
       const THREE = await import('three')
       
-      // Create scene, camera, renderer
-      const scene = new THREE.Scene()
-      const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000)
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+      // Get container dimensions
+      const width = container.clientWidth || 800
+      const height = container.clientHeight || 600
       
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight)
+      console.log(`📐 Three.js viewport size: ${width}x${height}`)
+      
+      // Create scene, camera, renderer (let Three.js create its own canvas)
+      const scene = new THREE.Scene()
+      const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+      
+      renderer.setSize(width, height)
       renderer.setClearColor(0x1a1a1a)
+      
+      // Style the Three.js canvas
+      renderer.domElement.className = 'testing-canvas threejs-canvas'
+      renderer.domElement.style.borderRadius = '8px'
+      
+      // Clear container and add Three.js canvas
+      container.innerHTML = ''
+      container.appendChild(renderer.domElement)
       
       // Create moderately complex cube geometry
       const geometry = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8) // Subdivided for better texture detail
@@ -218,40 +210,12 @@ const Testing: React.FC = () => {
     setTestMessage(`Exported ${targets.length} GLSL files for ${shader.name}`)
   }
 
-  const runBasicTest = () => {
-    console.log('🧪 Running basic test...')
-    setTestMessage('Basic test completed successfully!')
-  }
-
-  const runCanvasTest = () => {
-    console.log('🎨 Running canvas test...')
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        // Random colored squares
-        for (let i = 0; i < 20; i++) {
-          const x = Math.random() * (canvas.width - 50)
-          const y = Math.random() * (canvas.height - 50)
-          const hue = Math.random() * 360
-          ctx.fillStyle = `hsl(${hue}, 70%, 50%)`
-          ctx.fillRect(x, y, 30, 30)
-        }
-        setTestMessage('Canvas test completed - random squares drawn!')
-      }
-    }
-  }
-
-  const clearCanvas = () => {
-    console.log('🧹 Clearing canvas...')
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.fillStyle = '#1a1a1a'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        setTestMessage('Canvas cleared')
-      }
+  const runShaderTest = () => {
+    console.log('🎨 Running shader test...')
+    if (selectedShader) {
+      applyShaderToCube(selectedShader)
+    } else {
+      setTestMessage('Please select a shader first')
     }
   }
 
@@ -337,15 +301,21 @@ const Testing: React.FC = () => {
           </div>
 
           <div className="test-section">
-            <h3>Basic Tests</h3>
-            <button onClick={runBasicTest} className="test-btn">
-              Run Basic Test
+            <h3>Shader Tests</h3>
+            <button onClick={runShaderTest} className="test-btn">
+              Apply Selected Shader
             </button>
-            <button onClick={runCanvasTest} className="test-btn">
-              Canvas Test
-            </button>
-            <button onClick={clearCanvas} className="test-btn secondary">
-              Clear Canvas
+            <button 
+              onClick={() => {
+                if (threejsScene) {
+                  const { cube, THREE } = threejsScene
+                  cube.rotation.set(0, 0, 0)
+                  setTestMessage('Cube rotation reset')
+                }
+              }}
+              className="test-btn secondary"
+            >
+              Reset Rotation
             </button>
           </div>
           
@@ -356,35 +326,14 @@ const Testing: React.FC = () => {
             </div>
           </div>
           
-          <div className="test-section">
-            <h3>Future Tests</h3>
-            <button disabled className="test-btn disabled">
-              3D Preview Test (Coming Soon)
-            </button>
-            <button disabled className="test-btn disabled">
-              WebGPU Test (Coming Soon)
-            </button>
-            <button disabled className="test-btn disabled">
-              Shader Test (Coming Soon)
-            </button>
-          </div>
         </div>
         
         <div className="testing-viewport">
-          {/* Three.js shader preview canvas */}
-          <canvas
-            ref={threejsCanvasRef}
-            className="testing-canvas"
+          {/* Three.js viewport - Three.js will create its own canvas */}
+          <div 
+            ref={threejsContainerRef}
+            className="threejs-viewport"
             style={{ width: '100%', height: '100%' }}
-          />
-          
-          {/* Hidden 2D canvas for basic tests */}
-          <canvas
-            ref={canvasRef}
-            width={400}
-            height={300}
-            className="testing-canvas"
-            style={{ display: 'none' }}
           />
         </div>
       </div>
