@@ -493,74 +493,83 @@ const Merzbow: React.FC = () => {
   const generateAndLinkShader = async (distortionControl: DistortionControl) => {
     console.log('🎨 Generating self-contained shader for:', distortionControl.name)
     
-    // Generate self-contained Three.js shader with baked parameters
-    const threeJsShader = `// Self-contained Pipeline F shader
+    // Generate optimized Three.js texture shader with baked parameters
+    const threeJsShader = `// Three.js Procedural Texture Shader
 // Generated from: ${distortionControl.name}
 // Timestamp: ${new Date().toISOString()}
+// Type: Self-contained texture shader for Three.js materials
 
-uniform float u_time;
-varying vec2 vUv;
-varying vec3 vWorldPosition;
+// Standard Three.js varyings (automatically provided)
+varying vec2 vUv;           // Texture coordinates (0-1)
+varying vec3 vPosition;     // Local position
+varying vec3 vNormal;       // Surface normal
 
-// Baked distortion control parameters
-const float ANGULAR_ENABLED = ${distortionControl['angular-distortion'] ? '1.0' : '0.0'};
-const float FRACTAL_ENABLED = ${distortionControl['fractal-distortion'] ? '1.0' : '0.0'};
-const float CHECKERBOARD_ENABLED = ${distortionControl['checkerboard-pattern'] ? '1.0' : '0.0'};
-const float CURVE_SCALING = ${distortionControl['curve-scaling']};
-const float CHECKERBOARD_STEPS = ${distortionControl['checkerboard-steps']}.0;
-const float ANGULAR_FREQUENCY = ${distortionControl['angular-frequency']};
-const float ANGULAR_AMPLITUDE = ${distortionControl['angular-amplitude']};
-const float ANGULAR_OFFSET = ${distortionControl['angular-offset']};
-const float FRACTAL_SCALE_1 = ${distortionControl['fractal-scale-1']};
-const float FRACTAL_SCALE_2 = ${distortionControl['fractal-scale-2']};
-const float FRACTAL_STRENGTH = ${distortionControl['fractal-strength']}.0;
-const float DISTANCE_MODULUS = ${distortionControl['distance-modulus']}.0;
+// Optional time uniform for animation
+uniform float time;
+
+// Baked Pipeline F parameters (no external uniforms needed)
+#define ANGULAR_ENABLED ${distortionControl['angular-distortion'] ? '1.0' : '0.0'}
+#define FRACTAL_ENABLED ${distortionControl['fractal-distortion'] ? '1.0' : '0.0'}
+#define CHECKERBOARD_ENABLED ${distortionControl['checkerboard-pattern'] ? '1.0' : '0.0'}
+#define CURVE_SCALING ${distortionControl['curve-scaling']}
+#define CHECKERBOARD_STEPS ${distortionControl['checkerboard-steps']}.0
+#define ANGULAR_FREQUENCY ${distortionControl['angular-frequency']}
+#define ANGULAR_AMPLITUDE ${distortionControl['angular-amplitude']}
+#define ANGULAR_OFFSET ${distortionControl['angular-offset']}
+#define FRACTAL_SCALE_1 ${distortionControl['fractal-scale-1']}
+#define FRACTAL_SCALE_2 ${distortionControl['fractal-scale-2']}
+#define FRACTAL_STRENGTH ${distortionControl['fractal-strength']}.0
+#define DISTANCE_MODULUS ${distortionControl['distance-modulus']}.0
 
 // Distance calculation: ${distortionControl['distance-calculation']}
 float calculateDistance(vec2 coord) {
     ${distortionControl['distance-calculation'] === 'radial' ? 
-      'return sqrt(coord.x * coord.x + coord.y * coord.y);' :
+      'return length(coord);' :
     distortionControl['distance-calculation'] === 'cartesian-x' ?
       'return abs(coord.x);' :
     distortionControl['distance-calculation'] === 'cartesian-y' ?
       'return abs(coord.y);' :
     distortionControl['distance-calculation'] === 'manhattan' ?
       'return abs(coord.x) + abs(coord.y);' :
-      'return sqrt(coord.x * coord.x + coord.y * coord.y);' // default to radial
+    distortionControl['distance-calculation'] === 'chebyshev' ?
+      'return max(abs(coord.x), abs(coord.y));' :
+      'return length(coord);' // default to radial
     }
 }
 
-// Pipeline F implementation (self-contained)
-vec3 processCoordinate(vec2 coord) {
+// Self-contained Pipeline F implementation
+vec3 generatePattern(vec2 textureCoord) {
+    // Convert UV coordinates (0-1) to world coordinates
+    vec2 coord = (textureCoord - 0.5) * 10.0; // Scale for better pattern visibility
     vec2 processedCoord = coord;
     
-    // Distance modulus (virtual centers)
+    // Distance modulus (virtual centers for tiling)
     if (DISTANCE_MODULUS > 0.0) {
-        processedCoord = mod(processedCoord, DISTANCE_MODULUS);
+        processedCoord = mod(processedCoord + DISTANCE_MODULUS * 0.5, DISTANCE_MODULUS) - DISTANCE_MODULUS * 0.5;
     }
     
     // Angular distortion
     if (ANGULAR_ENABLED > 0.5) {
         float angle = atan(processedCoord.y, processedCoord.x);
         float radius = length(processedCoord);
-        angle += sin(angle * ANGULAR_FREQUENCY + ANGULAR_OFFSET * 0.01745329) * ANGULAR_AMPLITUDE * 0.01;
-        processedCoord = vec2(cos(angle) * radius, sin(angle) * radius);
+        angle += sin(angle * ANGULAR_FREQUENCY + radians(ANGULAR_OFFSET)) * ANGULAR_AMPLITUDE * 0.01;
+        processedCoord = vec2(cos(angle), sin(angle)) * radius;
     }
     
     // Fractal distortion
     if (FRACTAL_ENABLED > 0.5) {
-        processedCoord.x += sin(processedCoord.y * FRACTAL_SCALE_1 * 1000.0) * FRACTAL_STRENGTH * 0.1;
-        processedCoord.y += cos(processedCoord.x * FRACTAL_SCALE_2 * 1000.0) * FRACTAL_STRENGTH * 0.1;
+        processedCoord.x += sin(processedCoord.y * FRACTAL_SCALE_1 * 100.0) * FRACTAL_STRENGTH * 0.1;
+        processedCoord.y += cos(processedCoord.x * FRACTAL_SCALE_2 * 100.0) * FRACTAL_STRENGTH * 0.1;
     }
     
-    // Calculate distance
+    // Calculate final distance
     float distance = calculateDistance(processedCoord);
     
     // Apply curve scaling
     distance *= CURVE_SCALING;
     
-    // Convert to pattern (simple sine wave)
-    float pattern = sin(distance * 0.1) * 0.5 + 0.5;
+    // Generate pattern (procedural texture)
+    float pattern = sin(distance * 2.0) * 0.5 + 0.5;
     
     // Checkerboard effect
     if (CHECKERBOARD_ENABLED > 0.5 && CHECKERBOARD_STEPS > 0.0) {
@@ -570,15 +579,28 @@ vec3 processCoordinate(vec2 coord) {
         }
     }
     
-    return vec3(pattern, pattern * 0.8, pattern * 0.6);
+    // Generate color variation
+    return vec3(
+        pattern,
+        pattern * 0.8 + sin(distance * 0.5) * 0.2,
+        pattern * 0.6 + cos(distance * 0.3) * 0.4
+    );
 }
 
 void main() {
-    // Use world position for pattern calculation
-    vec2 coord = vWorldPosition.xz;
-    vec3 color = processCoordinate(coord);
+    // Use standard Three.js texture coordinates
+    vec3 color = generatePattern(vUv);
+    
+    // Three.js standard output
     gl_FragColor = vec4(color, 1.0);
-}`;
+}
+
+// === USAGE IN THREE.JS ===
+// const material = new THREE.ShaderMaterial({
+//   fragmentShader: thisShader,
+//   vertexShader: THREE.ShaderLib.basic.vertexShader,
+//   uniforms: { time: { value: 0.0 } }
+// });`;
 
     // Create shader document
     const shaderName = `${distortionControl.name}-glsl`;

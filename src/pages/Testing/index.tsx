@@ -145,8 +145,6 @@ const Testing: React.FC = () => {
 
   return (
     <div className="testing-page">
-      <Header />
-      
       <div className="testing-content">
         <div className="testing-sidebar">
           <h2>Testing Controls</h2>
