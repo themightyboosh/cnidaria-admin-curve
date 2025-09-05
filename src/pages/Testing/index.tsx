@@ -255,17 +255,29 @@ fn main(input: VertexOutput) -> @location(0) vec4f {
           console.log(`✅ Loaded ${distortionControls.length} distortion profiles`)
           
           // Auto-select the first DP for immediate testing (like Merzbow auto-selection)
-          if (distortionControls.length > 0 && !shaderBuilder.selectedDP) {
-            const firstDP = distortionControls[0]
-            setShaderBuilder(prev => ({
-              ...prev,
-              selectedDP: firstDP.id
-            }))
-            console.log(`🎯 Auto-selected first DP: ${firstDP.name}`)
-            setTestMessage(`Loaded ${distortionControls.length} DPs, auto-selected: ${firstDP.name}`)
-          } else {
-            setTestMessage(`Loaded ${distortionControls.length} distortion profiles`)
-          }
+                  if (distortionControls.length > 0 && !shaderBuilder.selectedDP) {
+          const firstDP = distortionControls[0]
+          
+          // Debug the auto-selected DP structure
+          console.log('🔄 Auto-selecting first DP with full data inspection:')
+          console.log('  Name:', firstDP.name)
+          console.log('  ID:', firstDP.id)
+          console.log('  All Keys:', Object.keys(firstDP))
+          console.log('  linked-curve:', firstDP['linked-curve'])
+          console.log('  linked-palette:', firstDP['linked-palette'])
+          console.log('  curve-scaling:', firstDP['curve-scaling'])
+          console.log('  angular-distortion:', firstDP['angular-distortion'])
+          console.log('  fractal-distortion:', firstDP['fractal-distortion'])
+          
+          setShaderBuilder(prev => ({
+            ...prev,
+            selectedDP: firstDP.id
+          }))
+          console.log(`🎯 Auto-selected first DP: ${firstDP.name} (ID: ${firstDP.id})`)
+          setTestMessage(`Loaded ${distortionControls.length} DPs, auto-selected: ${firstDP.name}`)
+        } else {
+          setTestMessage(`Loaded ${distortionControls.length} distortion profiles`)
+        }
         } else {
           console.error('❌ Invalid API response structure:', data)
           setTestMessage('Failed to load distortion profiles - invalid response')
@@ -1168,43 +1180,92 @@ fn main(input: VertexInput) -> VertexOutput {
 
   // Generate Pipeline F NodeMaterial
   const generatePipelineFNodeMaterial = async () => {
+    // Debug DP selection process
+    console.log('🔍 DP Selection Debug:')
+    console.log('  shaderBuilder.selectedDP:', shaderBuilder.selectedDP)
+    console.log('  availableDistortionProfiles.length:', availableDistortionProfiles.length)
+    console.log('  availableDistortionProfiles[0]:', availableDistortionProfiles[0]?.name)
+    
     // Get the currently selected DP from the shader builder
     const currentDP = availableDistortionProfiles.find(dp => dp.id === shaderBuilder.selectedDP)
     
+    console.log('🎯 Selected DP Result:', currentDP ? currentDP.name : 'NOT FOUND')
+    
     if (!currentDP || !babylonScene) {
       setTestMessage('❌ Missing requirements for NodeMaterial generation')
+      console.error('❌ Missing requirements:', {
+        currentDP: !!currentDP,
+        babylonScene: !!babylonScene,
+        selectedDPId: shaderBuilder.selectedDP
+      })
       return null
     }
 
     try {
       const { scene, BABYLON } = babylonScene
       console.log('🏗️ Generating Pipeline F NodeMaterial for DP:', currentDP.name)
+      console.log('🏗️ DP Full Object:', currentDP)
       
       // Load curve and palette data for the selected DP
       let dpCurveData = null
       let dpPaletteData = null
       
       try {
-        // Load curve data if linked
-        if (currentDP['linked-curve']) {
-          console.log('📊 Loading curve data for:', currentDP['linked-curve'])
-          const curveResponse = await fetch(`${apiUrl}/api/curves/${currentDP['linked-curve']}`)
-          if (curveResponse.ok) {
-            const curve = await curveResponse.json()
-            dpCurveData = curve.data || curve.values || []
-            console.log('✅ Loaded curve data:', dpCurveData.length, 'values')
-          }
-        }
+        // Debug DP data structure
+        console.log('🔍 DP Structure:', {
+          name: currentDP.name,
+          id: currentDP.id,
+          'linked-curve': currentDP['linked-curve'],
+          'linked-palette': currentDP['linked-palette'],
+          keys: Object.keys(currentDP)
+        })
         
-        // Load palette data if linked
-        if (currentDP['linked-palette']) {
-          console.log('🎨 Loading palette data for:', currentDP['linked-palette'])
-          const paletteResponse = await fetch(`${apiUrl}/api/palettes/${currentDP['linked-palette']}`)
-          if (paletteResponse.ok) {
-            const palette = await paletteResponse.json()
-            dpPaletteData = palette.colors || []
-            console.log('✅ Loaded palette data:', dpPaletteData.length, 'colors')
+        // Load complete DP data with embedded curve and palette using enhanced API
+        console.log('🔗 Loading complete DP data with embedded links:', currentDP.id)
+        try {
+          const dpResponse = await fetch(`${apiUrl}/api/distortion-controls/${currentDP.id}`)
+          console.log('🔗 Enhanced DP API response status:', dpResponse.status)
+          
+          if (dpResponse.ok) {
+            const dpData = await dpResponse.json()
+            console.log('🔗 Enhanced DP API response:', dpData)
+            
+            if (dpData.success && dpData.data) {
+              const completeDP = dpData.data
+              
+              // Extract embedded curve data
+              if (completeDP.linkedCurve && completeDP.linkedCurve.data) {
+                dpCurveData = completeDP.linkedCurve.data
+                console.log('✅ Loaded embedded curve data:', dpCurveData.length, 'values', dpCurveData.slice(0, 5))
+                console.log('📊 Curve info:', {
+                  id: completeDP.linkedCurve.id,
+                  name: completeDP.linkedCurve.name,
+                  width: completeDP.linkedCurve.width
+                })
+              } else {
+                console.warn('⚠️ No linkedCurve in enhanced DP response')
+              }
+              
+              // Extract embedded palette data
+              if (completeDP.linkedPalette && completeDP.linkedPalette.colors) {
+                dpPaletteData = completeDP.linkedPalette.colors
+                console.log('✅ Loaded embedded palette data:', dpPaletteData.length, 'colors', dpPaletteData.slice(0, 3))
+                console.log('🎨 Palette info:', {
+                  id: completeDP.linkedPalette.id,
+                  name: completeDP.linkedPalette.name
+                })
+              } else {
+                console.warn('⚠️ No linkedPalette in enhanced DP response')
+              }
+              
+            } else {
+              console.warn('❌ Enhanced DP API returned no data or success=false')
+            }
+          } else {
+            console.warn('❌ Enhanced DP API failed:', dpResponse.status, dpResponse.statusText)
           }
+        } catch (enhancedError) {
+          console.error('❌ Enhanced DP API error:', enhancedError)
         }
       } catch (dataError) {
         console.warn('⚠️ Failed to load curve/palette data:', dataError)
@@ -1723,7 +1784,7 @@ fn main(input: VertexInput) -> VertexOutput {
         imageData.data[pixelIndex] = result.r
         imageData.data[pixelIndex + 1] = result.g  
         imageData.data[pixelIndex + 2] = result.b
-        imageData.data[pixelIndex + 3] = 255
+        imageData.data[pixelIndex + 3] = result.a !== undefined ? result.a : 255 // Use palette alpha if present, else full opacity
         
         pixelCount++
       }
@@ -1780,33 +1841,45 @@ fn main(input: VertexInput) -> VertexOutput {
         console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → d=${d.toFixed(3)} → idx=${idx} → curveValue=${curveValue.toFixed(3)}`)
       }
       
-      // Map curveValue to palette color (exact Merzbow logic)
+      // Map curveValue to palette color (exact Merzbow logic) with conditional RGBA support
       if (paletteData && paletteData.length > 0) {
         const paletteIndex = Math.floor(curveValue * (paletteData.length - 1))
         const color = paletteData[paletteIndex] || { r: 0.7, g: 0.7, b: 0.7 }
+        
+        // Check if alpha is present in the palette data
+        const hasAlpha = color.a !== undefined
+        
         const result = { 
           r: Math.floor(color.r * 255), 
           g: Math.floor(color.g * 255), 
-          b: Math.floor(color.b * 255) 
+          b: Math.floor(color.b * 255)
+        }
+        
+        // Only add alpha if it exists in the palette
+        if (hasAlpha) {
+          result.a = Math.floor(color.a * 255)
         }
         
         if (pixelCount < 3) {
-          console.log(`    → paletteIndex=${paletteIndex} → color=(${result.r}, ${result.g}, ${result.b})`)
+          const colorStr = hasAlpha 
+            ? `(${result.r}, ${result.g}, ${result.b}, ${result.a})`
+            : `(${result.r}, ${result.g}, ${result.b})`
+          console.log(`    → paletteIndex=${paletteIndex} → color=${colorStr} ${hasAlpha ? 'RGBA' : 'RGB'}`)
         }
         
         return result
       }
       
-      // Grayscale fallback
+      // Grayscale fallback (RGB only)
       const gray = Math.floor(curveValue * 255)
       if (pixelCount < 3) {
-        console.log(`    → grayscale fallback: ${gray}`)
+        console.log(`    → grayscale fallback: ${gray} (RGB)`)
       }
       return { r: gray, g: gray, b: gray }
       
     } catch (error) {
-      // Error fallback
-      return { r: 128, g: 128, b: 128 }
+      // Error fallback with alpha
+      return { r: 128, g: 128, b: 128, a: 255 }
     }
   }
 
@@ -2512,7 +2585,14 @@ void main() {
             <label>Distortion Profile:</label>
             <select 
               value={shaderBuilder.selectedDP} 
-              onChange={(e) => setShaderBuilder({...shaderBuilder, selectedDP: e.target.value})}
+              onChange={(e) => {
+                console.log('🔄 DP Selection Changed:', {
+                  from: shaderBuilder.selectedDP,
+                  to: e.target.value,
+                  dpName: availableDistortionProfiles.find(dp => dp.id === e.target.value)?.name
+                })
+                setShaderBuilder({...shaderBuilder, selectedDP: e.target.value})
+              }}
               className="shader-dropdown"
             >
               <option value="">Select DP...</option>
