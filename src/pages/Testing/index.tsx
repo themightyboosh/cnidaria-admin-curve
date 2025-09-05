@@ -121,7 +121,29 @@ const Testing: React.FC = () => {
         BABYLON.Vector3.Zero(), 
         scene
       )
-      camera.attachToCanvas(canvas, true)
+      
+      // Attach camera controls (debug available methods)
+      console.log('🔍 Camera methods available:', Object.getOwnPropertyNames(camera).filter(name => name.includes('attach')))
+      
+      try {
+        // Try different attachment methods
+        if (typeof camera.attachToCanvas === 'function') {
+          camera.attachToCanvas(canvas, true)
+          console.log('✅ Camera attached via attachToCanvas')
+        } else if (typeof camera.attachControls === 'function') {
+          camera.attachControls(canvas)
+          console.log('✅ Camera attached via attachControls')
+        } else {
+          // Manual setup
+          camera.setTarget(BABYLON.Vector3.Zero())
+          scene.activeCamera = camera
+          console.log('✅ Camera set manually as active camera')
+        }
+      } catch (cameraError) {
+        console.error('⚠️ Camera attachment failed:', cameraError)
+        camera.setTarget(BABYLON.Vector3.Zero())
+        scene.activeCamera = camera
+      }
       
       // Add lighting
       const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene)
