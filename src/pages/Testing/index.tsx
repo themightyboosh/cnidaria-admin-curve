@@ -84,12 +84,23 @@ const Testing: React.FC = () => {
       
       const BABYLON = await import('@babylonjs/core')
       
-      // Create canvas
+      // Get container dimensions for proper aspect ratio
+      const containerRect = container.getBoundingClientRect()
+      const width = containerRect.width
+      const height = containerRect.height
+      
+      console.log(`📐 Container dimensions: ${width}x${height}`)
+      
+      // Create canvas with proper dimensions
       const canvas = document.createElement('canvas')
-      canvas.className = 'testing-canvas babylon-canvas'
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
-      canvas.style.borderRadius = '8px'
+      canvas.className = 'babylon-canvas'
+      canvas.width = width
+      canvas.height = height
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
+      canvas.style.display = 'block'
+      canvas.style.margin = '0'
+      canvas.style.padding = '0'
       container.appendChild(canvas)
       
       console.log('🚀 Creating WebGPU engine...')
@@ -103,10 +114,13 @@ const Testing: React.FC = () => {
         setTestMessage('Babylon.js WebGPU engine ready')
       } catch (webgpuError) {
         console.log('⚠️ WebGPU failed, falling back to WebGL...')
-        engine = new BABYLON.Engine(canvas, true)
+        engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true })
         console.log('✅ WebGL engine initialized')
         setTestMessage('Babylon.js WebGL engine ready (WebGPU unavailable)')
       }
+      
+      // Set proper engine size
+      engine.setSize(width, height)
       
       // Create scene
       const scene = new BABYLON.Scene(engine)
@@ -162,10 +176,21 @@ const Testing: React.FC = () => {
         scene.render()
       })
       
-      // Handle resize
-      window.addEventListener('resize', () => {
-        engine.resize()
-      })
+      // Handle resize properly
+      const handleResize = () => {
+        if (container && engine) {
+          const newRect = container.getBoundingClientRect()
+          canvas.width = newRect.width
+          canvas.height = newRect.height
+          canvas.style.width = `${newRect.width}px`
+          canvas.style.height = `${newRect.height}px`
+          engine.setSize(newRect.width, newRect.height)
+          engine.resize()
+          console.log(`📐 Resized to: ${newRect.width}x${newRect.height}`)
+        }
+      }
+      
+      window.addEventListener('resize', handleResize)
       
       // Store scene data
       setBabylonScene({ 
