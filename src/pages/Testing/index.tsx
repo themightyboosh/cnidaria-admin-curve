@@ -928,9 +928,115 @@ void main() {
         curveTexture = await getCurveTexture('default-linear', scene, BABYLON)
       }
       
-      // Generate WGSL shader directly from DP
-      const wgslShader = generatePipelineFShader(selectedDP)
-      console.log(`🚀 Generated WGSL fragment shader with Pipeline F math`)
+      // Build WGSL from concept model controls
+      const coordExpr = (axis: 'x'|'y', src: string) => {
+        switch (src) {
+          case 'uv': return `input.uv.${axis}`
+          case 'worldPosition': return `input.worldPosition.${axis}`
+          case 'position': return `input.worldPosition.${axis}`
+          case 'normal': return `input.normal.${axis}`
+          default: return `input.uv.${axis}`
+        }
+      }
+
+      const xExpr = coordExpr('x', shaderBuilder.objectData1)
+      const yExpr = coordExpr('y', shaderBuilder.objectData2)
+
+      const valueTransform = (varName: string) => {
+        switch (indexValueTransform) {
+          case 'raw': return `${varName}`
+          case 'percentage': return `${varName}`
+          case 'degrees': return `(${varName} * 360.0f) / 360.0f`
+          case 'signed': return `(${varName} * 2.0f - 1.0f)`
+          case 'pseudo-random': return `fract(sin(${varName} * 12.9898f) * 43758.5453f)`
+          case 'multiplier': return `(${varName} * ${indexValueScale.toFixed(3)}f)`
+          case 'color-hex':
+          case 'color-rgb':
+            return `${varName}`
+          default: return `${varName}`
+        }
+      }
+
+      const indexTransformExpr = (varName: string) => {
+        switch (indexTransform) {
+          case 'raw': return `${varName}`
+          case 'percentage': return `${varName}`
+          case 'degrees': return `(${varName} * 360.0f) / 360.0f`
+          case 'signed': return `(${varName} * 2.0f - 1.0f)`
+          case 'pseudo-random': return `fract(sin(${varName} * 12.9898f) * 43758.5453f)`
+          case 'multiplier': return `(${varName} * ${indexScale.toFixed(3)}f)`
+          default: return `${varName}`
+        }
+      }
+
+      const applyTargetsWGSL = () => {
+        const idxNorm = '(curveIndex / 255.0f)'
+        const idxExpr = indexTransformExpr(idxNorm)
+        const valExpr = valueTransform('curveValue')
+        let lines: string[] = []
+        if (['color-rgb','color-hex'].includes(indexValueTransform)) {
+          lines.push(`let paletteCoord = vec2f(${idxNorm}, 0.5f);`)
+          lines.push(`let pal = textureSample(paletteTexture, curveSampler, paletteCoord).rgb;`)
+          if (indexValueTarget === 'diffuse') lines.push(`finalColor = pal;`)
+          if (indexValueTarget === 'red') lines.push(`finalColor.r = pal.r;`)
+          if (indexValueTarget === 'green') lines.push(`finalColor.g = pal.g;`)
+          if (indexValueTarget === 'blue') lines.push(`finalColor.b = pal.b;`)
+        } else {
+          if (indexValueTarget === 'diffuse') lines.push(`finalColor = vec3f(${valExpr});`)
+          if (indexValueTarget === 'red') lines.push(`finalColor.r = ${valExpr};`)
+          if (indexValueTarget === 'green') lines.push(`finalColor.g = ${valExpr};`)
+          if (indexValueTarget === 'blue') lines.push(`finalColor.b = ${valExpr};`)
+          if (indexValueTarget === 'opacity') lines.push(`finalOpacity = clamp(${valExpr}, 0.0f, 1.0f);`)
+          if (indexValueTarget === 'emissive') lines.push(`emissive = vec3f(${valExpr} * 3.0f);`)
+          if (indexValueTarget === 'roughness') lines.push(`roughness = clamp(${valExpr}, 0.0f, 1.0f);`)
+          if (indexValueTarget === 'metallic') lines.push(`metallic = clamp(${valExpr}, 0.0f, 1.0f);`)
+        }
+        if (indexTarget !== 'none') {
+          if (indexTarget === 'opacity') lines.push(`finalOpacity = clamp(${idxExpr}, 0.0f, 1.0f);`)
+          if (indexTarget === 'emissive') lines.push(`emissive += vec3f(${idxExpr});`)
+          if (indexTarget === 'roughness') lines.push(`roughness = clamp(${idxExpr}, 0.0f, 1.0f);`)
+          if (indexTarget === 'metallic') lines.push(`metallic = clamp(${idxExpr}, 0.0f, 1.0f);`)
+        }
+        return lines.join('\n        ')
+      }
+
+      const wgslShader = `
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) worldPosition: vec3f,
+  @location(2) normal: vec3f,
+}
+@group(0) @binding(0) var curveTexture: texture_2d<f32>;
+@group(0) @binding(1) var curveSampler: sampler;
+${(['color-rgb','color-hex'].includes(indexValueTransform) ? '@group(0) @binding(2) var paletteTexture: texture_2d<f32>;' : '')}
+@fragment
+fn main(input: VertexOutput) -> @location(0) vec4f {
+  // Inputs → 2D coordinate
+  var coord = vec2f(${xExpr}, ${yExpr});
+  // Pipeline F (DP baked)
+  var p = coord;
+  ${selectedDP['distance-modulus'] > 0 ? `let modulus = ${selectedDP['distance-modulus'].toFixed(1)}f; p = (p + modulus * 0.5) % modulus - modulus * 0.5;` : ''}
+  ${selectedDP['angular-distortion'] ? `let a = atan2(p.y, p.x); let r = length(p); let na = a + sin(a * ${selectedDP['angular-frequency'].toFixed(1)}f + ${selectedDP['angular-offset'].toFixed(1)}f * 0.017453f) * ${selectedDP['angular-amplitude'].toFixed(1)}f * 0.01f; p = vec2f(cos(na) * r, sin(na) * r);` : ''}
+  ${selectedDP['fractal-distortion'] ? `p.x += sin(p.y * ${selectedDP['fractal-scale-1'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f; p.y += cos(p.x * ${selectedDP['fractal-scale-2'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f; p.x += sin(p.y * ${selectedDP['fractal-scale-3'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.1f;` : ''}
+  var distance: f32 = ${(() => { switch(selectedDP['distance-calculation']){case 'radial':return 'length(p)';case 'cartesian-x':return 'abs(p.x)';case 'cartesian-y':return 'abs(p.y)';case 'manhattan':return 'abs(p.x)+abs(p.y)';case 'chebyshev':return 'max(abs(p.x),abs(p.y))';default:return 'length(p)';}})()} * ${selectedDP['curve-scaling'].toFixed(4)}f;
+  var curveIndex = clamp(floor(distance * 255.0f), 0.0f, 255.0f);
+  var texCoord = vec2f(curveIndex / 255.0f, 0.5f);
+  var curveValue = textureSample(curveTexture, curveSampler, texCoord).r;
+  ${selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0 ? `let checker = floor(distance / ${selectedDP['checkerboard-steps'].toFixed(1)}f); if (checker % 2.0f > 0.5f) { curveValue = 1.0f - curveValue; }` : ''}
+  var baseColor = vec3f(0.7, 0.7, 0.7);
+  var finalColor = baseColor;
+  var finalOpacity = 1.0f;
+  var emissive = vec3f(0.0);
+  var metallic = 0.0f; var roughness = 0.5f;
+  ${applyTargetsWGSL()}
+  let lightDir = normalize(vec3f(1.0, 1.0, 1.0));
+  let NdotL = max(dot(input.normal, lightDir), 0.0);
+  let lighting = 0.3 + 0.7 * NdotL;
+  finalColor = finalColor * lighting + emissive;
+  return vec4f(finalColor, finalOpacity);
+}`
+      console.log('🚀 Generated WGSL from concept controls')
       
       // Apply WGSL Fragment Shader directly to mesh
       console.log('🎨 Applying Pipeline F WGSL shader to mesh...')
