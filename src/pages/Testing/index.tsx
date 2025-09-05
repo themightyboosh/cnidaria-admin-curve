@@ -293,6 +293,118 @@ const Testing: React.FC = () => {
     setTestMessage(`Updated ${currentGeometry} to ${newMesh.getTotalVertices()} vertices`)
   }
 
+  // Apply procedural texture with nested Pipeline F functions
+  const applyPipelineFTexture = async () => {
+    if (!babylonScene) {
+      console.log('⚠️ No Babylon.js scene available')
+      return
+    }
+
+    try {
+      console.log('🎨 Creating nested Pipeline F procedural texture...')
+      const { mesh, scene, BABYLON } = babylonScene
+      
+      // Create nested Pipeline F fragment shader
+      const pipelineFShader = `
+precision highp float;
+varying vec2 vUV;
+
+// Pipeline F Step 1: Distance Modulus (Virtual Centers)
+vec2 applyDistanceModulus(vec2 coord, float modulus) {
+    if (modulus > 0.0) {
+        return mod(coord + modulus * 0.5, modulus) - modulus * 0.5;
+    }
+    return coord;
+}
+
+// Pipeline F Step 2: Angular Distortion
+vec2 applyAngularDistortion(vec2 coord, float frequency, float amplitude, float offset) {
+    float angle = atan(coord.y, coord.x);
+    float radius = length(coord);
+    angle += sin(angle * frequency + offset * 0.017453) * amplitude * 0.01;
+    return vec2(cos(angle) * radius, sin(angle) * radius);
+}
+
+// Pipeline F Step 3: Fractal Distortion (3-scale)
+vec2 applyFractalDistortion(vec2 coord, float scale1, float scale2, float scale3, float strength) {
+    vec2 result = coord;
+    result.x += sin(coord.y * scale1) * strength * 0.3;
+    result.y += cos(coord.x * scale2) * strength * 0.3;
+    result.x += sin(coord.y * scale3) * strength * 0.1;
+    return result;
+}
+
+// Pipeline F Step 4: Distance Calculations
+float calculateRadialDistance(vec2 coord) { return length(coord); }
+float calculateCartesianX(vec2 coord) { return abs(coord.x); }
+float calculateCartesianY(vec2 coord) { return abs(coord.y); }
+float calculateManhattan(vec2 coord) { return abs(coord.x) + abs(coord.y); }
+float calculateChebyshev(vec2 coord) { return max(abs(coord.x), abs(coord.y)); }
+
+// Pipeline F Step 5: Checkerboard Pattern
+float applyCheckerboard(float pattern, float distance, float steps) {
+    if (steps > 0.0) {
+        float checker = floor(distance / steps);
+        if (mod(checker, 2.0) > 0.5) {
+            return 1.0 - pattern;
+        }
+    }
+    return pattern;
+}
+
+// Main nested processing function
+vec3 processNestedPipelineF(vec2 uv) {
+    // Convert UV to world coordinates
+    vec2 coord = (uv - 0.5) * 20.0;
+    
+    // Nested Pipeline F processing (modular functions)
+    coord = applyDistanceModulus(coord, 50.0);           // Virtual centers
+    coord = applyAngularDistortion(coord, 8.0, 30.0, 45.0); // Angular warping
+    coord = applyFractalDistortion(coord, 0.01, 0.05, 0.1, 10.0); // 3-scale fractal
+    
+    // Calculate distance and generate pattern
+    float distance = calculateRadialDistance(coord);
+    distance *= 0.5; // Curve scaling
+    float pattern = sin(distance * 2.0) * 0.5 + 0.5;
+    
+    // Apply checkerboard effect
+    pattern = applyCheckerboard(pattern, distance, 20.0);
+    
+    // Generate color variation
+    return vec3(pattern, pattern * 0.8, pattern * 0.6);
+}
+
+void main() {
+    vec3 color = processNestedPipelineF(vUV);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+
+      // Create procedural texture with nested Pipeline F
+      const proceduralTexture = new BABYLON.ProceduralTexture(
+        "nestedPipelineF", 
+        1024, 
+        pipelineFShader, 
+        scene
+      )
+      
+      // Create material and apply texture
+      const material = new BABYLON.StandardMaterial("pipelineFMaterial", scene)
+      material.diffuseTexture = proceduralTexture
+      material.disableLighting = true // Show texture clearly
+      
+      // Apply to current mesh
+      if (mesh) {
+        mesh.material = material
+        console.log('✅ Nested Pipeline F texture applied')
+        setTestMessage(`Applied nested Pipeline F texture to ${currentGeometry}`)
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to apply Pipeline F texture:', error)
+      setTestMessage(`Failed to apply texture: ${error.message}`)
+    }
+  }
+
   // Apply selected shader to the mesh (placeholder for future Babylon.js shader implementation)
   const applyShaderToMesh = async (shader: Shader) => {
     if (!babylonScene) {
@@ -302,8 +414,8 @@ const Testing: React.FC = () => {
 
     try {
       console.log(`🎨 Applying shader to ${currentGeometry}: ${shader.name}`)
-      // TODO: Implement Babylon.js shader application
-      setTestMessage(`Shader application coming soon: ${shader.name}`)
+      // TODO: Convert Three.js shader to Babylon.js format
+      setTestMessage(`Shader conversion coming soon: ${shader.name}`)
       
     } catch (error) {
       console.error('❌ Failed to apply shader:', error)
@@ -532,27 +644,29 @@ void main() {
 
           <div className="test-section">
             <h3>Shader Tests</h3>
+            <button 
+              onClick={() => applyPipelineFTexture()}
+              className="test-btn"
+              style={{ backgroundColor: '#00ff88', color: '#000' }}
+            >
+              Apply Pipeline F
+            </button>
             <button onClick={runShaderTest} className="test-btn">
               Apply Selected Shader
             </button>
             <button 
-              onClick={() => applyHardcodedTestShader()}
-              className="test-btn"
-              style={{ backgroundColor: '#ff6b35' }}
-            >
-              Apply Test Shader
-            </button>
-            <button 
               onClick={() => {
-                if (threejsScene) {
-                  const { cube, THREE } = threejsScene
-                  cube.rotation.set(0, 0, 0)
-                  setTestMessage('Cube rotation reset')
+                if (babylonScene?.mesh) {
+                  const { mesh, BABYLON, scene } = babylonScene
+                  const defaultMaterial = new BABYLON.StandardMaterial('default', scene)
+                  defaultMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4)
+                  mesh.material = defaultMaterial
+                  setTestMessage('Reset to default material')
                 }
               }}
               className="test-btn secondary"
             >
-              Reset Rotation
+              Reset Material
             </button>
           </div>
           
