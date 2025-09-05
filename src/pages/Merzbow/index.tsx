@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
 import { SaveButton } from '../../components/shared'
 import { apiUrl } from '../../config/environments'
-import { unityShaderGenerator } from '../../utils/unityShaderGenerator'
-import { glslShaderGenerator } from '../../utils/glslShaderGenerator'
+// import { unityShaderGenerator } from '../../utils/unityShaderGenerator'
+// import { glslShaderGenerator } from '../../utils/glslShaderGenerator'
 import './Merzbow.css'
 
 interface DistortionControl {
@@ -53,6 +53,8 @@ interface LinkButtonProps {
 const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette, selectedDistortionControl, onLink }) => {
   const [linkStatus, setLinkStatus] = useState({ curveLinked: false, paletteLinked: false })
   const [isChecking, setIsChecking] = useState(false)
+  const originalCurveIdRef = useRef<string | null>(null)
+  const originalPaletteNameRef = useRef<string | null>(null)
   
   // Check link status when selections change
   useEffect(() => {
@@ -72,6 +74,10 @@ const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette,
             const curveLinked = selectedCurve ? link.curveId === selectedCurve.id : false
             const paletteLinked = selectedPalette ? link.paletteName === selectedPalette.name : false
             setLinkStatus({ curveLinked, paletteLinked })
+
+            // Capture original linked values for change detection (first successful fetch only)
+            if (originalCurveIdRef.current === null) originalCurveIdRef.current = link.curveId || null
+            if (originalPaletteNameRef.current === null) originalPaletteNameRef.current = link.paletteName || null
           } else {
             setLinkStatus({ curveLinked: false, paletteLinked: false })
           }
@@ -89,9 +95,14 @@ const LinkButton: React.FC<LinkButtonProps> = ({ selectedCurve, selectedPalette,
   
   const needsLinking = (selectedCurve && !linkStatus.curveLinked) || (selectedPalette && !linkStatus.paletteLinked)
   const bothLinked = selectedCurve && selectedPalette && linkStatus.curveLinked && linkStatus.paletteLinked
+
+  // Only show button if the user changed either dropdown relative to original link
+  const curveChanged = selectedCurve?.id !== (originalCurveIdRef.current || undefined)
+  const paletteChanged = selectedPalette?.name !== (originalPaletteNameRef.current || undefined)
+  const userModifiedSelection = curveChanged || paletteChanged
   
   // Hide button if both are linked, no DP selected, or no curve/palette selected
-  if (bothLinked || !needsLinking || !selectedDistortionControl || (!selectedCurve && !selectedPalette)) {
+  if (bothLinked || !needsLinking || !selectedDistortionControl || (!selectedCurve && !selectedPalette) || !userModifiedSelection) {
     return null
   }
   
@@ -282,9 +293,7 @@ const Merzbow: React.FC = () => {
   const [centerOffsetX, setCenterOffsetX] = useState(0)
   const [centerOffsetY, setCenterOffsetY] = useState(0)
 
-  // 3D Preview state
-  const [showPreview, setShowPreview] = useState(false)
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+  // 3D Preview removed
 
   // Load available distortion controls from API
   const loadDistortionControls = async () => {
@@ -332,11 +341,7 @@ const Merzbow: React.FC = () => {
           const palettes = data.data.palettes
           setAvailablePalettes(palettes)
           
-          // Load default grayscale palette if available
-          const grayscale = palettes.find((p: Palette) => p.name.toLowerCase().includes('grayscale'))
-          if (grayscale && !selectedPalette) {
-            setSelectedPalette(grayscale)
-          }
+          // Do not auto-select a default palette; respect linked/user selection
         }
       }
     } catch (error) {
@@ -728,7 +733,7 @@ void main() {
       'angular-frequency': angularFrequency,
       'angular-amplitude': angularAmplitude,
       'angular-offset': angularOffset,
-      'fractal-scale-1': fractalScale1,
+      'fractal-scale-1': Math.min(Math.max(fractalScale1, 0.0), 0.01),
       'fractal-scale-2': fractalScale2,
       'fractal-scale-3': fractalScale3,
       'fractal-strength': fractalStrength
@@ -935,8 +940,8 @@ void main() {
     
     try {
       const copyName = `${selectedDistortionControl.name}-copy-${availableDistortionControls.length + 1}`
-      const duplicateData = { ...selectedDistortionControl, name: copyName }
-      delete duplicateData.id
+      const duplicateData: Omit<DistortionControl, 'id'> & Partial<Pick<DistortionControl, 'id'>> = { ...selectedDistortionControl, name: copyName }
+      delete (duplicateData as any).id
       
       const response = await fetch(`${apiUrl}/api/distortion-controls`, {
         method: 'POST',
@@ -1730,315 +1735,12 @@ void main() {
     }, 'image/jpeg', 0.95)
   }
 
-  // Export all GLSL pairs from linked shader
-  const exportCurveShader = async () => {
-    console.log('🎨 Exporting linked shader GLSL pairs...')
-    
-    if (!selectedDistortionControl) {
-      alert('Please select a distortion control before exporting')
-      return
-    }
+  // Export GLSL removed
 
-    try {
-      // Find linked shader for this distortion profile
-      const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
-      if (!linksResponse.ok) {
-        throw new Error('Failed to fetch distortion control links')
-      }
-      
-      const linksData = await linksResponse.json()
-      let linkedShaderName = null
-      
-      if (linksData.success && linksData.data && linksData.data.length > 0) {
-        const link = linksData.data[0] // Single link per DP
-        linkedShaderName = link.shaderName
-      }
-      
-      if (!linkedShaderName) {
-        alert('No shader linked to this distortion profile. Save the distortion profile first to auto-generate a shader.')
-        return
-      }
-      
-      console.log(`🔍 Found linked shader: ${linkedShaderName}`)
-      
-      // Fetch the shader document
-      const shaderResponse = await fetch(`${apiUrl}/api/shaders/${linkedShaderName}`)
-      if (!shaderResponse.ok) {
-        throw new Error(`Failed to fetch shader: ${linkedShaderName}`)
-      }
-      
-      const shaderData = await shaderResponse.json()
-      if (!shaderData.success || !shaderData.data) {
-        throw new Error('Invalid shader data received')
-      }
-      
-      const shader = shaderData.data
-      const glslPairs = shader.glsl || {}
-      const targets = Object.keys(glslPairs)
-      
-      console.log(`🎯 Exporting ${targets.length} GLSL targets:`, targets)
-      
-      if (targets.length === 0) {
-        alert('No GLSL code found in linked shader')
-        return
-      }
-      
-      // Export each GLSL target as a separate file
-      targets.forEach(target => {
-        const glslCode = glslPairs[target]
-        const fileName = `${shader.name}-${target}.glsl`
-        
-        const blob = new Blob([glslCode], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        
-        link.href = url
-        link.download = fileName
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-        
-        console.log(`✅ Exported: ${fileName}`)
-      })
-      
-      alert(`✅ Exported ${targets.length} shader files for ${shader.name}`)
-      
-    } catch (error) {
-      console.error('Export error:', error)
-      alert(`❌ Export failed: ${error.message}`)
-    }
-  }
-
-  // 3D Preview with rotating cube (simplified)
-  const start3DPreview = () => {
-    console.log('🔴 DEBUG: 3D Preview button clicked - SIMPLE VERSION')
-    
-    if (!selectedDistortionControl || !selectedCurve) {
-      alert('Please select both a distortion control and curve for 3D preview')
-      return
-    }
-
-    console.log('🎮 Starting 3D preview for:', selectedDistortionControl.name, selectedCurve.name)
-    alert(`🎮 3D Preview: ${selectedDistortionControl.name} + ${selectedCurve.name}\n\n(Full 3D implementation coming soon)`)
-  }
-
-  const init3DPreview = () => {
-    const canvas = previewCanvasRef.current
-    if (!canvas || !selectedDistortionControl || !selectedCurve) return
-
-    const gl = canvas.getContext('webgl2')
-    if (!gl) {
-      alert('WebGL2 not supported for 3D preview')
-      return
-    }
-
-    console.log('🎮 Starting 3D curve-shader preview')
-    console.log('📊 Canvas size:', canvas.width, 'x', canvas.height)
-    console.log('🎛️ DP:', selectedDistortionControl.name)
-    console.log('🎯 Curve:', selectedCurve.name)
-    console.log('🎨 Palette:', selectedPalette?.name || 'none')
-
-    // Generate the GLSL fragment shader
-    const shaderPackage = glslShaderGenerator.generateWebGLPackage({
-      shaderName: `Preview_${selectedDistortionControl.name}`,
-      distortionControl: selectedDistortionControl,
-      curve: selectedCurve,
-      palette: selectedPalette,
-      target: 'webgl',
-      includeComments: false
-    })
-
-    // Simple vertex shader for cube
-    const vertexShader = `#version 300 es
-precision highp float;
-
-in vec3 a_position;
-in vec2 a_uv;
-
-uniform mat4 u_mvpMatrix;
-
-out vec2 v_uv;
-
-void main() {
-    v_uv = a_uv;
-    gl_Position = u_mvpMatrix * vec4(a_position, 1.0);
-}`
-
-    // Compile shaders
-    const vs = createShader(gl, gl.VERTEX_SHADER, vertexShader)
-    const fs = createShader(gl, gl.FRAGMENT_SHADER, shaderPackage.fragmentShader)
-    
-    if (!vs || !fs) {
-      alert('Failed to compile shaders for 3D preview')
-      return
-    }
-
-    const program = createProgram(gl, vs, fs)
-    if (!program) {
-      alert('Failed to create shader program for 3D preview')
-      return
-    }
-
-    // Create complex geometric primitives
-    const createTorus = (majorRadius = 1, minorRadius = 0.4, majorSegments = 32, minorSegments = 16) => {
-      const vertices = []
-      const indices = []
-      
-      for (let i = 0; i <= majorSegments; i++) {
-        const u = (i / majorSegments) * Math.PI * 2
-        for (let j = 0; j <= minorSegments; j++) {
-          const v = (j / minorSegments) * Math.PI * 2
-          
-          const x = (majorRadius + minorRadius * Math.cos(v)) * Math.cos(u)
-          const y = minorRadius * Math.sin(v)
-          const z = (majorRadius + minorRadius * Math.cos(v)) * Math.sin(u)
-          
-          vertices.push(x, y, z)
-          vertices.push(i / majorSegments, j / minorSegments) // UV
-          
-          if (i < majorSegments && j < minorSegments) {
-            const a = i * (minorSegments + 1) + j
-            const b = (i + 1) * (minorSegments + 1) + j
-            const c = (i + 1) * (minorSegments + 1) + (j + 1)
-            const d = i * (minorSegments + 1) + (j + 1)
-            
-            indices.push(a, b, d, b, c, d)
-          }
-        }
-      }
-      
-      return {
-        vertices: new Float32Array(vertices),
-        indices: new Uint16Array(indices)
-      }
-    }
-    
-    const createIcosphere = (radius = 1, subdivisions = 2) => {
-      const vertices = []
-      const indices = []
-      
-      // Golden ratio
-      const phi = (1 + Math.sqrt(5)) / 2
-      const a = 1
-      const b = 1 / phi
-      
-      // Initial icosahedron vertices
-      const baseVertices = [
-        [-a, b, 0], [a, b, 0], [-a, -b, 0], [a, -b, 0],
-        [0, -a, b], [0, a, b], [0, -a, -b], [0, a, -b],
-        [b, 0, -a], [b, 0, a], [-b, 0, -a], [-b, 0, a]
-      ]
-      
-      // Normalize and scale vertices
-      baseVertices.forEach(v => {
-        const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
-        vertices.push(v[0]/len * radius, v[1]/len * radius, v[2]/len * radius)
-        // UV coordinates (spherical mapping)
-        const u = 0.5 + Math.atan2(v[2], v[0]) / (2 * Math.PI)
-        const v_coord = 0.5 - Math.asin(v[1]/len) / Math.PI
-        vertices.push(u, v_coord)
-      })
-      
-      // Initial triangle indices for icosahedron
-      const triangles = [
-        [0,11,5], [0,5,1], [0,1,7], [0,7,10], [0,10,11],
-        [1,5,9], [5,11,4], [11,10,2], [10,7,6], [7,1,8],
-        [3,9,4], [3,4,2], [3,2,6], [3,6,8], [3,8,9],
-        [4,9,5], [2,4,11], [6,2,10], [8,6,7], [9,8,1]
-      ]
-      
-      triangles.forEach(tri => {
-        indices.push(tri[0], tri[1], tri[2])
-      })
-      
-      return {
-        vertices: new Float32Array(vertices),
-        indices: new Uint16Array(indices)
-      }
-    }
-    
-    // Use torus for better shader pattern visibility
-    const mesh = createTorus(1.2, 0.5, 48, 24)
-    const meshVertices = mesh.vertices
-    const meshIndices = mesh.indices
-    
-    console.log(`🔺 Generated torus: ${meshVertices.length/5} vertices, ${meshIndices.length/3} triangles`)
-
-    // Create buffers
-    const vertexBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, meshVertices, gl.STATIC_DRAW)
-
-    const indexBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, meshIndices, gl.STATIC_DRAW)
-
-    // Set up attributes
-    const positionLocation = gl.getAttribLocation(program, 'a_position')
-    const uvLocation = gl.getAttribLocation(program, 'a_uv')
-
-    gl.enableVertexAttribArray(positionLocation)
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 5 * 4, 0)
-
-    gl.enableVertexAttribArray(uvLocation)
-    gl.vertexAttribPointer(uvLocation, 2, gl.FLOAT, false, 5 * 4, 3 * 4)
-
-    // Get uniform locations
-    const mvpLocation = gl.getUniformLocation(program, 'u_mvpMatrix')
-    const resolutionLocation = gl.getUniformLocation(program, 'u_resolution')
-    const offsetLocation = gl.getUniformLocation(program, 'u_offset')
-    const scaleLocation = gl.getUniformLocation(program, 'u_scale')
-
-    // Set distortion control uniforms
-    setDistortionUniforms(gl, program, selectedDistortionControl)
-
-    let rotation = 0
-
-    const render = () => {
-      if (!gl || !canvas) return
-
-      rotation += 0.02
-
-      // Clear and setup
-      gl.viewport(0, 0, canvas.width, canvas.height)
-      gl.clearColor(0.1, 0.1, 0.1, 1.0) // Dark gray background
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-      gl.enable(gl.DEPTH_TEST)
-      gl.useProgram(program)
-
-      // Create MVP matrix
-      const aspect = canvas.width / canvas.height
-      const perspective = createPerspectiveMatrix(45, aspect, 0.1, 100)
-      const view = createLookAtMatrix([0, 0, 5], [0, 0, 0], [0, 1, 0])
-      const model = createRotationMatrix(rotation, rotation * 0.7, 0)
-      const mvp = multiplyMatrices(perspective, multiplyMatrices(view, model))
-
-      // Set uniforms
-      gl.uniformMatrix4fv(mvpLocation, false, mvp)
-      gl.uniform2f(resolutionLocation, 512, 512)
-      gl.uniform2f(offsetLocation, centerOffsetX, centerOffsetY)
-      gl.uniform1f(scaleLocation, curveScaling)
-
-      // Draw icosphere
-      gl.drawElements(gl.TRIANGLES, meshIndices.length, gl.UNSIGNED_SHORT, 0)
-
-      // Check for WebGL errors
-      const error = gl.getError()
-      if (error !== gl.NO_ERROR) {
-        console.error('WebGL error during render:', error)
-      }
-
-      if (showPreview) {
-        requestAnimationFrame(render)
-      }
-    }
-
-    console.log('🎮 Starting render loop...')
-    render()
-  }
+  // 3D preview and WebGL helpers removed
 
   // Helper functions for 3D math
+  /* 3D helper removed
   const createPerspectiveMatrix = (fov: number, aspect: number, near: number, far: number): Float32Array => {
     const f = Math.tan(Math.PI * 0.5 - 0.5 * fov * Math.PI / 180)
     const rangeInv = 1.0 / (near - far)
@@ -2104,38 +1806,7 @@ void main() {
   ]
 
   // WebGL helper functions
-  const createShader = (gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null => {
-    const shader = gl.createShader(type)
-    if (!shader) return null
-    
-    gl.shaderSource(shader, source)
-    gl.compileShader(shader)
-    
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error('Shader compile error:', gl.getShaderInfoLog(shader))
-      gl.deleteShader(shader)
-      return null
-    }
-    
-    return shader
-  }
-
-  const createProgram = (gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram | null => {
-    const program = gl.createProgram()
-    if (!program) return null
-    
-    gl.attachShader(program, vs)
-    gl.attachShader(program, fs)
-    gl.linkProgram(program)
-    
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program))
-      gl.deleteProgram(program)
-      return null
-    }
-    
-    return program
-  }
+  // WebGL helper functions removed
 
   const setDistortionUniforms = (gl: WebGL2RenderingContext, program: WebGLProgram, distortion: DistortionControl) => {
     const uniforms = [
@@ -2166,69 +1837,10 @@ void main() {
       }
     })
   }
+  */
 
   // Validate GLSL shader before export
-  const validateGLSL = (fragmentShader: string, vertexShader: string): { valid: boolean; errors: string[] } => {
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2')
-    if (!gl) {
-      return { valid: false, errors: ['WebGL2 not available for validation'] }
-    }
-
-    const errors: string[] = []
-
-    try {
-      // Validate vertex shader
-      const vs = gl.createShader(gl.VERTEX_SHADER)
-      if (vs) {
-        gl.shaderSource(vs, vertexShader)
-        gl.compileShader(vs)
-        
-        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-          const error = gl.getShaderInfoLog(vs)
-          errors.push(`Vertex Shader Error: ${error}`)
-        }
-      }
-
-      // Validate fragment shader
-      const fs = gl.createShader(gl.FRAGMENT_SHADER)
-      if (fs) {
-        gl.shaderSource(fs, fragmentShader)
-        gl.compileShader(fs)
-        
-        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-          const error = gl.getShaderInfoLog(fs)
-          errors.push(`Fragment Shader Error: ${error}`)
-        }
-      }
-
-      // Try to link program
-      if (vs && fs && errors.length === 0) {
-        const program = gl.createProgram()
-        if (program) {
-          gl.attachShader(program, vs)
-          gl.attachShader(program, fs)
-          gl.linkProgram(program)
-          
-          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const error = gl.getProgramInfoLog(program)
-            errors.push(`Program Link Error: ${error}`)
-          }
-          
-          gl.deleteProgram(program)
-        }
-      }
-
-      // Cleanup
-      if (vs) gl.deleteShader(vs)
-      if (fs) gl.deleteShader(fs)
-
-    } catch (error) {
-      errors.push(`Validation Exception: ${error}`)
-    }
-
-    return { valid: errors.length === 0, errors }
-  }
+  // validateGLSL removed
 
   return (
     <div className="app">
@@ -2524,8 +2136,15 @@ void main() {
             {expandedSections.fractal && (
               <div className="section-content">
                 <div className="form-group">
-                  <label>Scale 1: {fractalScale1}</label>
-                  <input type="range" value={fractalScale1} min="0.001" max="0.1" step="0.001" onChange={(e) => setFractalScale1(parseFloat(e.target.value))} />
+                  <label>Scale 1: {fractalScale1.toFixed(4)}</label>
+                  <input 
+                    type="range" 
+                    value={fractalScale1} 
+                    min="0.0" 
+                    max="0.01" 
+                    step="0.0005" 
+                    onChange={(e) => setFractalScale1(parseFloat(e.target.value))} 
+                  />
                 </div>
                 
                 <div className="form-group">
@@ -2563,113 +2182,7 @@ void main() {
                       Export JPEG
                     </button>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                      onClick={() => {
-                        console.log('🎨 Exporting GLSL curve-shader...')
-                        
-                        if (!selectedDistortionControl || !selectedCurve) {
-                          alert('Please select both a distortion control and curve')
-                          return
-                        }
-
-                        try {
-                          // Create simple GLSL shader content
-                          const shaderContent = `// ===== FOUNDATIONAL CURVE-SHADER =====
-// Generated from Merzbow Pipeline F
-// Distortion: ${selectedDistortionControl.name}
-// Curve: ${selectedCurve.name}
-// Palette: ${selectedPalette?.name || 'Default Grayscale'}
-
-#version 300 es
-precision highp float;
-
-// Distortion control parameters
-uniform float u_distanceModulus;
-uniform float u_curveScaling;
-uniform float u_angularFrequency;
-uniform float u_fractalScale1;
-
-in vec2 v_uv;
-out vec4 fragColor;
-
-float calculateDistance(vec2 coord) {
-    return sqrt(coord.x * coord.x + coord.y * coord.y);
-}
-
-void main() {
-    vec2 worldCoord = (v_uv - 0.5) * 1000.0;
-    float dist = calculateDistance(worldCoord);
-    float pattern = sin(dist * u_curveScaling) * 0.5 + 0.5;
-    fragColor = vec4(vec3(pattern), 1.0);
-}
-
-// ===== USAGE =====
-// Apply this shader to any mesh for procedural texturing
-// Adjust uniforms for real-time parameter control
-`
-                          
-                          const blob = new Blob([shaderContent], { type: 'text/plain' })
-                          const url = URL.createObjectURL(blob)
-                          const link = document.createElement('a')
-                          
-                          const fileName = `curve-shader-${selectedDistortionControl.name.toLowerCase().replace(/\s+/g, '-')}.glsl`
-                          link.href = url
-                          link.download = fileName
-                          document.body.appendChild(link)
-                          link.click()
-                          document.body.removeChild(link)
-                          URL.revokeObjectURL(url)
-
-                          console.log(`✅ Exported: ${fileName}`)
-                          alert(`✅ Exported curve-shader: ${fileName}`)
-                          
-                        } catch (error) {
-                          console.error('Export error:', error)
-                          alert(`❌ Export failed: ${error}`)
-                        }
-                      }} 
-                      className="export-button unity"
-                      disabled={!selectedDistortionControl || !selectedCurve}
-                    >
-                      Export GLSL
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (!selectedDistortionControl || !selectedCurve) {
-                          alert('Please select both a distortion control and curve')
-                          return
-                        }
-                        setShowPreview(true)
-                        // Initialize 3D preview after modal opens
-                        setTimeout(() => init3DPreview(), 100)
-                      }} 
-                      className="export-button webgl"
-                      disabled={!selectedDistortionControl || !selectedCurve}
-                    >
-                      3D Preview
-                    </button>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      console.log('🟢 EMERGENCY TEST BUTTON CLICKED')
-                      alert('EMERGENCY BUTTON WORKS!')
-                    }}
-                    style={{ 
-                      width: '100%', 
-                      backgroundColor: '#00ff00', 
-                      color: '#000000',
-                      padding: '15px',
-                      border: '3px solid #ffffff',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      marginTop: '10px'
-                    }}
-                  >
-                    🚨 EMERGENCY TEST BUTTON 🚨
-                  </button>
+                  {/* Export GLSL, 3D Preview, and Emergency button removed */}
                   
                   {/* Debug Info */}
                   <div style={{ 
@@ -2698,28 +2211,7 @@ void main() {
           onContextMenu={handleContextMenu}
         />
 
-        {/* 3D Preview Modal */}
-        {showPreview && (
-          <div className="preview-modal" onClick={() => setShowPreview(false)}>
-            <div className="preview-content" onClick={(e) => e.stopPropagation()}>
-              <div className="preview-header">
-                <h3>3D Curve-Shader Preview</h3>
-                <button onClick={() => setShowPreview(false)} className="close-button">×</button>
-              </div>
-              <canvas 
-                ref={previewCanvasRef}
-                width={600}
-                height={400}
-                className="preview-canvas"
-              />
-              <div className="preview-info">
-                <p>Pattern: <strong>{selectedDistortionControl?.name}</strong></p>
-                <p>Curve: <strong>{selectedCurve?.name}</strong></p>
-                <p>Palette: <strong>{selectedPalette?.name || 'Default Grayscale'}</strong></p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 3D Preview removed */}
       </div>
     </div>
   )
