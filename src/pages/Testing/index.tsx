@@ -107,6 +107,8 @@ const CURVE_TRANSFORMS = {
 
 const Testing: React.FC = () => {
   const babylonContainerRef = useRef<HTMLDivElement>(null)
+  const hasInitializedRef = useRef<boolean>(false)
+  const babylonSceneRef = useRef<any>(null)
   const [testMessage, setTestMessage] = useState('Testing page loaded')
   const [availableShaders, setAvailableShaders] = useState<Shader[]>([])
   const [selectedShader, setSelectedShader] = useState<Shader | null>(null)
@@ -888,9 +890,13 @@ void main() {
     
     // Cleanup Babylon.js on unmount
     return () => {
-      if (babylonScene?.engine) {
-        babylonScene.engine.dispose()
-      }
+      try {
+        if (babylonSceneRef.current?.engine) {
+          babylonSceneRef.current.engine.stopRenderLoop()
+          babylonSceneRef.current.engine.dispose()
+        }
+      } catch {}
+      hasInitializedRef.current = false
     }
   }, [])
 
@@ -899,10 +905,23 @@ void main() {
     const container = babylonContainerRef.current
     if (!container) return
 
+    // Prevent duplicate initialization (React StrictMode / rapid re-renders)
+    if (hasInitializedRef.current) {
+      console.log('⏭️ Babylon scene already initialized; skipping duplicate init')
+      return
+    }
+
     try {
       console.log('🎮 Initializing Babylon.js scene with WebGPU...')
       
       // Cleanup any existing content
+      try {
+        // Dispose any previous engine/scene managed by us
+        if (babylonSceneRef.current?.engine) {
+          babylonSceneRef.current.engine.stopRenderLoop()
+          babylonSceneRef.current.engine.dispose()
+        }
+      } catch {}
       container.innerHTML = ''
       
       const BABYLON = await import('@babylonjs/core')
@@ -987,14 +1006,15 @@ void main() {
       light.intensity = 0.7
       
       // Create default geometry
-      const mesh = createGeometry(currentGeometry, vertexCount, BABYLON, scene)
+      let mesh = createGeometry(currentGeometry, vertexCount, BABYLON, scene)
       
       // Animation loop
       engine.runRenderLoop(() => {
-        // Slow rotation for better viewing
-        if (mesh) {
-          mesh.rotation.x += 0.005
-          mesh.rotation.y += 0.01
+        // Use latest mesh reference to avoid rotating a disposed mesh
+        const m = babylonSceneRef.current?.mesh || mesh
+        if (m) {
+          m.rotation.x += 0.005
+          m.rotation.y += 0.01
         }
         scene.render()
       })
@@ -1016,14 +1036,17 @@ void main() {
       window.addEventListener('resize', handleResize)
       
       // Store scene data
-      setBabylonScene({ 
+      const sceneData = { 
         engine, 
         scene, 
         camera, 
         mesh, 
         BABYLON,
         light
-      })
+      }
+      setBabylonScene(sceneData)
+      babylonSceneRef.current = sceneData
+      hasInitializedRef.current = true
       
       console.log('✅ Babylon.js scene initialized')
       console.log(`📐 Current geometry: ${currentGeometry} with ${vertexCount} subdivisions`)
@@ -1091,7 +1114,9 @@ void main() {
     const newMesh = createGeometry(newType, vertexCount, babylonScene.BABYLON, babylonScene.scene)
     
     // Update scene
-    setBabylonScene({ ...babylonScene, mesh: newMesh })
+    const updated = { ...babylonScene, mesh: newMesh }
+    setBabylonScene(updated)
+    babylonSceneRef.current = updated
     setCurrentGeometry(newType)
     setTestMessage(`Switched to ${newType} (${newMesh.getTotalVertices()} vertices)`)
   }
@@ -1111,7 +1136,9 @@ void main() {
     const newMesh = createGeometry(currentGeometry, newCount, babylonScene.BABYLON, babylonScene.scene)
     
     // Update scene
-    setBabylonScene({ ...babylonScene, mesh: newMesh })
+    const updated = { ...babylonScene, mesh: newMesh }
+    setBabylonScene(updated)
+    babylonSceneRef.current = updated
     setVertexCount(newCount)
     setTestMessage(`Updated ${currentGeometry} to ${newMesh.getTotalVertices()} vertices`)
   }
