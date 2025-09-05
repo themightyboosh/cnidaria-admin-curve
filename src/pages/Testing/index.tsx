@@ -77,6 +77,10 @@ const Testing: React.FC = () => {
 
     try {
       console.log('🎮 Initializing Three.js scene for shader preview...')
+      
+      // Cleanup any existing content first
+      container.innerHTML = ''
+      
       const THREE = await import('three')
       
       // Get container dimensions
@@ -85,21 +89,29 @@ const Testing: React.FC = () => {
       
       console.log(`📐 Three.js viewport size: ${width}x${height}`)
       
-      // Create scene, camera, renderer (let Three.js create its own canvas)
+      // Create a fresh canvas element for Three.js
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.className = 'testing-canvas threejs-canvas'
+      canvas.style.borderRadius = '8px'
+      canvas.style.width = '100%'
+      canvas.style.height = '100%'
+      
+      // Create scene, camera, renderer with the fresh canvas
       const scene = new THREE.Scene()
       const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+      const renderer = new THREE.WebGLRenderer({ 
+        canvas: canvas,
+        antialias: true, 
+        alpha: false 
+      })
       
       renderer.setSize(width, height)
       renderer.setClearColor(0x1a1a1a)
       
-      // Style the Three.js canvas
-      renderer.domElement.className = 'testing-canvas threejs-canvas'
-      renderer.domElement.style.borderRadius = '8px'
-      
-      // Clear container and add Three.js canvas
-      container.innerHTML = ''
-      container.appendChild(renderer.domElement)
+      // Add canvas to container
+      container.appendChild(canvas)
       
       // Create moderately complex cube geometry
       const geometry = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8) // Subdivided for better texture detail
