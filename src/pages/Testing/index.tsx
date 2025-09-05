@@ -1270,7 +1270,7 @@ fn main(input: VertexInput) -> VertexOutput {
       }
       setPipelineFMaterial(materialWithData)
       
-      // Create Pipeline F texture using exact proven mathematics (like Merzbow)
+      // Create Pipeline F material using DynamicTexture (like Merzbow canvas)
       const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
       
       console.log('✅ Pipeline F material with proven mathematics generated successfully')
@@ -1391,20 +1391,31 @@ fn main(input: VertexInput) -> VertexOutput {
     return { curveTexture, paletteTexture }
   }
 
-  // Generate Pipeline F shader using 8-bit data texture lookups
+  // Generate complete Pipeline F fragment shader with 8-bit data texture lookups
   const generatePipelineFWithTextures = (selectedDP: any, targets: TargetAssignment[]): string => {
     return `
       /*
-       * Pipeline F Shader with 8-bit Data Texture Lookups
+       * Complete Pipeline F Fragment Shader
        * Distortion Profile: ${selectedDP.name}
        * Uses: curveTexture (256x1 R8), paletteTexture (256x1 RGB8)
        */
       
-      vec3 computePipelineFColor(vec3 worldPos, sampler2D curveTexture, sampler2D paletteTexture) {
+      precision highp float;
+      
+      varying vec3 vWorldPosition;
+      varying vec3 vNormal;
+      varying vec2 vUV;
+      
+      uniform sampler2D curveTexture;
+      uniform sampler2D paletteTexture;
+      uniform float hasCurveTexture;
+      uniform float hasPaletteTexture;
+      
+      void main() {
         // Pipeline F: World Position → Distance → Curve Value → Palette Color
         
         // Step 1: Convert 3D world position to 2D coordinate
-        vec2 p = worldPos.xz;
+        vec2 p = vWorldPosition.xz;
         
         // Step 2: Apply Pipeline F distortions (from DP parameters)
         ${selectedDP['distance-modulus'] > 0 ? `
@@ -1431,10 +1442,13 @@ fn main(input: VertexInput) -> VertexOutput {
         // Step 3: Calculate distance using selected method
         float distance = ${getDistanceCalculationGLSL(selectedDP['distance-calculation'])} * ${selectedDP['curve-scaling'].toFixed(4)};
         
-        // Step 4: Lookup curve value from 8-bit data texture (not applied to mesh - pure data)
-        float normalizedDistance = clamp(distance / 255.0, 0.0, 1.0);
-        vec2 curveCoord = vec2(normalizedDistance, 0.5);
-        float curveValue = texture2D(curveTexture, curveCoord).r; // R channel contains curve data
+        // Step 4: Lookup curve value from 8-bit data texture (with fallback)
+        float curveValue = 0.5; // Default fallback
+        if (hasCurveTexture > 0.5) {
+          float normalizedDistance = clamp(distance * 0.00392157, 0.0, 1.0); // 1/255 = 0.00392157
+          vec2 curveCoord = vec2(normalizedDistance, 0.5);
+          curveValue = texture2D(curveTexture, curveCoord).r;
+        }
         
         // Step 5: Apply checkerboard pattern if enabled
         ${selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0 ? `
@@ -1444,11 +1458,17 @@ fn main(input: VertexInput) -> VertexOutput {
           }
         ` : ''}
         
-        // Step 6: Use curveValue to lookup palette color (Merzbow logic)
-        vec2 paletteCoord = vec2(curveValue, 0.5);
-        vec3 paletteColor = texture2D(paletteTexture, paletteCoord).rgb; // RGB channels contain palette
+        // Step 6: Use curveValue to lookup palette color (Merzbow logic) with fallback
+        vec3 finalColor = vec3(curveValue, curveValue, curveValue); // Grayscale fallback
+        if (hasPaletteTexture > 0.5) {
+          vec2 paletteCoord = vec2(curveValue, 0.5);
+          finalColor = texture2D(paletteTexture, paletteCoord).rgb;
+        }
         
-        return paletteColor;
+        // Apply target assignments
+        ${generateTargetAssignmentGLSL(targets)}
+        
+        gl_FragColor = vec4(finalColor, 1.0);
       }
     `
   }
@@ -1680,13 +1700,16 @@ fn main(input: VertexInput) -> VertexOutput {
     console.log('📊 Using curve data:', curveData ? curveData.length + ' values' : 'fallback')
     console.log('🎨 Using palette data:', paletteData ? paletteData.length + ' colors' : 'fallback')
     
-    // Create procedural texture using exact Pipeline F mathematics
-    const textureSize = 512
+    // Create procedural texture using exact Pipeline F mathematics (smaller for performance)
+    const textureSize = 256 // Smaller for faster generation
     const pipelineFTexture = new BABYLON.DynamicTexture('pipelineF', textureSize, scene, false)
     const context = pipelineFTexture.getContext()
     const imageData = context.createImageData(textureSize, textureSize)
     
+    console.log('🔄 Generating Pipeline F texture:', textureSize + 'x' + textureSize, 'pixels')
+    
     // Apply exact Pipeline F mathematics (from mathPipeline.ts + WebGPU implementations)
+    let pixelCount = 0
     for (let y = 0; y < textureSize; y++) {
       for (let x = 0; x < textureSize; x++) {
         // Convert pixel to world coordinates (same scale as Merzbow)
@@ -1694,15 +1717,19 @@ fn main(input: VertexInput) -> VertexOutput {
         const worldY = (y - textureSize/2) * 0.02
         
         // Apply exact Pipeline F logic
-        const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData)
+        const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData, pixelCount)
         
         const pixelIndex = (y * textureSize + x) * 4
         imageData.data[pixelIndex] = result.r
         imageData.data[pixelIndex + 1] = result.g  
         imageData.data[pixelIndex + 2] = result.b
         imageData.data[pixelIndex + 3] = 255
+        
+        pixelCount++
       }
     }
+    
+    console.log(`🎨 Generated ${pixelCount} pixels using Pipeline F mathematics`)
     
     context.putImageData(imageData, 0, 0)
     pipelineFTexture.update()
@@ -1718,7 +1745,7 @@ fn main(input: VertexInput) -> VertexOutput {
   }
 
   // Apply exact Pipeline F logic (from mathPipeline.ts - applyMathPipeline function)
-  const applyProvenPipelineFLogic = (x: number, y: number, selectedDP: any, curveData: any, paletteData: any) => {
+  const applyProvenPipelineFLogic = (x: number, y: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number) => {
     try {
       // Step 1: Apply noise function (simplified for now - using coordinates directly)
       const n = 1.0 // Noise function result (simplified)
@@ -1748,19 +1775,33 @@ fn main(input: VertexInput) -> VertexOutput {
         curveValue = idx / 255.0 // Fallback: linear ramp
       }
       
+      // Debug first few pixels
+      if (pixelCount < 5) {
+        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → d=${d.toFixed(3)} → idx=${idx} → curveValue=${curveValue.toFixed(3)}`)
+      }
+      
       // Map curveValue to palette color (exact Merzbow logic)
       if (paletteData && paletteData.length > 0) {
         const paletteIndex = Math.floor(curveValue * (paletteData.length - 1))
         const color = paletteData[paletteIndex] || { r: 0.7, g: 0.7, b: 0.7 }
-        return { 
+        const result = { 
           r: Math.floor(color.r * 255), 
           g: Math.floor(color.g * 255), 
           b: Math.floor(color.b * 255) 
         }
+        
+        if (pixelCount < 3) {
+          console.log(`    → paletteIndex=${paletteIndex} → color=(${result.r}, ${result.g}, ${result.b})`)
+        }
+        
+        return result
       }
       
       // Grayscale fallback
       const gray = Math.floor(curveValue * 255)
+      if (pixelCount < 3) {
+        console.log(`    → grayscale fallback: ${gray}`)
+      }
       return { r: gray, g: gray, b: gray }
       
     } catch (error) {
