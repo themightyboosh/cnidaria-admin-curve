@@ -121,13 +121,21 @@ const Testing: React.FC = () => {
   const [availableDistortionProfiles, setAvailableDistortionProfiles] = useState<DistortionProfile[]>([])
   const [shaderBuilder, setShaderBuilder] = useState<ShaderBuilderConfig>({
     shaderType: 'fragment',           // Fragment shader for texture generation (like Merzbow)
-    objectData1: 'position',          // World position coordinates (primary - matches Merzbow worldX/worldY)
-    objectData2: 'position',          // World position coordinates (secondary - pure position like Merzbow)
+    objectData1: 'uv',                // Default to UVs for guaranteed texture mapping
+    objectData2: 'uv',                // Second input defaults to UVs
     transformableElements: [],
     outputFormat: 'percentage',       // 0-1 range for color values (matches Merzbow processing)
     targetElements: ['diffuse'],      // Generate diffuse color texture (like Merzbow canvas)
     selectedDP: ''                    // Will auto-select first available DP
   })
+
+  // Concept targets & transforms
+  const [indexValueTarget, setIndexValueTarget] = useState<string>('diffuse')
+  const [indexValueTransform, setIndexValueTransform] = useState<string>('percentage')
+  const [indexValueScale, setIndexValueScale] = useState<number>(1.0)
+  const [indexTarget, setIndexTarget] = useState<string>('none')
+  const [indexTransform, setIndexTransform] = useState<string>('raw')
+  const [indexScale, setIndexScale] = useState<number>(1.0)
 
   // Curve texture cache - SINGLE TEXTURE PER CURVE, SHARED ACROSS ALL INSTANCES
   const curveTextureCache = useRef<Map<string, any>>(new Map())
