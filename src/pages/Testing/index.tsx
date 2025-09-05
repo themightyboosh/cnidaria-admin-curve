@@ -778,6 +778,59 @@ void main() {
     return texture
   }
 
+  // --- Palette helpers (loaded from API palettes by name) ---
+  const hexToRGBA = (hex: string): { r: number; g: number; b: number; a: number } => {
+    let h = hex.trim()
+    if (h.startsWith('#')) h = h.slice(1)
+    if (h.length === 3) {
+      h = h.split('').map((c) => c + c).join('')
+    }
+    if (h.length === 6) h = h + 'FF'
+    const num = parseInt(h, 16)
+    const r = (num >> 24) & 0xff
+    const g = (num >> 16) & 0xff
+    const b = (num >> 8) & 0xff
+    const a = num & 0xff
+    return { r, g, b, a }
+  }
+
+  const createPaletteTexture = (paletteKey: string, colors: any[], scene: any, BABYLON: any): any => {
+    if (curveTextureCache.current.has(paletteKey)) {
+      return curveTextureCache.current.get(paletteKey)
+    }
+    const data = new Uint8Array(256 * 4)
+    for (let i = 0; i < 256; i++) {
+      const c = colors[i] ?? colors[colors.length - 1] ?? '#000000'
+      let rgba: { r: number; g: number; b: number; a: number }
+      if (typeof c === 'string') {
+        rgba = hexToRGBA(c)
+      } else if (typeof c === 'object' && c) {
+        rgba = {
+          r: Math.max(0, Math.min(255, Math.round(c.r ?? 0))),
+          g: Math.max(0, Math.min(255, Math.round(c.g ?? 0))),
+          b: Math.max(0, Math.min(255, Math.round(c.b ?? 0))),
+          a: Math.max(0, Math.min(255, Math.round(c.a ?? 255)))
+        }
+      } else {
+        rgba = { r: i, g: i, b: i, a: 255 }
+      }
+      const p = i * 4
+      data[p] = rgba.r; data[p + 1] = rgba.g; data[p + 2] = rgba.b; data[p + 3] = rgba.a
+    }
+    const texture = new BABYLON.RawTexture(
+      data,
+      256,
+      1,
+      BABYLON.Constants.TEXTUREFORMAT_RGBA,
+      scene,
+      false,
+      false,
+      BABYLON.Constants.TEXTURE_NEAREST_SAMPLINGMODE
+    )
+    curveTextureCache.current.set(paletteKey, texture)
+    return texture
+  }
+
   // Get curve texture with full 256-value array for shader index lookup
   const getCurveTexture = async (curveId: string, scene: any, BABYLON: any): Promise<any> => {
     // Check cache first
@@ -815,6 +868,8 @@ void main() {
       console.log('📡 Getting linked curve data for DP...')
       const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDP.id}`)
       let curveTexture: any = null
+      let paletteTexture: any = null
+      let paletteName: string | null = null
       let curveId = 'default-linear'
       
       if (linksResponse.ok) {
@@ -827,11 +882,36 @@ void main() {
             curveTexture = await getCurveTexture(curveId, scene, BABYLON)
             console.log('✅ Curve texture ready for shader (cached)')
           }
+          if (link.paletteName) {
+            paletteName = link.paletteName
+            console.log(`🎨 Linked palette: ${paletteName}`)
+          }
         } else {
           console.log('⚠️ No links found for this DP')
         }
       } else {
         console.error('❌ Failed to load DP links:', linksResponse.statusText)
+      }
+
+      // Load palette by name if available
+      if (paletteName) {
+        try {
+          const palettesRes = await fetch(`${apiUrl}/api/palettes`)
+          if (palettesRes.ok) {
+            const palettesData = await palettesRes.json()
+            const list = palettesData?.data?.palettes || palettesData?.data || []
+            const pal = list.find((p: any) => p.name === paletteName)
+            if (pal && pal.colors) {
+              const key = `palette-${paletteName}`
+              paletteTexture = createPaletteTexture(key, pal.colors, scene, BABYLON)
+              console.log('✅ Palette texture ready for shader (cached)')
+            } else {
+              console.log('⚠️ Palette not found in API response:', paletteName)
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ Failed loading palettes API:', e)
+        }
       }
       
       // If no curve found, use cached default linear curve
@@ -859,6 +939,10 @@ void main() {
       if (curveTexture) {
         proceduralTexture.setTexture("curveTexture", curveTexture)
         console.log('🎨 Curve texture bound to procedural texture')
+      }
+      if (paletteTexture) {
+        proceduralTexture.setTexture('paletteTexture', paletteTexture)
+        console.log('🎨 Palette texture bound to procedural texture')
       }
       
       // Create material and apply
