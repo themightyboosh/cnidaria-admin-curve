@@ -147,3 +147,65 @@
   color: #cccccc;
   margin-bottom: 2px;
 }
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #cccccc;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.button-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.button-row .test-btn {
+  flex: 1;
+  margin-bottom: 0;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.test-btn.active {
+  background: #00ff88;
+  color: #000;
+}
+
+.vertex-slider {
+  width: 100%;
+  margin-bottom: 8px;
+  accent-color: #00ff88;
+}
+
+.vertex-info {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+.babylon-viewport {
+  width: 100%;
+  height: 100%;
+}
+
+.babylon-canvas {
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #000;
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.1);
+  width: 100%;
+  height: 100%;
+}
+
+.babylon-canvas:hover {
+  border-color: #00ff88;
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+  transition: all 0.3s ease;
+}

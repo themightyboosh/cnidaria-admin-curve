@@ -3,6 +3,8 @@ import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
 import './Testing.css'
 
+type GeometryType = 'sphere' | 'cube' | 'landscape-box'
+
 interface Shader {
   id: string
   name: string
@@ -14,12 +16,14 @@ interface Shader {
 }
 
 const Testing: React.FC = () => {
-  const threejsContainerRef = useRef<HTMLDivElement>(null)
+  const babylonContainerRef = useRef<HTMLDivElement>(null)
   const [testMessage, setTestMessage] = useState('Testing page loaded')
   const [availableShaders, setAvailableShaders] = useState<Shader[]>([])
   const [selectedShader, setSelectedShader] = useState<Shader | null>(null)
   const [isLoadingShaders, setIsLoadingShaders] = useState(false)
-  const [threejsScene, setThreejsScene] = useState<any>(null)
+  const [babylonScene, setBabylonScene] = useState<any>(null)
+  const [currentGeometry, setCurrentGeometry] = useState<GeometryType>('sphere')
+  const [vertexCount, setVertexCount] = useState(32)
 
   // Load all shaders from API
   const loadShaders = async () => {
@@ -54,136 +58,205 @@ const Testing: React.FC = () => {
     console.log('🧪 Testing page initialized')
     loadShaders()
     
-    // Initialize Three.js scene
+    // Initialize Babylon.js scene
     setTimeout(() => {
-      initThreeJsScene()
+      initBabylonScene()
     }, 100) // Small delay to ensure container is mounted
     
-    // Cleanup Three.js on unmount
+    // Cleanup Babylon.js on unmount
     return () => {
-      if (threejsScene?.animationId) {
-        cancelAnimationFrame(threejsScene.animationId)
-      }
-      if (threejsScene?.renderer) {
-        threejsScene.renderer.dispose()
+      if (babylonScene?.engine) {
+        babylonScene.engine.dispose()
       }
     }
   }, [])
 
-  // Initialize Three.js scene for shader preview
-  const initThreeJsScene = async () => {
-    const container = threejsContainerRef.current
+  // Initialize Babylon.js scene for GPU-accelerated testing
+  const initBabylonScene = async () => {
+    const container = babylonContainerRef.current
     if (!container) return
 
     try {
-      console.log('🎮 Initializing Three.js scene for shader preview...')
+      console.log('🎮 Initializing Babylon.js scene with WebGPU...')
       
-      // Cleanup any existing content first
+      // Cleanup any existing content
       container.innerHTML = ''
       
-      const THREE = await import('three')
+      const BABYLON = await import('@babylonjs/core')
       
-      // Get container dimensions
-      const width = container.clientWidth || 800
-      const height = container.clientHeight || 600
-      
-      console.log(`📐 Three.js viewport size: ${width}x${height}`)
-      
-      // Create a fresh canvas element for Three.js
+      // Create canvas
       const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      canvas.className = 'testing-canvas threejs-canvas'
-      canvas.style.borderRadius = '8px'
+      canvas.className = 'testing-canvas babylon-canvas'
       canvas.style.width = '100%'
       canvas.style.height = '100%'
-      
-      // Create scene, camera, renderer with the fresh canvas
-      const scene = new THREE.Scene()
-      const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-      const renderer = new THREE.WebGLRenderer({ 
-        canvas: canvas,
-        antialias: true, 
-        alpha: false 
-      })
-      
-      renderer.setSize(width, height)
-      renderer.setClearColor(0x1a1a1a)
-      
-      // Add canvas to container
+      canvas.style.borderRadius = '8px'
       container.appendChild(canvas)
       
-      // Create moderately complex cube geometry
-      const geometry = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8) // Subdivided for better texture detail
+      console.log('🚀 Creating WebGPU engine...')
       
-      // Default material (will be replaced when shader is selected)
-      const material = new THREE.MeshBasicMaterial({ color: 0x666666, wireframe: false })
-      const cube = new THREE.Mesh(geometry, material)
-      
-      scene.add(cube)
-      camera.position.z = 5
-      
-      // Animation loop
-      let animationId: number
-      const animate = () => {
-        animationId = requestAnimationFrame(animate)
-        
-        // Rotate cube
-        cube.rotation.x += 0.005
-        cube.rotation.y += 0.01
-        
-        renderer.render(scene, camera)
+      // Try WebGPU first, fallback to WebGL
+      let engine: any
+      try {
+        engine = new BABYLON.WebGPUEngine(canvas)
+        await engine.initAsync()
+        console.log('✅ WebGPU engine initialized')
+        setTestMessage('Babylon.js WebGPU engine ready')
+      } catch (webgpuError) {
+        console.log('⚠️ WebGPU failed, falling back to WebGL...')
+        engine = new BABYLON.Engine(canvas, true)
+        console.log('✅ WebGL engine initialized')
+        setTestMessage('Babylon.js WebGL engine ready (WebGPU unavailable)')
       }
       
-      animate()
+      // Create scene
+      const scene = new BABYLON.Scene(engine)
+      scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.1)
       
-      // Store scene data for shader updates
-      setThreejsScene({ scene, camera, renderer, cube, animationId, THREE })
-      console.log('✅ Three.js scene initialized')
-      setTestMessage('Three.js scene ready for shader testing')
+      // Create isometric camera
+      const camera = new BABYLON.ArcRotateCamera(
+        'camera', 
+        -Math.PI / 4, 
+        Math.PI / 3, 
+        10, 
+        BABYLON.Vector3.Zero(), 
+        scene
+      )
+      camera.attachToCanvas(canvas, true)
+      
+      // Add lighting
+      const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene)
+      light.intensity = 0.7
+      
+      // Create default geometry
+      const mesh = createGeometry(currentGeometry, vertexCount, BABYLON, scene)
+      
+      // Animation loop
+      engine.runRenderLoop(() => {
+        // Slow rotation for better viewing
+        if (mesh) {
+          mesh.rotation.x += 0.005
+          mesh.rotation.y += 0.01
+        }
+        scene.render()
+      })
+      
+      // Handle resize
+      window.addEventListener('resize', () => {
+        engine.resize()
+      })
+      
+      // Store scene data
+      setBabylonScene({ 
+        engine, 
+        scene, 
+        camera, 
+        mesh, 
+        BABYLON,
+        light
+      })
+      
+      console.log('✅ Babylon.js scene initialized')
+      console.log(`📐 Current geometry: ${currentGeometry} with ${vertexCount} subdivisions`)
       
     } catch (error) {
-      console.error('❌ Failed to initialize Three.js scene:', error)
-      setTestMessage(`Failed to initialize 3D scene: ${error.message}`)
+      console.error('❌ Failed to initialize Babylon.js scene:', error)
+      setTestMessage(`Failed to initialize Babylon.js: ${error.message}`)
     }
   }
 
-  // Apply selected shader to the cube
-  const applyShaderToCube = async (shader: Shader) => {
-    if (!threejsScene || !shader.glsl['three-js']) {
-      console.log('⚠️ No Three.js scene or Three.js shader available')
+  // Create geometry based on type and vertex count
+  const createGeometry = (type: GeometryType, subdivisions: number, BABYLON: any, scene: any) => {
+    console.log(`🔺 Creating ${type} with ${subdivisions} subdivisions`)
+    
+    let mesh: any
+    
+    switch (type) {
+      case 'sphere':
+        mesh = BABYLON.MeshBuilder.CreateSphere('sphere', {
+          diameter: 3,
+          segments: subdivisions
+        }, scene)
+        break
+        
+      case 'cube':
+        mesh = BABYLON.MeshBuilder.CreateBox('cube', {
+          size: 3,
+          subdivisions: subdivisions
+        }, scene)
+        break
+        
+      case 'landscape-box':
+        mesh = BABYLON.MeshBuilder.CreateBox('landscapeBox', {
+          width: 10,
+          height: 3, 
+          depth: 10,
+          subdivisionsX: subdivisions,
+          subdivisionsY: Math.floor(subdivisions / 3),
+          subdivisionsZ: subdivisions
+        }, scene)
+        break
+    }
+    
+    // Default material
+    const material = new BABYLON.StandardMaterial('defaultMaterial', scene)
+    material.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4)
+    mesh.material = material
+    
+    console.log(`✅ Created ${type} with ~${mesh.getTotalVertices()} vertices`)
+    return mesh
+  }
+
+  // Switch geometry type
+  const switchGeometry = (newType: GeometryType) => {
+    if (!babylonScene) return
+    
+    console.log(`🔄 Switching geometry from ${currentGeometry} to ${newType}`)
+    
+    // Remove old mesh
+    if (babylonScene.mesh) {
+      babylonScene.mesh.dispose()
+    }
+    
+    // Create new mesh
+    const newMesh = createGeometry(newType, vertexCount, babylonScene.BABYLON, babylonScene.scene)
+    
+    // Update scene
+    setBabylonScene({ ...babylonScene, mesh: newMesh })
+    setCurrentGeometry(newType)
+    setTestMessage(`Switched to ${newType} (${newMesh.getTotalVertices()} vertices)`)
+  }
+
+  // Update vertex count
+  const updateVertexCount = (newCount: number) => {
+    if (!babylonScene) return
+    
+    console.log(`🔢 Updating vertex count from ${vertexCount} to ${newCount}`)
+    
+    // Remove old mesh
+    if (babylonScene.mesh) {
+      babylonScene.mesh.dispose()
+    }
+    
+    // Create new mesh with updated vertex count
+    const newMesh = createGeometry(currentGeometry, newCount, babylonScene.BABYLON, babylonScene.scene)
+    
+    // Update scene
+    setBabylonScene({ ...babylonScene, mesh: newMesh })
+    setVertexCount(newCount)
+    setTestMessage(`Updated ${currentGeometry} to ${newMesh.getTotalVertices()} vertices`)
+  }
+
+  // Apply selected shader to the mesh (placeholder for future Babylon.js shader implementation)
+  const applyShaderToMesh = async (shader: Shader) => {
+    if (!babylonScene) {
+      console.log('⚠️ No Babylon.js scene available')
       return
     }
 
     try {
-      console.log(`🎨 Applying shader to cube: ${shader.name}`)
-      const { cube, THREE } = threejsScene
-      
-      // Create shader material with the selected shader
-      const shaderMaterial = new THREE.ShaderMaterial({
-        fragmentShader: shader.glsl['three-js'],
-        vertexShader: `
-          varying vec2 vUv;
-          varying vec3 vPosition;
-          varying vec3 vNormal;
-          
-          void main() {
-            vUv = uv;
-            vPosition = position;
-            vNormal = normal;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        uniforms: {
-          time: { value: 0.0 }
-        }
-      })
-      
-      // Apply shader to cube
-      cube.material = shaderMaterial
-      
-      console.log('✅ Shader applied to cube')
-      setTestMessage(`Applied shader: ${shader.name}`)
+      console.log(`🎨 Applying shader to ${currentGeometry}: ${shader.name}`)
+      // TODO: Implement Babylon.js shader application
+      setTestMessage(`Shader application coming soon: ${shader.name}`)
       
     } catch (error) {
       console.error('❌ Failed to apply shader:', error)
@@ -235,23 +308,22 @@ const Testing: React.FC = () => {
       
       // Simple, guaranteed-to-work Three.js shader
       const testShader = `
-        varying vec2 vUv;
-        uniform float time;
-        
-        void main() {
-          vec2 coord = vUv * 8.0;
-          float dist = length(coord - 4.0);
-          float pattern = sin(dist * 2.0 + time) * 0.5 + 0.5;
-          
-          vec3 color = vec3(
-            pattern,
-            pattern * 0.8,
-            sin(time * 0.5) * 0.5 + 0.5
-          );
-          
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `
+varying vec2 vUv;
+uniform float time;
+
+void main() {
+    vec2 coord = vUv * 8.0;
+    float dist = length(coord - 4.0);
+    float pattern = sin(dist * 2.0 + time) * 0.5 + 0.5;
+    
+    vec3 color = vec3(
+        pattern,
+        pattern * 0.8,
+        sin(time * 0.5) * 0.5 + 0.5
+    );
+    
+    gl_FragColor = vec4(color, 1.0);
+}`
       
       const testMaterial = new THREE.ShaderMaterial({
         fragmentShader: testShader,
@@ -292,7 +364,7 @@ const Testing: React.FC = () => {
   const runShaderTest = () => {
     console.log('🎨 Running shader test...')
     if (selectedShader) {
-      applyShaderToCube(selectedShader)
+      applyShaderToMesh(selectedShader)
     } else {
       setTestMessage('Please select a shader first')
     }
@@ -313,8 +385,8 @@ const Testing: React.FC = () => {
                 setSelectedShader(shader || null)
                 if (shader) {
                   setTestMessage(`Selected: ${shader.name} (${shader.targets.length} targets: ${shader.targets.join(', ')})`)
-                  // Apply shader to Three.js cube
-                  applyShaderToCube(shader)
+                  // Apply shader to Babylon.js mesh (coming soon)
+                  applyShaderToMesh(shader)
                 }
               }}
               disabled={isLoadingShaders}
@@ -355,23 +427,55 @@ const Testing: React.FC = () => {
           </div>
 
           <div className="test-section">
-            <h3>3D Scene Controls</h3>
+            <h3>Geometry Controls</h3>
+            
+            <div className="form-group">
+              <label>Geometry Type:</label>
+              <div className="button-row">
+                <button 
+                  onClick={() => switchGeometry('sphere')}
+                  className={`test-btn ${currentGeometry === 'sphere' ? 'active' : 'secondary'}`}
+                >
+                  Sphere
+                </button>
+                <button 
+                  onClick={() => switchGeometry('cube')}
+                  className={`test-btn ${currentGeometry === 'cube' ? 'active' : 'secondary'}`}
+                >
+                  Cube
+                </button>
+                <button 
+                  onClick={() => switchGeometry('landscape-box')}
+                  className={`test-btn ${currentGeometry === 'landscape-box' ? 'active' : 'secondary'}`}
+                >
+                  Landscape
+                </button>
+              </div>
+            </div>
+            
+            <div className="form-group">
+              <label>Vertex Count: {vertexCount}</label>
+              <input 
+                type="range" 
+                min="4" 
+                max="128" 
+                step="4"
+                value={vertexCount}
+                onChange={(e) => updateVertexCount(parseInt(e.target.value))}
+                className="vertex-slider"
+              />
+              <div className="vertex-info">
+                {babylonScene?.mesh ? `${babylonScene.mesh.getTotalVertices()} vertices` : 'No mesh'}
+              </div>
+            </div>
+          </div>
+
+          <div className="test-section">
+            <h3>Scene Controls</h3>
             <button 
               onClick={() => {
-                if (threejsScene) {
-                  const { cube, THREE } = threejsScene
-                  cube.material = new THREE.MeshBasicMaterial({ color: 0x666666 })
-                  setTestMessage('Reset cube to default material')
-                }
-              }} 
-              className="test-btn secondary"
-            >
-              Reset Cube
-            </button>
-            <button 
-              onClick={() => {
-                initThreeJsScene()
-                setTestMessage('Three.js scene reinitialized')
+                initBabylonScene()
+                setTestMessage('Babylon.js scene reinitialized')
               }} 
               className="test-btn"
             >
@@ -415,10 +519,10 @@ const Testing: React.FC = () => {
         </div>
         
         <div className="testing-viewport">
-          {/* Three.js viewport - Three.js will create its own canvas */}
+          {/* Babylon.js viewport - WebGPU accelerated */}
           <div 
-            ref={threejsContainerRef}
-            className="threejs-viewport"
+            ref={babylonContainerRef}
+            className="babylon-viewport"
             style={{ width: '100%', height: '100%' }}
           />
         </div>
