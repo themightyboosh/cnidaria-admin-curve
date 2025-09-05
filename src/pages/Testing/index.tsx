@@ -222,6 +222,73 @@ const Testing: React.FC = () => {
     setTestMessage(`Exported ${targets.length} GLSL files for ${shader.name}`)
   }
 
+  // Apply hardcoded test shader (guaranteed to work)
+  const applyHardcodedTestShader = () => {
+    if (!threejsScene) {
+      setTestMessage('Three.js scene not initialized')
+      return
+    }
+
+    try {
+      console.log('🧪 Applying hardcoded test shader...')
+      const { cube, THREE } = threejsScene
+      
+      // Simple, guaranteed-to-work Three.js shader
+      const testShader = `
+        varying vec2 vUv;
+        uniform float time;
+        
+        void main() {
+          vec2 coord = vUv * 8.0;
+          float dist = length(coord - 4.0);
+          float pattern = sin(dist * 2.0 + time) * 0.5 + 0.5;
+          
+          vec3 color = vec3(
+            pattern,
+            pattern * 0.8,
+            sin(time * 0.5) * 0.5 + 0.5
+          );
+          
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `
+      
+      const testMaterial = new THREE.ShaderMaterial({
+        fragmentShader: testShader,
+        vertexShader: `
+          varying vec2 vUv;
+          uniform float time;
+          
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        uniforms: {
+          time: { value: 0.0 }
+        }
+      })
+      
+      // Update time in animation loop
+      const originalAnimate = threejsScene.animate
+      if (originalAnimate) {
+        const animateWithTime = () => {
+          testMaterial.uniforms.time.value = Date.now() * 0.001
+          originalAnimate()
+        }
+        animateWithTime()
+      }
+      
+      cube.material = testMaterial
+      console.log('✅ Hardcoded test shader applied')
+      setTestMessage('Test shader applied - animated procedural texture')
+      
+    } catch (error) {
+      console.error('❌ Failed to apply test shader:', error)
+      setTestMessage(`Test shader failed: ${error.message}`)
+    }
+  }
+
   const runShaderTest = () => {
     console.log('🎨 Running shader test...')
     if (selectedShader) {
@@ -316,6 +383,13 @@ const Testing: React.FC = () => {
             <h3>Shader Tests</h3>
             <button onClick={runShaderTest} className="test-btn">
               Apply Selected Shader
+            </button>
+            <button 
+              onClick={() => applyHardcodedTestShader()}
+              className="test-btn"
+              style={{ backgroundColor: '#ff6b35' }}
+            >
+              Apply Test Shader
             </button>
             <button 
               onClick={() => {
