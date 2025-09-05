@@ -493,167 +493,73 @@ const Merzbow: React.FC = () => {
   const generateAndLinkShader = async (distortionControl: DistortionControl) => {
     console.log('🎨 Generating self-contained shader for:', distortionControl.name)
     
-    // Generate complete Pipeline F shader with proper Three.js syntax
-    const threeJsShader = `// Complete Pipeline F Three.js Shader
-// Generated from: ${distortionControl.name}
-// Timestamp: ${new Date().toISOString()}
-// Contains full Pipeline F distortion mathematics
-
+    // Generate simple, working Three.js shader (based on hardcoded test pattern)
+    let threeJsShader = `// Pipeline F Three.js Shader - ${distortionControl.name}
 varying vec2 vUv;
 
-// Distance calculation functions
-float calculateRadialDistance(vec2 coord) {
-    return length(coord);
-}
-
-float calculateCartesianXDistance(vec2 coord) {
-    return abs(coord.x);
-}
-
-float calculateCartesianYDistance(vec2 coord) {
-    return abs(coord.y);
-}
-
-float calculateManhattanDistance(vec2 coord) {
-    return abs(coord.x) + abs(coord.y);
-}
-
-float calculateChebyshevDistance(vec2 coord) {
-    return max(abs(coord.x), abs(coord.y));
-}
-
-float calculateMinkowski3Distance(vec2 coord) {
-    return pow(pow(abs(coord.x), 3.0) + pow(abs(coord.y), 3.0), 1.0/3.0);
-}
-
-float calculateSpiralDistance(vec2 coord) {
-    float r = length(coord);
-    float theta = atan(coord.y, coord.x);
-    return r + theta * 0.5;
-}
-
-float calculateDistance(vec2 coord) {
-    ${distortionControl['distance-calculation'] === 'radial' ? 
-      'return calculateRadialDistance(coord);' :
-    distortionControl['distance-calculation'] === 'cartesian-x' ?
-      'return calculateCartesianXDistance(coord);' :
-    distortionControl['distance-calculation'] === 'cartesian-y' ?
-      'return calculateCartesianYDistance(coord);' :
-    distortionControl['distance-calculation'] === 'manhattan' ?
-      'return calculateManhattanDistance(coord);' :
-    distortionControl['distance-calculation'] === 'chebyshev' ?
-      'return calculateChebyshevDistance(coord);' :
-    distortionControl['distance-calculation'] === 'minkowski-3' ?
-      'return calculateMinkowski3Distance(coord);' :
-    distortionControl['distance-calculation'] === 'spiral' ?
-      'return calculateSpiralDistance(coord);' :
-      'return calculateRadialDistance(coord);'
-    }
-}
-
 void main() {
-    // Pipeline F: Complete implementation
     vec2 coord = (vUv - 0.5) * 10.0;
-    vec2 processedCoord = coord;
+    vec2 p = coord;
     
-    // Step 1: Distance Modulus (Virtual Centers)
-    float distanceModulus = ${distortionControl['distance-modulus']}.0;
-    if (distanceModulus > 0.0) {
-        processedCoord = mod(processedCoord + distanceModulus * 0.5, distanceModulus) - distanceModulus * 0.5;
+    // Distance modulus: ${distortionControl['distance-modulus']}
+    float dm = ${distortionControl['distance-modulus']}.0;
+    if (dm > 0.0) {
+        p = mod(p + dm * 0.5, dm) - dm * 0.5;
+    }
+    `;
+    
+    // Add angular distortion if enabled
+    if (distortionControl['angular-distortion']) {
+      threeJsShader += `
+    // Angular distortion
+    float angle = atan(p.y, p.x);
+    float radius = length(p);
+    angle += sin(angle * ${distortionControl['angular-frequency']}.0 + ${distortionControl['angular-offset']} * 0.017453) * ${distortionControl['angular-amplitude']}.0 * 0.01;
+    p = vec2(cos(angle) * radius, sin(angle) * radius);
+    `;
     }
     
-    // Step 2: Angular Distortion
-    bool angularEnabled = ${distortionControl['angular-distortion'] ? 'true' : 'false'};
-    if (angularEnabled) {
-        float angle = atan(processedCoord.y, processedCoord.x);
-        float radius = length(processedCoord);
-        float angularFreq = ${distortionControl['angular-frequency']};
-        float angularAmp = ${distortionControl['angular-amplitude']};
-        float angularOffset = ${distortionControl['angular-offset']};
-        
-        angle += sin(angle * angularFreq + angularOffset * 0.017453) * angularAmp * 0.01;
-        processedCoord = vec2(cos(angle) * radius, sin(angle) * radius);
+    // Add fractal distortion if enabled
+    if (distortionControl['fractal-distortion']) {
+      threeJsShader += `
+    // Fractal distortion (3 scales)
+    p.x += sin(p.y * ${distortionControl['fractal-scale-1']}) * ${distortionControl['fractal-strength']}.0 * 0.3;
+    p.y += cos(p.x * ${distortionControl['fractal-scale-2']}) * ${distortionControl['fractal-strength']}.0 * 0.3;
+    p.x += sin(p.y * ${distortionControl['fractal-scale-3']}) * ${distortionControl['fractal-strength']}.0 * 0.1;
+    `;
     }
     
-    // Step 3: Fractal Distortion (Complete 3-scale implementation)
-    bool fractalEnabled = ${distortionControl['fractal-distortion'] ? 'true' : 'false'};
-    if (fractalEnabled) {
-        float fractalScale1 = ${distortionControl['fractal-scale-1']};
-        float fractalScale2 = ${distortionControl['fractal-scale-2']};
-        float fractalScale3 = ${distortionControl['fractal-scale-3']};
-        float fractalStrength = ${distortionControl['fractal-strength']}.0;
-        
-        // 3-scale fractal distortion matching original Pipeline F
-        float scale1X = sin(processedCoord.x * fractalScale1) * fractalStrength * 0.3;
-        float scale1Y = cos(processedCoord.y * fractalScale1) * fractalStrength * 0.3;
-        
-        float scale2X = sin(processedCoord.x * fractalScale2) * fractalStrength * 0.2;
-        float scale2Y = cos(processedCoord.y * fractalScale2) * fractalStrength * 0.2;
-        
-        float scale3X = sin(processedCoord.x * fractalScale3) * fractalStrength * 0.1;
-        float scale3Y = cos(processedCoord.y * fractalScale3) * fractalStrength * 0.1;
-        
-        processedCoord.x += scale1X + scale2X + scale3X;
-        processedCoord.y += scale1Y + scale2Y + scale3Y;
+    // Add distance calculation
+    let distanceCalc = 'length(p)';
+    if (distortionControl['distance-calculation'] === 'cartesian-x') distanceCalc = 'abs(p.x)';
+    if (distortionControl['distance-calculation'] === 'cartesian-y') distanceCalc = 'abs(p.y)';
+    if (distortionControl['distance-calculation'] === 'manhattan') distanceCalc = 'abs(p.x) + abs(p.y)';
+    if (distortionControl['distance-calculation'] === 'chebyshev') distanceCalc = 'max(abs(p.x), abs(p.y))';
+    
+    threeJsShader += `
+    // Distance calculation: ${distortionControl['distance-calculation']}
+    float dist = ${distanceCalc};
+    
+    // Curve scaling: ${distortionControl['curve-scaling']}
+    dist *= ${distortionControl['curve-scaling']};
+    
+    // Pattern generation
+    float pattern = sin(dist * 2.0) * 0.5 + 0.5;
+    `;
+    
+    // Add checkerboard if enabled
+    if (distortionControl['checkerboard-pattern'] && distortionControl['checkerboard-steps'] > 0) {
+      threeJsShader += `
+    // Checkerboard pattern
+    float checker = floor(dist / ${distortionControl['checkerboard-steps']}.0);
+    if (mod(checker, 2.0) > 0.5) pattern = 1.0 - pattern;
+    `;
     }
     
-    // Step 4: Calculate Distance
-    float distance = calculateDistance(processedCoord);
-    
-    // Step 5: Fractal Distortion on Distance (matching original Pipeline F)
-    if (fractalEnabled) {
-        float fractalScale1 = ${distortionControl['fractal-scale-1']};
-        float fractalScale2 = ${distortionControl['fractal-scale-2']};
-        float fractalScale3 = ${distortionControl['fractal-scale-3']};
-        float fractalStrength = ${distortionControl['fractal-strength']}.0;
-        
-        float distScale1 = sin(distance * fractalScale1) * fractalStrength * 0.3;
-        float distScale2 = cos(distance * fractalScale2) * fractalStrength * 0.2;
-        float distScale3 = sin(distance * fractalScale3) * fractalStrength * 0.1;
-        distance += distScale1 + distScale2 + distScale3;
-    }
-    
-    // Step 6: Angular Distortion on Distance (matching original Pipeline F)
-    if (angularEnabled) {
-        float angularFreq = ${distortionControl['angular-frequency']};
-        float angularAmp = ${distortionControl['angular-amplitude']};
-        float angularOffset = ${distortionControl['angular-offset']};
-        
-        distance += sin(distance * angularFreq + angularOffset * 0.017453) * angularAmp * 0.01;
-    }
-    
-    // Step 7: Apply Curve Scaling
-    float curveScaling = ${distortionControl['curve-scaling']};
-    distance *= curveScaling;
-    
-    // Step 8: Generate Pattern (Curve Simulation)
-    float pattern = sin(distance * 0.1) * 0.5 + 0.5;
-    
-    // Step 9: Checkerboard Pattern
-    bool checkerboardEnabled = ${distortionControl['checkerboard-pattern'] ? 'true' : 'false'};
-    if (checkerboardEnabled) {
-        float checkerboardSteps = ${distortionControl['checkerboard-steps']}.0;
-        if (checkerboardSteps > 0.0) {
-            float checker = floor(distance / checkerboardSteps);
-            if (mod(checker, 2.0) > 0.5) {
-                pattern = 1.0 - pattern;
-            }
-        }
-    }
-    
-    // Step 10: Final Color Output
+    threeJsShader += `
     vec3 color = vec3(pattern, pattern * 0.8, pattern * 0.6);
     gl_FragColor = vec4(color, 1.0);
-}
-
-// === PIPELINE F IMPLEMENTATION NOTES ===
-// This shader contains the complete Pipeline F mathematics:
-// 1. Distance Modulus: ${distortionControl['distance-modulus']} (virtual centers)
-// 2. Angular: ${distortionControl['angular-distortion'] ? 'ENABLED' : 'DISABLED'} (freq:${distortionControl['angular-frequency']}, amp:${distortionControl['angular-amplitude']}, offset:${distortionControl['angular-offset']}°)
-// 3. Fractal: ${distortionControl['fractal-distortion'] ? 'ENABLED' : 'DISABLED'} (scales:${distortionControl['fractal-scale-1']},${distortionControl['fractal-scale-2']}, strength:${distortionControl['fractal-strength']})
-// 4. Distance: ${distortionControl['distance-calculation']}
-// 5. Curve Scaling: ${distortionControl['curve-scaling']}
-// 6. Checkerboard: ${distortionControl['checkerboard-pattern'] ? 'ENABLED' : 'DISABLED'} (steps:${distortionControl['checkerboard-steps']})`;
+}`;
 
     // Create shader document with kebab-case name
     const toKebabCase = (str: string) => {
