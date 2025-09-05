@@ -6,6 +6,7 @@ import WaveEditor from '../pages/WaveEditor'
 import TagManager from '../pages/TagManager'
 import WorldView from '../pages/WorldView/index'
 import Merzbow from '../pages/Merzbow'
+import Testing from '../pages/Testing'
 import ErrorBoundary from '../components/ErrorBoundary'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Login from '../pages/Login'
@@ -32,7 +33,8 @@ export const router = createBrowserRouter([
           { path: 'wave-editor', element: <WaveEditor /> },
           { path: 'wave-editor/:curveId', element: <WaveEditor /> },
           { path: 'world-view', element: <WorldView /> },
-          { path: 'merzbow', element: <Merzbow /> }
+          { path: 'merzbow', element: <Merzbow /> },
+          { path: 'testing', element: <Testing /> }
         ]
       }
     ]

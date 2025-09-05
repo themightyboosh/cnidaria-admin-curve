@@ -13,7 +13,8 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const navItems = [
     { path: '/', label: 'Menu', icon: '🏠' },
     { path: '/tags', label: 'Tag Manager', icon: '🏷️' },
-    { path: '/wave-editor', label: 'Wave Editor', icon: '🌊' }
+    { path: '/wave-editor', label: 'Wave Editor', icon: '🌊' },
+    { path: '/testing', label: 'Testing', icon: '🧪' }
   ]
 
   const isActive = (path: string) => {
