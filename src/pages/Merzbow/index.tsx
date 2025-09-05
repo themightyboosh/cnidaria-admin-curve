@@ -602,8 +602,17 @@ void main() {
 //   uniforms: { time: { value: 0.0 } }
 // });`;
 
-    // Create shader document
-    const shaderName = `${distortionControl.name}-glsl`;
+    // Create shader document with kebab-case name
+    const toKebabCase = (str: string) => {
+      return str
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+        .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+    };
+    
+    const shaderName = `${toKebabCase(distortionControl.name)}-glsl`;
     const shaderData = {
       name: shaderName,
       category: 'level-one-shaders',
@@ -659,7 +668,9 @@ void main() {
         console.error('❌ Failed to update shader:', updateResponse.statusText);
       }
     } else {
-      console.error('❌ Failed to create shader:', shaderResponse.statusText);
+      const errorData = await shaderResponse.text();
+      console.error('❌ Failed to create shader:', shaderResponse.status, shaderResponse.statusText);
+      console.error('❌ API Error Details:', errorData);
     }
   }
 
