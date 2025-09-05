@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import Modal from '../../components/shared/Modal'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
 import './Testing.css'
@@ -136,6 +137,10 @@ const Testing: React.FC = () => {
   const [indexTarget, setIndexTarget] = useState<string>('none')
   const [indexTransform, setIndexTransform] = useState<string>('raw')
   const [indexScale, setIndexScale] = useState<number>(1.0)
+
+  // WGSL preview state
+  const [lastWGSL, setLastWGSL] = useState<string>('')
+  const [isWGSLModalOpen, setIsWGSLModalOpen] = useState<boolean>(false)
 
   // Curve texture cache - SINGLE TEXTURE PER CURVE, SHARED ACROSS ALL INSTANCES
   const curveTextureCache = useRef<Map<string, any>>(new Map())
@@ -1037,6 +1042,7 @@ fn main(input: VertexOutput) -> @location(0) vec4f {
   return vec4f(finalColor, finalOpacity);
 }`
       console.log('🚀 Generated WGSL from concept controls')
+      setLastWGSL(wgslShader)
       
       // Apply WGSL Fragment Shader directly to mesh
       console.log('🎨 Applying Pipeline F WGSL shader to mesh...')
@@ -1864,6 +1870,12 @@ void main() {
             >
               Reset Material
             </button>
+            <button 
+              onClick={() => setIsWGSLModalOpen(true)}
+              className="test-btn secondary"
+            >
+              View WGSL Applied
+            </button>
           </div>
           
           <div className="test-section">
@@ -1885,6 +1897,13 @@ void main() {
         </div>
       </div>
     </div>
+    {isWGSLModalOpen && (
+      <Modal onClose={() => setIsWGSLModalOpen(false)} title="WGSL Shader (Final)">
+        <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px', lineHeight: '1.4', maxHeight: '60vh', overflow: 'auto' }}>
+{lastWGSL}
+        </pre>
+      </Modal>
+    )}
   )
 }
 
