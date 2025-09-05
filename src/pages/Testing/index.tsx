@@ -1898,7 +1898,7 @@ void main() {
       </div>
     </div>
     {isWGSLModalOpen && (
-      <Modal onClose={() => setIsWGSLModalOpen(false)} title="WGSL Shader (Final)">
+      <Modal isOpen={isWGSLModalOpen} onClose={() => setIsWGSLModalOpen(false)} title="WGSL Shader (Final)">
         <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px', lineHeight: '1.4', maxHeight: '60vh', overflow: 'auto' }}>
 {lastWGSL}
         </pre>
