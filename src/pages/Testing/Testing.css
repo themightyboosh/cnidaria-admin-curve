@@ -101,3 +101,43 @@
   box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
   transition: all 0.3s ease;
 }
+
+.shader-dropdown {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: #2a2a2a;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.shader-dropdown:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.shader-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
+.shader-details {
+  margin-bottom: 12px;
+}
+
+.shader-details strong {
+  color: #00ff88;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.shader-details div {
+  font-size: 12px;
+  color: #cccccc;
+  margin-bottom: 2px;
+}

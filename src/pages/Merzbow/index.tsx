@@ -489,6 +489,158 @@ const Merzbow: React.FC = () => {
   }
 
   // Save current distortion control
+  // Generate self-contained Three.js shader and auto-link to distortion profile
+  const generateAndLinkShader = async (distortionControl: DistortionControl) => {
+    console.log('🎨 Generating self-contained shader for:', distortionControl.name)
+    
+    // Generate self-contained Three.js shader with baked parameters
+    const threeJsShader = `// Self-contained Pipeline F shader
+// Generated from: ${distortionControl.name}
+// Timestamp: ${new Date().toISOString()}
+
+uniform float u_time;
+varying vec2 vUv;
+varying vec3 vWorldPosition;
+
+// Baked distortion control parameters
+const float ANGULAR_ENABLED = ${distortionControl['angular-distortion'] ? '1.0' : '0.0'};
+const float FRACTAL_ENABLED = ${distortionControl['fractal-distortion'] ? '1.0' : '0.0'};
+const float CHECKERBOARD_ENABLED = ${distortionControl['checkerboard-pattern'] ? '1.0' : '0.0'};
+const float CURVE_SCALING = ${distortionControl['curve-scaling']};
+const float CHECKERBOARD_STEPS = ${distortionControl['checkerboard-steps']}.0;
+const float ANGULAR_FREQUENCY = ${distortionControl['angular-frequency']};
+const float ANGULAR_AMPLITUDE = ${distortionControl['angular-amplitude']};
+const float ANGULAR_OFFSET = ${distortionControl['angular-offset']};
+const float FRACTAL_SCALE_1 = ${distortionControl['fractal-scale-1']};
+const float FRACTAL_SCALE_2 = ${distortionControl['fractal-scale-2']};
+const float FRACTAL_STRENGTH = ${distortionControl['fractal-strength']}.0;
+const float DISTANCE_MODULUS = ${distortionControl['distance-modulus']}.0;
+
+// Distance calculation: ${distortionControl['distance-calculation']}
+float calculateDistance(vec2 coord) {
+    ${distortionControl['distance-calculation'] === 'radial' ? 
+      'return sqrt(coord.x * coord.x + coord.y * coord.y);' :
+    distortionControl['distance-calculation'] === 'cartesian-x' ?
+      'return abs(coord.x);' :
+    distortionControl['distance-calculation'] === 'cartesian-y' ?
+      'return abs(coord.y);' :
+    distortionControl['distance-calculation'] === 'manhattan' ?
+      'return abs(coord.x) + abs(coord.y);' :
+      'return sqrt(coord.x * coord.x + coord.y * coord.y);' // default to radial
+    }
+}
+
+// Pipeline F implementation (self-contained)
+vec3 processCoordinate(vec2 coord) {
+    vec2 processedCoord = coord;
+    
+    // Distance modulus (virtual centers)
+    if (DISTANCE_MODULUS > 0.0) {
+        processedCoord = mod(processedCoord, DISTANCE_MODULUS);
+    }
+    
+    // Angular distortion
+    if (ANGULAR_ENABLED > 0.5) {
+        float angle = atan(processedCoord.y, processedCoord.x);
+        float radius = length(processedCoord);
+        angle += sin(angle * ANGULAR_FREQUENCY + ANGULAR_OFFSET * 0.01745329) * ANGULAR_AMPLITUDE * 0.01;
+        processedCoord = vec2(cos(angle) * radius, sin(angle) * radius);
+    }
+    
+    // Fractal distortion
+    if (FRACTAL_ENABLED > 0.5) {
+        processedCoord.x += sin(processedCoord.y * FRACTAL_SCALE_1 * 1000.0) * FRACTAL_STRENGTH * 0.1;
+        processedCoord.y += cos(processedCoord.x * FRACTAL_SCALE_2 * 1000.0) * FRACTAL_STRENGTH * 0.1;
+    }
+    
+    // Calculate distance
+    float distance = calculateDistance(processedCoord);
+    
+    // Apply curve scaling
+    distance *= CURVE_SCALING;
+    
+    // Convert to pattern (simple sine wave)
+    float pattern = sin(distance * 0.1) * 0.5 + 0.5;
+    
+    // Checkerboard effect
+    if (CHECKERBOARD_ENABLED > 0.5 && CHECKERBOARD_STEPS > 0.0) {
+        float checker = floor(distance / CHECKERBOARD_STEPS);
+        if (mod(checker, 2.0) > 0.5) {
+            pattern = 1.0 - pattern;
+        }
+    }
+    
+    return vec3(pattern, pattern * 0.8, pattern * 0.6);
+}
+
+void main() {
+    // Use world position for pattern calculation
+    vec2 coord = vWorldPosition.xz;
+    vec3 color = processCoordinate(coord);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+
+    // Create shader document
+    const shaderName = `${distortionControl.name}-glsl`;
+    const shaderData = {
+      name: shaderName,
+      category: 'level-one-shaders',
+      glsl: {
+        'three-js': threeJsShader
+      }
+    };
+    
+    console.log('🔄 Creating shader document:', shaderName)
+    
+    // Create shader via API
+    const shaderResponse = await fetch(`${apiUrl}/api/shaders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(shaderData)
+    });
+    
+    if (shaderResponse.ok) {
+      const createdShader = await shaderResponse.json();
+      console.log('✅ Shader created:', createdShader.data.name);
+      
+      // Auto-link shader to distortion profile
+      const linkBody = {
+        distortionControlId: distortionControl.id,
+        shaderName: createdShader.data.name
+      };
+      
+      const linkResponse = await fetch(`${apiUrl}/api/distortion-control-links/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(linkBody)
+      });
+      
+      if (linkResponse.ok) {
+        console.log('✅ Shader auto-linked to distortion profile');
+      } else {
+        console.error('❌ Failed to link shader:', linkResponse.statusText);
+      }
+      
+    } else if (shaderResponse.status === 409) {
+      // Shader already exists - update it instead
+      console.log('🔄 Shader exists, updating...');
+      
+      const updateResponse = await fetch(`${apiUrl}/api/shaders/${shaderName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shaderData)
+      });
+      
+      if (updateResponse.ok) {
+        console.log('✅ Shader updated successfully');
+      } else {
+        console.error('❌ Failed to update shader:', updateResponse.statusText);
+      }
+    } else {
+      console.error('❌ Failed to create shader:', shaderResponse.statusText);
+    }
+  }
+
   const saveDistortionControl = async () => {
     if (!selectedDistortionControl || isSaving) return
     
@@ -611,6 +763,15 @@ const Merzbow: React.FC = () => {
           )
         )
         console.log('🔄 Updated local DP cache with saved data')
+        
+        // AUTO-GENERATE SHADER: Create shader document from current distortion profile
+        console.log('🎨 Auto-generating shader for saved distortion profile...')
+        try {
+          await generateAndLinkShader(savedData.data)
+        } catch (shaderError) {
+          console.error('❌ Error auto-generating shader:', shaderError)
+          // Don't fail the save if shader generation fails
+        }
         
         // Auto-link current curve and palette when saving
         if (selectedCurve && selectedPalette) {
@@ -1559,53 +1720,83 @@ const Merzbow: React.FC = () => {
     }, 'image/jpeg', 0.95)
   }
 
-  // Export foundational curve-shader (GLSL only)
-  const exportCurveShader = () => {
-    console.log('🔴 DEBUG: Export button clicked - SIMPLE VERSION')
+  // Export all GLSL pairs from linked shader
+  const exportCurveShader = async () => {
+    console.log('🎨 Exporting linked shader GLSL pairs...')
     
-    if (!selectedDistortionControl || !selectedCurve) {
-      alert('Please select both a distortion control and curve before exporting')
+    if (!selectedDistortionControl) {
+      alert('Please select a distortion control before exporting')
       return
     }
 
     try {
-      console.log('🔴 DEBUG: Creating simple test download...')
+      // Find linked shader for this distortion profile
+      const linksResponse = await fetch(`${apiUrl}/api/distortion-control-links/control/${selectedDistortionControl.id}`)
+      if (!linksResponse.ok) {
+        throw new Error('Failed to fetch distortion control links')
+      }
       
-      // Simple test content
-      const testContent = `// Test GLSL Export
-// Distortion: ${selectedDistortionControl.name}
-// Curve: ${selectedCurve.name}
-// Timestamp: ${new Date().toISOString()}
-
-#version 300 es
-precision highp float;
-
-in vec2 v_uv;
-out vec4 fragColor;
-
-void main() {
-    vec2 coord = v_uv - 0.5;
-    float dist = length(coord);
-    fragColor = vec4(vec3(dist), 1.0);
-}`
+      const linksData = await linksResponse.json()
+      let linkedShaderName = null
       
-      const blob = new Blob([testContent], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
+      if (linksData.success && linksData.data && linksData.data.length > 0) {
+        const link = linksData.data[0] // Single link per DP
+        linkedShaderName = link.shaderName
+      }
       
-      link.href = url
-      link.download = `test-shader-${Date.now()}.glsl`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
-      console.log('🔴 DEBUG: Test download completed')
-      alert('✅ Test shader exported')
-
+      if (!linkedShaderName) {
+        alert('No shader linked to this distortion profile. Save the distortion profile first to auto-generate a shader.')
+        return
+      }
+      
+      console.log(`🔍 Found linked shader: ${linkedShaderName}`)
+      
+      // Fetch the shader document
+      const shaderResponse = await fetch(`${apiUrl}/api/shaders/${linkedShaderName}`)
+      if (!shaderResponse.ok) {
+        throw new Error(`Failed to fetch shader: ${linkedShaderName}`)
+      }
+      
+      const shaderData = await shaderResponse.json()
+      if (!shaderData.success || !shaderData.data) {
+        throw new Error('Invalid shader data received')
+      }
+      
+      const shader = shaderData.data
+      const glslPairs = shader.glsl || {}
+      const targets = Object.keys(glslPairs)
+      
+      console.log(`🎯 Exporting ${targets.length} GLSL targets:`, targets)
+      
+      if (targets.length === 0) {
+        alert('No GLSL code found in linked shader')
+        return
+      }
+      
+      // Export each GLSL target as a separate file
+      targets.forEach(target => {
+        const glslCode = glslPairs[target]
+        const fileName = `${shader.name}-${target}.glsl`
+        
+        const blob = new Blob([glslCode], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        
+        link.href = url
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        console.log(`✅ Exported: ${fileName}`)
+      })
+      
+      alert(`✅ Exported ${targets.length} shader files for ${shader.name}`)
+      
     } catch (error) {
-      console.error('❌ Export failed:', error)
-      alert(`❌ Export failed: ${error}`)
+      console.error('Export error:', error)
+      alert(`❌ Export failed: ${error.message}`)
     }
   }
 

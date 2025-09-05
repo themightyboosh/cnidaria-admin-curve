@@ -1,13 +1,57 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../../components/Header'
+import { apiUrl } from '../../config/environments'
 import './Testing.css'
+
+interface Shader {
+  id: string
+  name: string
+  category: string
+  glsl: Record<string, string>
+  targets: string[]
+  createdAt: string
+  updatedAt: string
+}
 
 const Testing: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [testMessage, setTestMessage] = useState('Testing page loaded')
+  const [availableShaders, setAvailableShaders] = useState<Shader[]>([])
+  const [selectedShader, setSelectedShader] = useState<Shader | null>(null)
+  const [isLoadingShaders, setIsLoadingShaders] = useState(false)
+
+  // Load all shaders from API
+  const loadShaders = async () => {
+    setIsLoadingShaders(true)
+    try {
+      console.log('📡 Loading shaders from API...')
+      const response = await fetch(`${apiUrl}/api/shaders`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setAvailableShaders(data.data)
+          console.log(`✅ Loaded ${data.data.length} shaders`)
+          setTestMessage(`Loaded ${data.data.length} shaders from system`)
+        } else {
+          console.error('❌ Invalid shader data:', data)
+          setTestMessage('Failed to load shader data')
+        }
+      } else {
+        console.error('❌ Failed to load shaders:', response.statusText)
+        setTestMessage(`Failed to load shaders: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('❌ Error loading shaders:', error)
+      setTestMessage(`Error loading shaders: ${error.message}`)
+    } finally {
+      setIsLoadingShaders(false)
+    }
+  }
 
   useEffect(() => {
     console.log('🧪 Testing page initialized')
+    loadShaders()
     
     // Simple canvas test
     const canvas = canvasRef.current
@@ -30,6 +74,37 @@ const Testing: React.FC = () => {
       }
     }
   }, [])
+
+  const exportShaderGLSL = (shader: Shader) => {
+    console.log(`🎨 Exporting GLSL pairs for: ${shader.name}`)
+    
+    const targets = Object.keys(shader.glsl)
+    if (targets.length === 0) {
+      alert('No GLSL code found in this shader')
+      return
+    }
+    
+    // Export each GLSL target as a separate file
+    targets.forEach(target => {
+      const glslCode = shader.glsl[target]
+      const fileName = `${shader.name}-${target}.glsl`
+      
+      const blob = new Blob([glslCode], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      console.log(`✅ Exported: ${fileName}`)
+    })
+    
+    setTestMessage(`Exported ${targets.length} GLSL files for ${shader.name}`)
+  }
 
   const runBasicTest = () => {
     console.log('🧪 Running basic test...')
@@ -76,6 +151,46 @@ const Testing: React.FC = () => {
         <div className="testing-sidebar">
           <h2>Testing Controls</h2>
           
+          <div className="test-section">
+            <h3>Shaders in System</h3>
+            <select 
+              value={selectedShader?.id || ''} 
+              onChange={(e) => {
+                const shader = availableShaders.find(s => s.id === e.target.value)
+                setSelectedShader(shader || null)
+                if (shader) {
+                  setTestMessage(`Selected: ${shader.name} (${shader.targets.length} targets: ${shader.targets.join(', ')})`)
+                }
+              }}
+              disabled={isLoadingShaders}
+              className="shader-dropdown"
+            >
+              <option value="">{isLoadingShaders ? 'Loading shaders...' : 'Select shader...'}</option>
+              {availableShaders.map(shader => (
+                <option key={shader.id} value={shader.id}>
+                  {shader.name} ({shader.category})
+                </option>
+              ))}
+            </select>
+            
+            {selectedShader && (
+              <div className="shader-info">
+                <div className="shader-details">
+                  <strong>{selectedShader.name}</strong>
+                  <div>Category: {selectedShader.category}</div>
+                  <div>Targets: {selectedShader.targets.join(', ')}</div>
+                  <div>Created: {new Date(selectedShader.createdAt).toLocaleDateString()}</div>
+                </div>
+                <button 
+                  onClick={() => exportShaderGLSL(selectedShader)} 
+                  className="test-btn"
+                >
+                  Export GLSL Files
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="test-section">
             <h3>Basic Tests</h3>
             <button onClick={runBasicTest} className="test-btn">
