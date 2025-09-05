@@ -15,10 +15,12 @@ interface Shader {
 
 const Testing: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const threejsCanvasRef = useRef<HTMLCanvasElement>(null)
   const [testMessage, setTestMessage] = useState('Testing page loaded')
   const [availableShaders, setAvailableShaders] = useState<Shader[]>([])
   const [selectedShader, setSelectedShader] = useState<Shader | null>(null)
   const [isLoadingShaders, setIsLoadingShaders] = useState(false)
+  const [threejsScene, setThreejsScene] = useState<any>(null)
 
   // Load all shaders from API
   const loadShaders = async () => {
@@ -53,6 +55,11 @@ const Testing: React.FC = () => {
     console.log('🧪 Testing page initialized')
     loadShaders()
     
+    // Initialize Three.js scene
+    setTimeout(() => {
+      initThreeJsScene()
+    }, 100) // Small delay to ensure canvas is mounted
+    
     // Simple canvas test
     const canvas = canvasRef.current
     if (canvas) {
@@ -73,7 +80,112 @@ const Testing: React.FC = () => {
         console.log('✅ Canvas test pattern drawn')
       }
     }
+    
+    // Cleanup Three.js on unmount
+    return () => {
+      if (threejsScene?.animationId) {
+        cancelAnimationFrame(threejsScene.animationId)
+      }
+      if (threejsScene?.renderer) {
+        threejsScene.renderer.dispose()
+      }
+    }
   }, [])
+
+  // Initialize Three.js scene for shader preview
+  const initThreeJsScene = async () => {
+    const canvas = threejsCanvasRef.current
+    if (!canvas) return
+
+    try {
+      console.log('🎮 Initializing Three.js scene for shader preview...')
+      const THREE = await import('three')
+      
+      // Create scene, camera, renderer
+      const scene = new THREE.Scene()
+      const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000)
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+      
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight)
+      renderer.setClearColor(0x1a1a1a)
+      
+      // Create moderately complex cube geometry
+      const geometry = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8) // Subdivided for better texture detail
+      
+      // Default material (will be replaced when shader is selected)
+      const material = new THREE.MeshBasicMaterial({ color: 0x666666, wireframe: false })
+      const cube = new THREE.Mesh(geometry, material)
+      
+      scene.add(cube)
+      camera.position.z = 5
+      
+      // Animation loop
+      let animationId: number
+      const animate = () => {
+        animationId = requestAnimationFrame(animate)
+        
+        // Rotate cube
+        cube.rotation.x += 0.005
+        cube.rotation.y += 0.01
+        
+        renderer.render(scene, camera)
+      }
+      
+      animate()
+      
+      // Store scene data for shader updates
+      setThreejsScene({ scene, camera, renderer, cube, animationId, THREE })
+      console.log('✅ Three.js scene initialized')
+      setTestMessage('Three.js scene ready for shader testing')
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize Three.js scene:', error)
+      setTestMessage(`Failed to initialize 3D scene: ${error.message}`)
+    }
+  }
+
+  // Apply selected shader to the cube
+  const applyShaderToCube = async (shader: Shader) => {
+    if (!threejsScene || !shader.glsl['three-js']) {
+      console.log('⚠️ No Three.js scene or Three.js shader available')
+      return
+    }
+
+    try {
+      console.log(`🎨 Applying shader to cube: ${shader.name}`)
+      const { cube, THREE } = threejsScene
+      
+      // Create shader material with the selected shader
+      const shaderMaterial = new THREE.ShaderMaterial({
+        fragmentShader: shader.glsl['three-js'],
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vPosition;
+          varying vec3 vNormal;
+          
+          void main() {
+            vUv = uv;
+            vPosition = position;
+            vNormal = normal;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        uniforms: {
+          time: { value: 0.0 }
+        }
+      })
+      
+      // Apply shader to cube
+      cube.material = shaderMaterial
+      
+      console.log('✅ Shader applied to cube')
+      setTestMessage(`Applied shader: ${shader.name}`)
+      
+    } catch (error) {
+      console.error('❌ Failed to apply shader:', error)
+      setTestMessage(`Failed to apply shader: ${error.message}`)
+    }
+  }
 
   const exportShaderGLSL = (shader: Shader) => {
     console.log(`🎨 Exporting GLSL pairs for: ${shader.name}`)
@@ -158,6 +270,8 @@ const Testing: React.FC = () => {
                 setSelectedShader(shader || null)
                 if (shader) {
                   setTestMessage(`Selected: ${shader.name} (${shader.targets.length} targets: ${shader.targets.join(', ')})`)
+                  // Apply shader to Three.js cube
+                  applyShaderToCube(shader)
                 }
               }}
               disabled={isLoadingShaders}
@@ -179,14 +293,47 @@ const Testing: React.FC = () => {
                   <div>Targets: {selectedShader.targets.join(', ')}</div>
                   <div>Created: {new Date(selectedShader.createdAt).toLocaleDateString()}</div>
                 </div>
-                <button 
-                  onClick={() => exportShaderGLSL(selectedShader)} 
-                  className="test-btn"
-                >
-                  Export GLSL Files
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={() => applyShaderToCube(selectedShader)} 
+                    className="test-btn"
+                  >
+                    Apply to Cube
+                  </button>
+                  <button 
+                    onClick={() => exportShaderGLSL(selectedShader)} 
+                    className="test-btn secondary"
+                  >
+                    Export GLSL
+                  </button>
+                </div>
               </div>
             )}
+          </div>
+
+          <div className="test-section">
+            <h3>3D Scene Controls</h3>
+            <button 
+              onClick={() => {
+                if (threejsScene) {
+                  const { cube, THREE } = threejsScene
+                  cube.material = new THREE.MeshBasicMaterial({ color: 0x666666 })
+                  setTestMessage('Reset cube to default material')
+                }
+              }} 
+              className="test-btn secondary"
+            >
+              Reset Cube
+            </button>
+            <button 
+              onClick={() => {
+                initThreeJsScene()
+                setTestMessage('Three.js scene reinitialized')
+              }} 
+              className="test-btn"
+            >
+              Reinit Scene
+            </button>
           </div>
 
           <div className="test-section">
@@ -224,11 +371,20 @@ const Testing: React.FC = () => {
         </div>
         
         <div className="testing-viewport">
+          {/* Three.js shader preview canvas */}
+          <canvas
+            ref={threejsCanvasRef}
+            className="testing-canvas"
+            style={{ width: '100%', height: '100%' }}
+          />
+          
+          {/* Hidden 2D canvas for basic tests */}
           <canvas
             ref={canvasRef}
-            width={800}
-            height={600}
+            width={400}
+            height={300}
             className="testing-canvas"
+            style={{ display: 'none' }}
           />
         </div>
       </div>
