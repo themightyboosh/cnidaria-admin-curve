@@ -1,0 +1,85 @@
+Sheet 1: Babylon.js Shader Types & Object Compatibility
+Shader Type,Sphere Compatible,Cube Compatible,Landscape-box Compatible,Description,Primary Use Case,Performance Impact,WebGPU Support
+Fragment Shader,Yes,Yes,Yes,"Per-pixel color calculation, UV-based processing","Surface texturing, procedural patterns",Medium,Full
+Vertex Shader,Yes,Yes,Yes,"Per-vertex position/normal modification","Geometry deformation, displacement mapping",Low,Full
+Compute Shader,Yes,Yes,Yes,"GPU parallel processing, data transformation","Procedural generation, physics simulation",High,WebGPU Only
+Node Material,Yes,Yes,Yes,"Visual node-based shader editor","Complex material creation, layered effects",Medium,Full
+Procedural Texture,Yes,Yes,Yes,"Runtime texture generation via fragment shader","Dynamic patterns, real-time texturing",Medium,Full
+Custom Material,Yes,Yes,Yes,"Full shader control with vertex + fragment","Complete rendering pipeline control",High,Full
+PBR Material,Yes,Yes,Yes,"Physically-based rendering with shader hooks","Realistic materials with custom effects",Medium,Full
+Standard Material,Yes,Yes,Yes,"Basic material with texture/color properties","Simple texturing, solid colors",Low,Full
+Unlit Material,Yes,Yes,Yes,"No lighting calculations, pure texture/color","UI elements, emissive effects",Low,Full
+Water Material,Partial,No,Yes,"Specialized water rendering with waves/reflection","Water surfaces, liquid simulation",High,Full
+Lava Material,Yes,Yes,Yes,"Animated hot material with distortion","Molten effects, heat simulation",Medium,Full
+Fire Material,Yes,Yes,Partial,"Particle-based fire with transparency","Fire effects, heat distortion",High,Full
+Sky Material,No,No,Yes,"Atmospheric scattering for sky rendering","Sky domes, atmospheric effects",Medium,Full
+Terrain Material,No,No,Yes,"Multi-texture blending for landscapes","Ground surfaces, terrain rendering",High,Full
+Fur Material,Yes,Partial,Partial,"Shell-based fur/hair rendering","Organic surfaces, fabric textures",Very High,Partial
+
+Sheet 2: Shader Variables & Parameters
+Variable Name,Data Type,Value Range,Default Value,Description,Affects Geometry,Affects Color,Affects Animation,Compatible Shader Types
+uTime,float,0.0 to infinity,0.0,"Global time for animations",No,Yes,Yes,"Fragment,Vertex,Compute,Procedural"
+uResolution,vec2,"(1,1) to (8192,8192)","(1024,1024)","Texture/screen resolution",No,Yes,No,"Fragment,Procedural"
+uMouse,vec2,"(0,0) to (1,1)","(0.5,0.5)","Normalized mouse position",No,Yes,Yes,"Fragment,Procedural"
+uCameraPosition,vec3,"(-inf,-inf,-inf) to (inf,inf,inf)","(0,0,5)","World camera position",No,Yes,Yes,"Fragment,Vertex"
+uWorldMatrix,mat4,4x4 transformation matrix,Identity,"Object world transformation",Yes,No,Yes,"Vertex,Custom"
+uViewMatrix,mat4,4x4 transformation matrix,Identity,"Camera view transformation",Yes,No,Yes,"Vertex,Custom"
+uProjectionMatrix,mat4,4x4 transformation matrix,Identity,"Camera projection transformation",Yes,No,Yes,"Vertex,Custom"
+uLightPosition,vec3,"(-inf,-inf,-inf) to (inf,inf,inf)","(0,10,0)","Primary light world position",No,Yes,No,"Fragment,PBR"
+uLightColor,vec3,"(0,0,0) to (1,1,1)","(1,1,1)","Primary light RGB color",No,Yes,No,"Fragment,PBR"
+uAmbientColor,vec3,"(0,0,0) to (1,1,1)","(0.1,0.1,0.1)","Ambient lighting RGB",No,Yes,No,"Fragment,PBR"
+uDiffuseColor,vec3,"(0,0,0) to (1,1,1)","(0.5,0.5,0.5)","Base material color",No,Yes,No,"Fragment,Standard,PBR"
+uSpecularColor,vec3,"(0,0,0) to (1,1,1)","(1,1,1)","Specular highlight color",No,Yes,No,"Fragment,PBR"
+uRoughness,float,0.0 to 1.0,0.5,"Surface roughness for PBR",No,Yes,No,"PBR"
+uMetallic,float,0.0 to 1.0,0.0,"Metallic factor for PBR",No,Yes,No,"PBR"
+uEmissive,vec3,"(0,0,0) to (10,10,10)","(0,0,0)","Emissive glow color",No,Yes,No,"Fragment,PBR,Unlit"
+uOpacity,float,0.0 to 1.0,1.0,"Material transparency",No,Yes,No,"Fragment,Standard,PBR"
+uFresnelBias,float,0.0 to 1.0,0.0,"Fresnel effect bias",No,Yes,No,"Fragment,Custom"
+uFresnelScale,float,0.0 to 5.0,1.0,"Fresnel effect scale",No,Yes,No,"Fragment,Custom"
+uFresnelPower,float,0.1 to 10.0,2.0,"Fresnel effect power",No,Yes,No,"Fragment,Custom"
+uDisplacementScale,float,0.0 to 10.0,1.0,"Vertex displacement amount",Yes,No,No,"Vertex,Terrain"
+uNoiseScale,float,0.01 to 100.0,1.0,"Noise pattern scale",Yes,Yes,Yes,"Fragment,Vertex,Procedural"
+uNoiseSpeed,float,0.0 to 10.0,1.0,"Noise animation speed",No,Yes,Yes,"Fragment,Procedural"
+uWaveAmplitude,float,0.0 to 5.0,1.0,"Wave displacement height",Yes,No,Yes,"Vertex,Water"
+uWaveFrequency,float,0.1 to 20.0,2.0,"Wave pattern frequency",Yes,No,Yes,"Vertex,Water"
+uWaveSpeed,float,0.0 to 10.0,1.0,"Wave animation speed",Yes,No,Yes,"Vertex,Water"
+uScrollSpeed,vec2,"(-10,-10) to (10,10)","(0,0)","Texture scrolling velocity",No,Yes,Yes,"Fragment,Procedural"
+uTileCount,vec2,"(0.1,0.1) to (100,100)","(1,1)","Texture tiling repetition",No,Yes,No,"Fragment,Procedural"
+uDistortionStrength,float,0.0 to 5.0,0.0,"UV coordinate distortion amount",No,Yes,Yes,"Fragment,Procedural"
+uColorMultiplier,vec3,"(0,0,0) to (5,5,5)","(1,1,1)","Color intensity multiplier",No,Yes,No,"Fragment,All"
+uBrightness,float,0.0 to 3.0,1.0,"Overall brightness adjustment",No,Yes,No,"Fragment,All"
+uContrast,float,0.0 to 3.0,1.0,"Color contrast adjustment",No,Yes,No,"Fragment,All"
+uSaturation,float,0.0 to 3.0,1.0,"Color saturation adjustment",No,Yes,No,"Fragment,All"
+uHueShift,float,0.0 to 6.28,0.0,"Hue rotation in radians",No,Yes,Yes,"Fragment,All"
+
+Sheet 3: Object Input Data Available to Shaders
+Input Name,Data Type,Source,Description,Available On Sphere,Available On Cube,Available On Landscape-box,Coordinate Space
+position,vec3,Vertex Attribute,"World-space vertex position",Yes,Yes,Yes,World
+normal,vec3,Vertex Attribute,"Surface normal vector",Yes,Yes,Yes,World
+uv,vec2,Vertex Attribute,"Texture coordinate (0-1 range)",Yes,Yes,Yes,UV
+uv2,vec2,Vertex Attribute,"Secondary texture coordinate",No,Yes,Yes,UV
+color,vec4,Vertex Attribute,"Per-vertex color (if available)",No,No,Partial,Linear RGB
+tangent,vec3,Vertex Attribute,"Tangent vector for normal mapping",Yes,Yes,Yes,World
+bitangent,vec3,Vertex Attribute,"Bitangent vector for normal mapping",Yes,Yes,Yes,World
+worldPos,vec3,Vertex Shader,"Transformed world position",Yes,Yes,Yes,World
+viewPos,vec3,Vertex Shader,"Camera-space position",Yes,Yes,Yes,View
+screenPos,vec4,Vertex Shader,"Screen-space position",Yes,Yes,Yes,Screen
+worldNormal,vec3,Vertex Shader,"World-space normal",Yes,Yes,Yes,World
+viewNormal,vec3,Vertex Shader,"View-space normal",Yes,Yes,Yes,View
+cameraDistance,float,Calculated,"Distance from camera to vertex",Yes,Yes,Yes,World
+vertexIndex,int,System,"Vertex array index",Yes,Yes,Yes,System
+instanceId,int,System,"Instance ID for instanced rendering",Yes,Yes,Yes,System
+primitiveId,int,System,"Triangle primitive ID",Yes,Yes,Yes,System
+faceIndex,int,Calculated,"Face index (cube specific)",No,Yes,No,System
+sphericalCoord,vec2,Calculated,"Theta/Phi coordinates (sphere)",Yes,No,No,Spherical
+cylindricalCoord,vec3,Calculated,"R/Theta/Z coordinates",Yes,Partial,Partial,Cylindrical
+barycentricCoord,vec3,Fragment,"Barycentric coordinates within triangle",Yes,Yes,Yes,Barycentric
+fragmentDepth,float,Fragment,"Z-buffer depth value",Yes,Yes,Yes,NDC
+ddx_uv,vec2,Fragment,"UV derivative in X direction",Yes,Yes,Yes,UV
+ddy_uv,vec2,Fragment,"UV derivative in Y direction",Yes,Yes,Yes,UV
+frontFacing,bool,Fragment,"True if front-facing triangle",Yes,Yes,Yes,System
+lightDirection,vec3,Calculated,"Direction to primary light",Yes,Yes,Yes,World
+viewDirection,vec3,Calculated,"Direction to camera",Yes,Yes,Yes,World
+reflectionVector,vec3,Calculated,"Perfect reflection vector",Yes,Yes,Yes,World
+refractionVector,vec3,Calculated,"Refraction vector (if transparent)",Yes,Yes,Yes,World
+fresnel,float,Calculated,"Fresnel factor (0-1)",Yes,Yes,Yes,Unitless
