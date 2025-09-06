@@ -1212,6 +1212,7 @@ fn main(input: VertexInput) -> VertexOutput {
       // Load curve and palette data for the selected DP
       let dpCurveData = null
       let dpPaletteData = null
+      let enhancedDP = null
       
       try {
         // Debug DP data structure
@@ -1235,6 +1236,9 @@ fn main(input: VertexInput) -> VertexOutput {
             
             if (dpData.success && dpData.data) {
               const completeDP = dpData.data
+              
+              // Store the enhanced DP for use in material creation
+              enhancedDP = completeDP
               
               // Extract embedded curve data
               if (completeDP.linkedCurve && completeDP.linkedCurve.data) {
