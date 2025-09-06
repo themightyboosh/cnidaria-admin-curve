@@ -1427,53 +1427,45 @@ fn main(input: VertexInput) -> VertexOutput {
       console.log(`📊 Created normalized curve texture: 256×1 R8 (from ${curveData.length} source values)`)
     }
     
-    // Create palette data texture using API's smart format detection
-    let paletteTexture = null
+    // Create separate 8-bit textures for maximum efficiency (R8 format - most efficient)
+    let paletteRTexture = null, paletteGTexture = null, paletteBTexture = null, paletteATexture = null
+    
     if (paletteData && paletteData.length > 0) {
-      // API already optimized the colors - check if format is RGB or RGBA
-      const hasAlpha = paletteData[0] && paletteData[0].a !== undefined
+      // Create separate R8 textures for each channel (maximum 8-bit efficiency)
+      const rBytes = new Uint8Array(256)
+      const gBytes = new Uint8Array(256) 
+      const bBytes = new Uint8Array(256)
+      const aBytes = new Uint8Array(256)
+      
+      const hasAlpha = paletteData[0]?.a !== undefined
+      
+      for (let i = 0; i < 256; i++) {
+        const color = i < paletteData.length ? paletteData[i] : { r: 0.7, g: 0.7, b: 0.7 }
+        rBytes[i] = Math.floor(color.r * 255)
+        gBytes[i] = Math.floor(color.g * 255)
+        bBytes[i] = Math.floor(color.b * 255)
+        aBytes[i] = color.a !== undefined ? Math.floor(color.a * 255) : 255
+      }
+      
+      // Create separate R8 textures (WebGPU compatible, maximum 8-bit efficiency)
+      paletteRTexture = new BABYLON.RawTexture(rBytes, 256, 1, BABYLON.Engine.TEXTUREFORMAT_R, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      paletteGTexture = new BABYLON.RawTexture(gBytes, 256, 1, BABYLON.Engine.TEXTUREFORMAT_R, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      paletteBTexture = new BABYLON.RawTexture(bBytes, 256, 1, BABYLON.Engine.TEXTUREFORMAT_R, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE)
       
       if (hasAlpha) {
-        // API returned RGBA format
-        const paletteBytes = new Uint8Array(256 * 4)
-        for (let i = 0; i < 256; i++) {
-          const color = i < paletteData.length ? paletteData[i] : { r: 0.7, g: 0.7, b: 0.7, a: 1.0 }
-          paletteBytes[i * 4] = Math.floor(color.r * 255)     // R
-          paletteBytes[i * 4 + 1] = Math.floor(color.g * 255) // G  
-          paletteBytes[i * 4 + 2] = Math.floor(color.b * 255) // B
-          paletteBytes[i * 4 + 3] = Math.floor(color.a * 255) // A
-        }
-        
-        paletteTexture = new BABYLON.RawTexture(
-          paletteBytes,
-          256, 1, // 256x1 texture
-          BABYLON.Engine.TEXTUREFORMAT_RGBA, // RGBA format
-          scene,
-          false, false, // No mipmap, no invert
-          BABYLON.Texture.NEAREST_SAMPLINGMODE // Exact pixel sampling
-        )
-        console.log('🎨 Created palette data texture: 256x1 RGBA8 (API provided alpha)')
-        
+        paletteATexture = new BABYLON.RawTexture(aBytes, 256, 1, BABYLON.Engine.TEXTUREFORMAT_R, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE)
+        console.log('🎨 Created 4×R8 palette textures: 256×1 each (R,G,B,A channels) - Maximum 8-bit efficiency')
       } else {
-        // API returned RGB-only format (more efficient)
-        const paletteBytes = new Uint8Array(256 * 3)
-        for (let i = 0; i < 256; i++) {
-          const color = i < paletteData.length ? paletteData[i] : { r: 0.7, g: 0.7, b: 0.7 }
-          paletteBytes[i * 3] = Math.floor(color.r * 255)     // R
-          paletteBytes[i * 3 + 1] = Math.floor(color.g * 255) // G  
-          paletteBytes[i * 3 + 2] = Math.floor(color.b * 255) // B
-        }
-        
-        paletteTexture = new BABYLON.RawTexture(
-          paletteBytes,
-          256, 1, // 256x1 texture
-          BABYLON.Engine.TEXTUREFORMAT_RGB, // RGB format (8-bit efficient)
-          scene,
-          false, false, // No mipmap, no invert
-          BABYLON.Texture.NEAREST_SAMPLINGMODE // Exact pixel sampling
-        )
-        console.log('🎨 Created palette data texture: 256x1 RGB8 (API optimized, no alpha)')
+        console.log('🎨 Created 3×R8 palette textures: 256×1 each (R,G,B channels) - Maximum 8-bit efficiency')
       }
+      
+      // Store all textures for shader binding
+      paletteTexture = {
+        r: paletteRTexture,
+        g: paletteGTexture, 
+        b: paletteBTexture,
+        a: paletteATexture,
+        hasAlpha
     }
     
     return { curveTexture, paletteTexture }
@@ -1483,9 +1475,9 @@ fn main(input: VertexInput) -> VertexOutput {
   const generatePipelineFWithTextures = (selectedDP: any, targets: TargetAssignment[]): string => {
     return `
       /*
-       * Complete Pipeline F Fragment Shader
+       * Complete Pipeline F Fragment Shader with Ultra-Efficient 8-bit Textures
        * Distortion Profile: ${selectedDP.name}
-       * Uses: curveTexture (256x1 R8), paletteTexture (256x1 RGB8)
+       * Uses: curveTexture (256x1 R8), separate R8 textures for palette channels
        */
       
       precision highp float;
@@ -1495,9 +1487,13 @@ fn main(input: VertexInput) -> VertexOutput {
       varying vec2 vUV;
       
       uniform sampler2D curveTexture;
-      uniform sampler2D paletteTexture;
+      uniform sampler2D paletteRTexture;
+      uniform sampler2D paletteGTexture;
+      uniform sampler2D paletteBTexture;
+      uniform sampler2D paletteATexture;
       uniform float hasCurveTexture;
       uniform float hasPaletteTexture;
+      uniform float paletteHasAlpha;
       
       void main() {
         // Pipeline F: World Position → Distance → Curve Value → Palette Color
