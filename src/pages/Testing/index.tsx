@@ -1522,7 +1522,7 @@ fn main(input: VertexInput) -> VertexOutput {
     `
   }
 
-  // Helper for distance calculation GLSL (since NodeMaterial uses GLSL)
+  // Helper for distance calculation GLSL (legacy)
   const getDistanceCalculationGLSL = (type: string): string => {
     switch(type) {
       case 'radial': return 'length(p)'
@@ -1534,155 +1534,210 @@ fn main(input: VertexInput) -> VertexOutput {
     }
   }
 
-  // Create actual Pipeline F ShaderMaterial using 8-bit data textures
+  // Helper for distance calculation WGSL (modern)
+  const getDistanceCalculationWGSL = (type: string): string => {
+    switch(type) {
+      case 'radial': return 'length(p)'
+      case 'cartesian-x': return 'abs(p.x)'
+      case 'cartesian-y': return 'abs(p.y)'
+      case 'manhattan': return 'abs(p.x) + abs(p.y)'
+      case 'chebyshev': return 'max(abs(p.x), abs(p.y))'
+      case 'triangular': return 'abs(p.x) + abs(p.y)' // Same as manhattan
+      default: return 'length(p)'
+    }
+  }
+
+  // Create actual Pipeline F ShaderMaterial using proper WGSL structure
   const createPipelineFShaderMaterial = (scene: any, selectedDP: any, curveTexture: any, paletteTexture: any, targets: TargetAssignment[]) => {
     const { BABYLON } = babylonScene
     
-    // Create ShaderMaterial with Pipeline F implementation
+    // Generate unique shader names to avoid conflicts
+    const shaderBaseName = `pipelineF_${selectedDP.id}`
+    const vertexShaderName = `${shaderBaseName}VertexShader`
+    const fragmentShaderName = `${shaderBaseName}FragmentShader`
+    
+    // Create WGSL vertex shader following Babylon.js best practices
     const vertexShader = `
-      attribute vec3 position;
-      attribute vec3 normal;
-      attribute vec2 uv;
-      
-      uniform mat4 worldViewProjection;
-      uniform mat4 world;
-      
-      varying vec3 vWorldPosition;
-      varying vec3 vNormal;
-      varying vec2 vUV;
-      
-      void main() {
-        vec4 worldPos = world * vec4(position, 1.0);
-        vWorldPosition = worldPos.xyz;
-        vNormal = normalize((world * vec4(normal, 0.0)).xyz);
-        vUV = uv;
-        
-        gl_Position = worldViewProjection * vec4(position, 1.0);
-      }
-    `
+struct VertexInputs {
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+};
+
+struct VertexOutputs {
+  @builtin(position) position: vec4f,
+  @location(0) worldPosition: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+};
+
+struct Uniforms {
+  world: mat4x4f,
+  worldViewProjection: mat4x4f,
+  worldOrigin: vec2f,
+  worldScale: f32,
+  hasCurveTexture: f32,
+  hasPaletteTexture: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+@vertex
+fn main(input: VertexInputs) -> VertexOutputs {
+  var output: VertexOutputs;
+  
+  let worldPos = uniforms.world * vec4f(input.position, 1.0);
+  output.worldPosition = worldPos.xyz;
+  output.normal = normalize((uniforms.world * vec4f(input.normal, 0.0)).xyz);
+  output.uv = input.uv;
+  
+  output.position = uniforms.worldViewProjection * vec4f(input.position, 1.0);
+  
+  return output;
+}
+`
     
+    // Create WGSL fragment shader with baked Pipeline F mathematics
     const fragmentShader = `
-      precision highp float;
-      
-      varying vec3 vWorldPosition;
-      varying vec3 vNormal;
-      varying vec2 vUV;
-      
-      uniform sampler2D curveTexture;
-      uniform sampler2D paletteTexture;
-      uniform float hasCurveTexture;
-      uniform float hasPaletteTexture;
-      
-      // World-anchored coordinate mapping (non-self-referential to mesh bounds)
-      uniform vec2 uWorldOrigin; // world-space origin for mapping
-      uniform float uWorldScale; // world-to-pipeline scale factor
-      
-      void main() {
-        // Pipeline F: World Position → Distance → Curve Value → Palette Color
-        
-        // Step 1: Convert 3D world position to world-anchored 2D coordinate
-        // Anchor in world space so moving/scaling the mesh does not change pattern scale
-        vec2 p = (vWorldPosition.xz - uWorldOrigin) * uWorldScale;
-        
-        // Step 2: Apply Pipeline F distortions
-        ${selectedDP['distance-modulus'] > 0 ? `
-          // Distance modulus wrapping
-          float modulus = ${selectedDP['distance-modulus'].toFixed(1)};
-          p = mod(p + modulus * 0.5, modulus) - modulus * 0.5;
-        ` : ''}
-        
-        ${selectedDP['angular-distortion'] ? `
-          // Angular distortion
-          float angle = atan(p.y, p.x);
-          float radius = length(p);
-          float newAngle = angle + sin(angle * ${selectedDP['angular-frequency'].toFixed(1)} + ${selectedDP['angular-offset'].toFixed(1)} * 0.017453) * ${selectedDP['angular-amplitude'].toFixed(1)} * 0.01;
-          p = vec2(cos(newAngle) * radius, sin(newAngle) * radius);
-        ` : ''}
-        
-        ${selectedDP['fractal-distortion'] ? `
-          // Fractal distortion (3-scale system)
-          p.x += sin(p.y * ${selectedDP['fractal-scale-1'].toFixed(3)}) * ${selectedDP['fractal-strength'].toFixed(1)} * 0.3;
-          p.y += cos(p.x * ${selectedDP['fractal-scale-2'].toFixed(3)}) * ${selectedDP['fractal-strength'].toFixed(1)} * 0.3;
-          p.x += sin(p.y * ${selectedDP['fractal-scale-3'].toFixed(3)}) * ${selectedDP['fractal-strength'].toFixed(1)} * 0.1;
-        ` : ''}
-        
-        // Step 3: Calculate distance using selected method
-        float distance = ${getDistanceCalculationGLSL(selectedDP['distance-calculation'])} * ${selectedDP['curve-scaling'].toFixed(4)};
-        
-        // Step 4: Lookup curve value from 8-bit data texture (with fallback)
-        float curveValue = 0.5; // Default fallback
-        if (hasCurveTexture > 0.5) {
-          // Convert scaled distance to discrete curve index with wrapping (0..255)
-          float curveWidth = 256.0;
-          float idx = floor(mod(distance, curveWidth));
-          if (idx < 0.0) idx += curveWidth;
-          float t = idx / (curveWidth - 1.0);
-          vec2 curveCoord = vec2(t, 0.5);
-          curveValue = texture2D(curveTexture, curveCoord).r;
-        }
-        
-        // Step 5: Apply checkerboard pattern if enabled
-        ${selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0 ? `
-          float checker = floor(distance * ${(1.0 / selectedDP['checkerboard-steps']).toFixed(6)});
-          if (mod(checker, 2.0) > 0.5) {
-            curveValue = 1.0 - curveValue;
-          }
-        ` : ''}
-        
-        // Step 6: Use curveValue to lookup palette color (Merzbow logic) with fallback
-        vec3 finalColor = vec3(curveValue, curveValue, curveValue); // Grayscale fallback
-        if (hasPaletteTexture > 0.5) {
-          vec2 paletteCoord = vec2(curveValue, 0.5);
-          finalColor = texture2D(paletteTexture, paletteCoord).rgb;
-        }
-        
-        // Apply target assignments
-        ${generateTargetAssignmentGLSL(targets)}
-        
-        gl_FragColor = vec4(finalColor, 1.0);
-      }
-    `
+struct VertexOutputs {
+  @builtin(position) position: vec4f,
+  @location(0) worldPosition: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+};
+
+struct Uniforms {
+  world: mat4x4f,
+  worldViewProjection: mat4x4f,
+  worldOrigin: vec2f,
+  worldScale: f32,
+  hasCurveTexture: f32,
+  hasPaletteTexture: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(1) var curveTexture: texture_2d<f32>;
+@group(0) @binding(2) var curveSampler: sampler;
+@group(0) @binding(3) var paletteTexture: texture_2d<f32>;
+@group(0) @binding(4) var paletteSampler: sampler;
+
+@fragment
+fn main(input: VertexOutputs) -> @location(0) vec4f {
+  // Pipeline F: World Position → Distance → Curve Value → Palette Color
+  
+  // Step 1: Convert 3D world position to world-anchored 2D coordinate
+  // Anchor in world space so moving/scaling the mesh does not change pattern scale
+  var p = (input.worldPosition.xz - uniforms.worldOrigin) * uniforms.worldScale;
+  
+  // Step 2: Apply Pipeline F distortions (baked from DP parameters)
+  ${selectedDP['distance-modulus'] > 0 ? `
+  // Distance modulus wrapping
+  let modulus = ${selectedDP['distance-modulus'].toFixed(1)}f;
+  p = (p + modulus * 0.5) % modulus - modulus * 0.5;
+  ` : ''}
+  
+  ${selectedDP['angular-distortion'] ? `
+  // Angular distortion
+  let angle = atan2(p.y, p.x);
+  let radius = length(p);
+  let newAngle = angle + sin(angle * ${selectedDP['angular-frequency'].toFixed(1)}f + ${selectedDP['angular-offset'].toFixed(1)}f * 0.017453f) * ${selectedDP['angular-amplitude'].toFixed(1)}f * 0.01f;
+  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);
+  ` : ''}
+  
+  ${selectedDP['fractal-distortion'] ? `
+  // Fractal distortion (3-scale system)
+  p.x += sin(p.y * ${selectedDP['fractal-scale-1'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f;
+  p.y += cos(p.x * ${selectedDP['fractal-scale-2'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f;
+  p.x += sin(p.y * ${selectedDP['fractal-scale-3'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.1f;
+  ` : ''}
+  
+  // Step 3: Calculate distance using selected method (baked)
+  var distance = ${getDistanceCalculationWGSL(selectedDP['distance-calculation'])} * ${selectedDP['curve-scaling'].toFixed(4)}f;
+  
+  // Step 4: Lookup curve value from 8-bit data texture
+  var curveValue = 0.5f; // Default fallback
+  if (uniforms.hasCurveTexture > 0.5f) {
+    // Convert scaled distance to discrete curve index with wrapping (0..255)
+    let curveWidth = 256.0f;
+    var idx = floor(distance % curveWidth);
+    if (idx < 0.0f) { idx += curveWidth; }
+    let t = idx / (curveWidth - 1.0f);
+    let curveCoord = vec2f(t, 0.5f);
+    curveValue = textureSample(curveTexture, curveSampler, curveCoord).r;
+  }
+  
+  // Step 5: Apply checkerboard pattern if enabled (baked)
+  ${selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0 ? `
+  let checker = floor(distance * ${(1.0 / selectedDP['checkerboard-steps']).toFixed(6)}f);
+  if (checker % 2.0f > 0.5f) {
+    curveValue = 1.0f - curveValue;
+  }
+  ` : ''}
+  
+  // Step 6: Use curveValue to lookup palette color (Merzbow logic)
+  var finalColor = vec3f(curveValue, curveValue, curveValue); // Grayscale fallback
+  if (uniforms.hasPaletteTexture > 0.5f) {
+    let paletteCoord = vec2f(curveValue, 0.5f);
+    finalColor = textureSample(paletteTexture, paletteSampler, paletteCoord).rgb;
+  }
+  
+  return vec4f(finalColor, 1.0f);
+}
+`
     
-    // Create the actual ShaderMaterial
+    // Create the ShaderMaterial with proper WGSL configuration
     const shaderMaterial = new BABYLON.ShaderMaterial(
-      `pipelineF_${selectedDP.id}`,
+      shaderBaseName,
       scene,
       {
-        vertex: "custom",
-        fragment: "custom"
+        vertexSource: vertexShader,
+        fragmentSource: fragmentShader,
+        shaderLanguage: BABYLON.ShaderLanguage.WGSL
       },
       {
         attributes: ["position", "normal", "uv"],
-        uniforms: ["world", "worldViewProjection", "hasCurveTexture", "hasPaletteTexture", "uWorldOrigin", "uWorldScale"],
+        uniformBuffers: ["Scene"],
         samplers: ["curveTexture", "paletteTexture"]
       }
     )
     
-    // Set the shader code
-    BABYLON.Effect.ShadersStore["customVertexShader"] = vertexShader
-    BABYLON.Effect.ShadersStore["customFragmentShader"] = fragmentShader
+    // Store shaders with unique names to avoid conflicts
+    BABYLON.Effect.ShadersStore[vertexShaderName] = vertexShader
+    BABYLON.Effect.ShadersStore[fragmentShaderName] = fragmentShader
     
-    // Set uniform flags and bind textures
+    // Set up uniform buffer for WGSL shader
     const hasCurve = curveTexture && curveTexture.isReady()
     const hasPalette = paletteTexture && paletteTexture.isReady()
     
+    // Create uniform buffer data matching WGSL struct
+    const uniformData = new Float32Array(32) // Padded for alignment
+    // world matrix (16 floats) - will be set by Babylon.js automatically
+    // worldViewProjection matrix (16 floats) - will be set by Babylon.js automatically
+    uniformData[32] = 0.0 // worldOrigin.x
+    uniformData[33] = 0.0 // worldOrigin.y
+    uniformData[34] = 2.0 // worldScale (Merzbow parity)
+    uniformData[35] = hasCurve ? 1.0 : 0.0 // hasCurveTexture
+    uniformData[36] = hasPalette ? 1.0 : 0.0 // hasPaletteTexture
+    
+    // Set uniforms using the new structure
+    shaderMaterial.setVector2("worldOrigin", new BABYLON.Vector2(0.0, 0.0))
+    shaderMaterial.setFloat("worldScale", 2.0)
     shaderMaterial.setFloat("hasCurveTexture", hasCurve ? 1.0 : 0.0)
     shaderMaterial.setFloat("hasPaletteTexture", hasPalette ? 1.0 : 0.0)
-    // Set default world-anchored mapping (parity with Merzbow proven values)
-    shaderMaterial.setVector2("uWorldOrigin", new BABYLON.Vector2(0.0, 0.0))
-    shaderMaterial.setFloat("uWorldScale", 2.0)
     
-    // Bind textures only if available
+    // Bind textures and samplers for WGSL
     if (hasCurve) {
       shaderMaterial.setTexture("curveTexture", curveTexture)
-      console.log('📊 Curve texture bound to shader')
+      shaderMaterial.setTextureSampler("curveSampler", new BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      console.log('📊 Curve texture bound to WGSL shader')
     } else {
       console.warn('⚠️ Curve texture not ready or missing - using fallback')
     }
     
     if (hasPalette) {
       shaderMaterial.setTexture("paletteTexture", paletteTexture)
-      console.log('🎨 Palette texture bound to shader')
+      shaderMaterial.setTextureSampler("paletteSampler", new BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      console.log('🎨 Palette texture bound to WGSL shader')
     } else {
       console.warn('⚠️ Palette texture not ready or missing - using grayscale fallback')
     }
