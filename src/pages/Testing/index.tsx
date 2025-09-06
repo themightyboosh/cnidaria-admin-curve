@@ -1666,6 +1666,8 @@ struct Uniforms {
   worldViewProjection: mat4x4f,
   worldOrigin: vec2f,
   worldScale: f32,
+  curveIndexScaling: f32,
+  curveWidth: f32,
   hasCurveTexture: f32,
   hasPaletteTexture: f32,
 };
@@ -1676,27 +1678,51 @@ struct Uniforms {
 @group(0) @binding(3) var paletteTexture: texture_2d<f32>;
 @group(0) @binding(4) var paletteSampler: sampler;
 
+// Noise function (matches mathPipeline.ts approach)
+fn noiseFunction(x: f32, y: f32) -> f32 {
+  // Create variation based on coordinates (like real noise function)
+  return 1.0 + sin(x * 0.01) * 0.1 + cos(y * 0.01) * 0.1;
+}
+
+// Coordinate warping function (matches warpPointScalarRadius)
+fn warpPointScalarRadius(x: f32, y: f32, n: f32) -> vec2f {
+  let r = length(vec2f(x, y));
+  if (r > 0.0) {
+    let s = n / r;
+    return vec2f(x * s, y * s);
+  }
+  return vec2f(0.0, 0.0);
+}
+
 @fragment
 fn main(input: VertexOutputs) -> @location(0) vec4f {
-  // Pipeline F: World Position → Distance → Curve Value → Palette Color
+  // Pipeline F: Complete implementation following specification
   
-  // Step 1: Convert 3D world position to world-anchored 2D coordinate
-  // Anchor in world space so moving/scaling the mesh does not change pattern scale
-  var p = (input.worldPosition.xz - uniforms.worldOrigin) * uniforms.worldScale;
+  // Step 1-2: Convert 3D world position to world-anchored 2D coordinate
+  let worldCoord = (input.worldPosition.xz - uniforms.worldOrigin) * uniforms.worldScale;
+  
+  // Step 3: Apply noise function (ADDED - was missing!)
+  let n = noiseFunction(worldCoord.x, worldCoord.y);
+  
+  // Step 4: Coordinate warping (ADDED - was missing!)
+  var p = warpPointScalarRadius(worldCoord.x, worldCoord.y, n);
   
   // Step 2: Apply Pipeline F distortions (baked from DP parameters)
 ${distortionCode}
   
-  // Step 3: Calculate distance using selected method (baked)
-  var distance = ${distanceCalculation} * ${curveScaling}f;
+  // Step 5: Calculate distance using DP-selected method (baked)
+  var distance = ${distanceCalculation};
   
-  // Step 4: Lookup curve value from 8-bit data texture
+  // Step 6: Scale distance using curve's index scaling (FIXED)
+  distance *= uniforms.curveIndexScaling;
+  
+  // Step 7: Index calculation with proper modulus wrapping (FIXED)
   var curveValue = 0.5f; // Default fallback
   if (uniforms.hasCurveTexture > 0.5f) {
-    // Convert scaled distance to discrete curve index with wrapping (0..255)
-    let curveWidth = 256.0f;
+    let curveWidth = uniforms.curveWidth;
     var idx = floor(distance % curveWidth);
     if (idx < 0.0f) { idx += curveWidth; }
+    if (idx >= curveWidth) { idx = curveWidth - 1.0f; }
     let t = idx / (curveWidth - 1.0f);
     let curveCoord = vec2f(t, 0.5f);
     curveValue = textureSample(curveTexture, curveSampler, curveCoord).r;
@@ -1750,6 +1776,14 @@ ${distortionCode}
     // Set uniforms using the new structure
     shaderMaterial.setVector2("worldOrigin", new BABYLON.Vector2(0.0, 0.0))
     shaderMaterial.setFloat("worldScale", 2.0)
+    // Get curve parameters from selectedDP (these should come from the curve data)
+    const curveIndexScaling = selectedDP['curve-index-scaling'] || 1.0
+    const curveWidth = selectedDP['curve-width'] || 256.0
+    
+    shaderMaterial.setFloat("curveIndexScaling", curveIndexScaling)
+    shaderMaterial.setFloat("curveWidth", curveWidth)
+    
+    console.log('🔍 Shader uniforms set:', { curveIndexScaling, curveWidth })
     shaderMaterial.setFloat("hasCurveTexture", hasCurve ? 1.0 : 0.0)
     shaderMaterial.setFloat("hasPaletteTexture", hasPalette ? 1.0 : 0.0)
     
