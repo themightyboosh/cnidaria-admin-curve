@@ -1556,7 +1556,7 @@ fn main(input: VertexInput) -> VertexOutput {
     // Distance modulus wrapping
     if (dp['distance-modulus'] && dp['distance-modulus'] > 0) {
       const modulus = dp['distance-modulus'].toFixed(1)
-      code += `  // Distance modulus wrapping\n  let modulus = ${modulus}f;\n  p = (p + modulus * 0.5) % modulus - modulus * 0.5;\n\n`
+      code += '  // Distance modulus wrapping\n  let modulus = ' + modulus + 'f;\n  p = (p + modulus * 0.5) % modulus - modulus * 0.5;\n\n'
     }
     
     // Angular distortion
@@ -1564,7 +1564,7 @@ fn main(input: VertexInput) -> VertexOutput {
       const freq = (dp['angular-frequency'] || 1.0).toFixed(1)
       const amp = (dp['angular-amplitude'] || 1.0).toFixed(1)
       const offset = (dp['angular-offset'] || 0.0).toFixed(1)
-      code += `  // Angular distortion\n  let angle = atan2(p.y, p.x);\n  let radius = length(p);\n  let newAngle = angle + sin(angle * ${freq}f + ${offset}f * 0.017453f) * ${amp}f * 0.01f;\n  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);\n\n`
+      code += '  // Angular distortion\n  let angle = atan2(p.y, p.x);\n  let radius = length(p);\n  let newAngle = angle + sin(angle * ' + freq + 'f + ' + offset + 'f * 0.017453f) * ' + amp + 'f * 0.01f;\n  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);\n\n'
     }
     
     // Fractal distortion
@@ -1573,13 +1573,13 @@ fn main(input: VertexInput) -> VertexOutput {
       const scale1 = (dp['fractal-scale-1'] || 0.1).toFixed(3)
       const scale2 = (dp['fractal-scale-2'] || 0.1).toFixed(3)
       const scale3 = (dp['fractal-scale-3'] || 0.1).toFixed(3)
-      code += `  // Fractal distortion (3-scale system)\n  p.x += sin(p.y * ${scale1}f) * ${strength}f * 0.3f;\n  p.y += cos(p.x * ${scale2}f) * ${strength}f * 0.3f;\n  p.x += sin(p.y * ${scale3}f) * ${strength}f * 0.1f;\n\n`
+      code += '  // Fractal distortion (3-scale system)\n  p.x += sin(p.y * ' + scale1 + 'f) * ' + strength + 'f * 0.3f;\n  p.y += cos(p.x * ' + scale2 + 'f) * ' + strength + 'f * 0.3f;\n  p.x += sin(p.y * ' + scale3 + 'f) * ' + strength + 'f * 0.1f;\n\n'
     }
     
     // Checkerboard pattern
     if (dp['checkerboard-pattern'] && dp['checkerboard-steps'] && dp['checkerboard-steps'] > 0) {
       const stepInverse = (1.0 / dp['checkerboard-steps']).toFixed(6)
-      code += `  // Checkerboard pattern\n  let checker = floor(distance * ${stepInverse}f);\n  if (checker % 2.0f > 0.5f) {\n    curveValue = 1.0f - curveValue;\n  }\n\n`
+      code += '  // Checkerboard pattern\n  let checker = floor(distance * ' + stepInverse + 'f);\n  if (checker % 2.0f > 0.5f) {\n    curveValue = 1.0f - curveValue;\n  }\n\n'
     }
     
     return code
