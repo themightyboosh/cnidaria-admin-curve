@@ -1814,18 +1814,45 @@ fn main(input: VertexInput) -> VertexOutput {
         'curve-index-scaling': (selectedDP['curve-scaling'] || 1.0) * 0.1 // Scale down for better curve utilization
       }
       
-      // Debug curve parameters
+      // Comprehensive validation of DP → curve → Pipeline F data flow
       if (pixelCount < 1) {
-        console.log('📊 Curve parameters:', {
-          dataLength: curve['curve-data'].length,
-          width: curve['curve-width'], 
-          scaling: curve['curve-index-scaling'],
-          sampleValues: curve['curve-data'].slice(0, 10)
+        console.log('🔍 COMPREHENSIVE DATA VALIDATION:')
+        console.log('📊 DP Parameters:', {
+          name: selectedDP.name,
+          'curve-scaling': selectedDP['curve-scaling'],
+          'distance-calculation': selectedDP['distance-calculation'],
+          'angular-distortion': selectedDP['angular-distortion'],
+          'angular-frequency': selectedDP['angular-frequency'],
+          'angular-amplitude': selectedDP['angular-amplitude']
+        })
+        
+        console.log('📊 Raw Curve Data:', {
+          originalLength: curveData ? curveData.length : 0,
+          firstTenValues: curveData ? curveData.slice(0, 10) : [],
+          lastTenValues: curveData ? curveData.slice(-10) : [],
+          minValue: curveData ? Math.min(...curveData) : 'N/A',
+          maxValue: curveData ? Math.max(...curveData) : 'N/A'
+        })
+        
+        console.log('📊 Curve Object for Pipeline F:', {
+          'curve-data': curve['curve-data'].slice(0, 10),
+          'curve-width': curve['curve-width'], 
+          'curve-index-scaling': curve['curve-index-scaling']
+        })
+        
+        console.log('🎨 Palette Data:', {
+          length: paletteData ? paletteData.length : 0,
+          firstColor: paletteData ? paletteData[0] : null,
+          lastColor: paletteData ? paletteData[paletteData.length - 1] : null,
+          hasAlpha: paletteData && paletteData[0] ? paletteData[0].a !== undefined : false
         })
       }
       
-      // Use simple noise function (simplified for 3D texture generation)
-      const noiseFn = () => 1.0
+      // Use variable noise function to create coordinate variation
+      const noiseFn = (x: number, y: number) => {
+        // Create variation based on coordinates (like real noise function)
+        return 1.0 + Math.sin(x * 0.01) * 0.1 + Math.cos(y * 0.01) * 0.1
+      }
       
       // Step 1: Apply core math pipeline (coordinates + curve → index value + position)
       const pipelineResult = applyPipelineF(worldX, worldY, noiseFn, curve, selectedDP)
@@ -1833,12 +1860,34 @@ fn main(input: VertexInput) -> VertexOutput {
       // Step 2: Apply DP-level palette mapping (index value → color)
       const paletteColor = applyPaletteMapping(pipelineResult, paletteData)
       
-      // Debug first few pixels with more detail
-      if (pixelCount < 5) {
-        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → Pipeline F details:`)
-        console.log(`    World coords: (${worldX.toFixed(3)}, ${worldY.toFixed(3)})`)
-        console.log(`    Result: idx=${pipelineResult.index}, value=${pipelineResult.value}`)
-        console.log(`    Color: (${paletteColor.r}, ${paletteColor.g}, ${paletteColor.b})`)
+      // Debug first few pixels with complete Pipeline F step validation
+      if (pixelCount < 3) {
+        console.log(`\n🔍 PIXEL ${pixelCount} PIPELINE F VALIDATION:`)
+        console.log(`📍 Pixel coords: (${x}, ${y})`)
+        console.log(`🌍 World coords: (${worldX.toFixed(3)}, ${worldY.toFixed(3)})`)
+        
+        // Manual step-by-step validation
+        const n = noiseFn(worldX, worldY)
+        console.log(`🎲 Noise result: ${n.toFixed(3)}`)
+        
+        // Check if this matches what Pipeline F produces
+        console.log(`🔧 Pipeline F result:`)
+        console.log(`  Index: ${pipelineResult.index}`)
+        console.log(`  Value: ${pipelineResult.value}`)
+        
+        // Validate curve array access
+        if (curve['curve-data'] && curve['curve-data'][pipelineResult.index] !== undefined) {
+          console.log(`✅ Curve array access: curve[${pipelineResult.index}] = ${curve['curve-data'][pipelineResult.index]}`)
+        } else {
+          console.log(`❌ Curve array access FAILED: index ${pipelineResult.index} out of bounds`)
+        }
+        
+        // Validate palette access
+        if (paletteData && paletteData[pipelineResult.value]) {
+          console.log(`✅ Palette access: palette[${pipelineResult.value}] = (${paletteColor.r}, ${paletteColor.g}, ${paletteColor.b})`)
+        } else {
+          console.log(`❌ Palette access FAILED: value ${pipelineResult.value} out of bounds`)
+        }
       }
       
       // Convert normalized palette color (0-1) to pixel color (0-255)
