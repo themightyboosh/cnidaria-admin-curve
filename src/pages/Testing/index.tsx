@@ -1278,15 +1278,18 @@ fn main(input: VertexInput) -> VertexOutput {
         console.warn('⚠️ Failed to load curve/palette data:', dataError)
       }
       
-      // For now, create a StandardMaterial with 8-bit data textures attached
-      // This avoids the complex NodeMaterial connection issues
-      const standardMaterial = new BABYLON.StandardMaterial(`pipelineF_${currentDP.id}`, scene)
+      // Implement distinct approaches based on render mode
+      let pipelineFMaterial = null
       
-      // For now, use the working DynamicTexture approach for both modes
-      // TODO: Implement actual compute shader execution for static mode
-      const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData, enhancedDP)
-      
-      console.log(`🎯 Using ${renderMode} mode (DynamicTexture implementation for both)`)
+      if (renderMode === 'static') {
+        // 🔥 STATIC MODE: Generate texture once using WebGPU compute shader + StandardMaterial
+        console.log('🔥 Using STATIC mode: Compute Shader + StandardMaterial')
+        pipelineFMaterial = await createPipelineFComputeMaterial(scene, currentDP, dpCurveData, dpPaletteData, enhancedDP)
+      } else {
+        // ⚡ REAL-TIME MODE: Real-time Pipeline F calculation in fragment shader
+        console.log('⚡ Using REAL-TIME mode: ShaderMaterial with Pipeline F fragment shader')
+        pipelineFMaterial = await createPipelineFShaderMaterial(scene, currentDP, dpCurveData, dpPaletteData, enhancedDP)
+      }
       
       // Generate shader code for viewing based on render mode
       let compiledShaders = { glsl: '', wgsl: '' }
@@ -1590,7 +1593,7 @@ fn main(input: VertexInput) -> VertexOutput {
   }
 
   // Create actual Pipeline F ShaderMaterial using proper WGSL structure
-  const createPipelineFShaderMaterial = (scene: any, selectedDP: any, curveTexture: any, paletteTexture: any, targets: TargetAssignment[]) => {
+  const createPipelineFWGSLShaderMaterial = (scene: any, selectedDP: any, curveTexture: any, paletteTexture: any, targets: TargetAssignment[]) => {
     const { BABYLON } = babylonScene
     
     // Validate inputs to prevent parsing errors
@@ -1833,7 +1836,36 @@ ${distortionCode}
     }
   }
 
-  // Create Pipeline F material using proven mathematics (replicates Merzbow canvas generation)
+  // 🔥 STATIC MODE: Create Pipeline F material using WebGPU compute shader + StandardMaterial
+  const createPipelineFComputeMaterial = async (scene: any, selectedDP: any, curveData: any, paletteData: any, enhancedDP?: any) => {
+    const { BABYLON } = babylonScene
+    
+    console.log('🔥 Creating Pipeline F compute texture (static approach)...')
+    
+    // For now, fall back to DynamicTexture until compute shader is implemented
+    const fallbackMaterial = createPipelineFTextureMaterial(scene, selectedDP, curveData, paletteData, enhancedDP)
+    
+    console.log('⚠️ Using DynamicTexture fallback for static mode (compute shader TODO)')
+    return fallbackMaterial
+  }
+
+  // ⚡ REAL-TIME MODE: Create Pipeline F material using ShaderMaterial with real-time calculation
+  const createPipelineFShaderMaterial = async (scene: any, selectedDP: any, curveData: any, paletteData: any, enhancedDP?: any) => {
+    const { BABYLON } = babylonScene
+    
+    console.log('⚡ Creating Pipeline F ShaderMaterial (real-time approach)...')
+    
+    // Create 8-bit data textures for curve and palette
+    const { curveTexture, paletteTexture } = createDataTextures(scene, curveData, paletteData)
+    
+    // Create the actual WGSL ShaderMaterial we implemented earlier
+    const shaderMaterial = createPipelineFWGSLShaderMaterial(scene, selectedDP, curveTexture, paletteTexture, [])
+    
+    console.log('✅ Pipeline F ShaderMaterial created (real-time mode)')
+    return shaderMaterial
+  }
+
+  // 🎨 LEGACY: Create Pipeline F material using proven mathematics (DynamicTexture - CPU approach)
   const createPipelineFTextureMaterial = (scene: any, selectedDP: any, curveData: any, paletteData: any, enhancedDP?: any) => {
     const { BABYLON } = babylonScene
     
