@@ -160,6 +160,86 @@ vec3 emission = paletteColor.rgb * (normalizedValue * 2.0); // Baked scale facto
 
 ---
 
+## **🚀 BEST OF BOTH WORLDS APPROACH:**
+
+### **🔧 Hybrid Implementation Strategy:**
+
+#### **Option 1: Compute Shader Generation (Static, Maximum Efficiency)**
+```javascript
+// Generate Pipeline F texture once using WebGPU compute shader
+const pipelineFTexture = await generatePipelineFComputeTexture(dp, curve, palette, size)
+
+// Apply with simple StandardMaterial  
+const material = new BABYLON.StandardMaterial("pipelineF_static", scene)
+material.diffuseTexture = pipelineFTexture
+material.specularColor = BABYLON.Color3.Black()
+```
+
+**✅ Best for:** Static textures, maximum performance, batch generation
+**✅ WebGPU Features:** Compute shaders, storage textures, parallel processing
+
+#### **Option 2: Real-Time ShaderMaterial (Dynamic, Maximum Flexibility)**
+```javascript
+// Real-time Pipeline F calculation in fragment shader
+const shaderMaterial = new BABYLON.ShaderMaterial(
+  "pipelineF_realtime",
+  scene,
+  {
+    vertexSource: vertexWGSL,
+    fragmentSource: pipelineFFragmentWGSL, // Baked DP parameters
+    shaderLanguage: BABYLON.ShaderLanguage.WGSL
+  },
+  {
+    attributes: ["position", "normal", "uv"],
+    uniforms: ["world", "worldViewProjection"],
+    samplers: ["curveTexture", "paletteTexture"] // 8-bit data textures
+  }
+)
+```
+
+**✅ Best for:** Animated effects, parameter changes, real-time modification
+**✅ WebGPU Features:** Native WGSL, texture sampling, real-time rendering
+
+### **🎛️ UI Implementation (Radio Button Selection):**
+```tsx
+// Radio button selection in Testing page
+const [renderMode, setRenderMode] = useState<'static' | 'realtime'>('static')
+
+<div className="render-mode-selection">
+  <label>
+    <input 
+      type="radio" 
+      checked={renderMode === 'static'}
+      onChange={() => setRenderMode('static')}
+    />
+    🔥 Compute Shader (Static, Max Performance)
+  </label>
+  
+  <label>
+    <input 
+      type="radio" 
+      checked={renderMode === 'realtime'} 
+      onChange={() => setRenderMode('realtime')}
+    />
+    ⚡ ShaderMaterial (Real-time, Max Flexibility)
+  </label>
+</div>
+```
+
+### **📊 Performance Comparison:**
+
+| Approach | Generation | Per-Frame Cost | Flexibility | WebGPU Efficiency |
+|----------|------------|----------------|-------------|------------------|
+| **Compute Shader** | ~5ms once | ~0.1ms | Low | ⭐⭐⭐⭐⭐ |
+| **ShaderMaterial** | ~0ms | ~2ms | High | ⭐⭐⭐ |
+
+### **🎯 Best Practice:**
+- **Default to Compute Shader** for static Pipeline F patterns
+- **Switch to ShaderMaterial** when animation or real-time modification needed
+- **User choice** via radio buttons for different use cases
+
+---
+
 ### **📊 COMPLETE DP FIELD VALIDATION (ZorWED - Current):**
 
 #### **✅ CORE PIPELINE F FIELDS (Always Used):**
