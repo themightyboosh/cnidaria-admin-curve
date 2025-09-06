@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Modal from '../../components/shared/Modal'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
-import { applyPipelineF, buildNoiseFn } from '../../utils/mathPipeline'
+import { applyPipelineF, applyPaletteMapping, buildNoiseFn } from '../../utils/mathPipeline'
 import './Testing.css'
 
 type GeometryType = 'sphere' | 'cube' | 'landscape-box'
@@ -1789,51 +1789,30 @@ fn main(input: VertexInput) -> VertexOutput {
       // Use simple noise function (simplified for 3D texture generation)
       const noiseFn = () => 1.0
       
-      // Apply centralized Pipeline F with distortions
-      const result = applyPipelineF(x, y, noiseFn, curve, selectedDP)
-      const v = result.value // This is the final curve value (0-255)
+      // Step 1: Apply core math pipeline (coordinates + curve → index value + position)
+      const pipelineResult = applyPipelineF(x, y, noiseFn, curve, selectedDP)
+      
+      // Step 2: Apply DP-level palette mapping (index value → color)
+      const paletteColor = applyPaletteMapping(pipelineResult, paletteData)
       
       // Debug first few pixels
       if (pixelCount < 5) {
-        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → idx=${result.index} → curveValue=${v}`)
+        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → idx=${pipelineResult.index} → value=${pipelineResult.value} → color=(${paletteColor.r}, ${paletteColor.g}, ${paletteColor.b})`)
       }
       
-      // Map curve value to palette color (EXACT same logic as imageGenerator.worker.ts)
-      if (paletteData && paletteData.length > 0) {
-        // Use curve value directly as palette index (like existing code: normalizedPalette[v])
-        const paletteIndex = Math.min(v, paletteData.length - 1) // v is already 0-255 integer
-        const color = paletteData[paletteIndex] || { r: 0.7, g: 0.7, b: 0.7 }
-        
-        // Check if alpha is present in the palette data
-        const hasAlpha = color.a !== undefined
-        
-        const colorResult = { 
-          r: Math.floor(color.r * 255), 
-          g: Math.floor(color.g * 255), 
-          b: Math.floor(color.b * 255)
-        }
-        
-        // Only add alpha if it exists in the palette
-        if (hasAlpha) {
-          colorResult.a = Math.floor(color.a * 255)
-        }
-        
-        if (pixelCount < 3) {
-          const colorStr = hasAlpha 
-            ? `(${colorResult.r}, ${colorResult.g}, ${colorResult.b}, ${colorResult.a})`
-            : `(${colorResult.r}, ${colorResult.g}, ${colorResult.b})`
-          console.log(`    → paletteIndex=${paletteIndex} → color=${colorStr} ${hasAlpha ? 'RGBA' : 'RGB'}`)
-        }
-        
-        return colorResult
+      // Convert normalized palette color (0-1) to pixel color (0-255)
+      const pixelColor = {
+        r: Math.floor(paletteColor.r * 255),
+        g: Math.floor(paletteColor.g * 255), 
+        b: Math.floor(paletteColor.b * 255)
       }
       
-      // Grayscale fallback (RGB only)
-      const gray = Math.floor((v / 255.0) * 255) // Normalize v for grayscale
-      if (pixelCount < 3) {
-        console.log(`    → grayscale fallback: ${gray} (RGB)`)
+      // Add alpha if present
+      if (paletteColor.a !== undefined) {
+        pixelColor.a = Math.floor(paletteColor.a * 255)
       }
-      return { r: gray, g: gray, b: gray }
+      
+      return pixelColor
       
     } catch (error) {
       // Error fallback

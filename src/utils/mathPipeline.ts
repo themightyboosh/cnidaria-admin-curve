@@ -189,14 +189,14 @@ export function warpPointScalarRadius(x: number, y: number, n: number): [number,
   return [0, 0];
 }
 
-// Enhanced Pipeline F with distortion support
+// Core Pipeline F: coordinates + curve → index value + index position (NO PALETTE)
 export function applyPipelineF(
   x: number, 
   y: number, 
   noiseFn: (x: number, y: number) => number,
   curve: Curve,
   distortionProfile?: any
-): { value: number; index: number; valuePct: number; indexPct: number } {
+): { value: number; index: number } {
   // Step 1: Read x,y from the grid (already provided)
   
   // Step 2: Compute n = gpuExpression(x,y); form p' per the scalar-radius contract
@@ -266,14 +266,11 @@ export function applyPipelineF(
     }
   }
   
-  // Compute percentages  
-  const valuePct = v / CONFIG.CURVE_HEIGHT;
-  const indexPct = curveWidth > 1 ? idx / (curveWidth - 1) : 0;
-  
-  return { value: v, index: idx, valuePct, indexPct };
+  // Return core Pipeline F output (percentages can be computed by shaders if needed)
+  return { value: v, index: idx };
 }
 
-// Legacy function for backward compatibility
+// Legacy function for backward compatibility (adds percentages for existing code)
 export function applyMathPipeline(
   x: number, 
   y: number, 
@@ -281,7 +278,19 @@ export function applyMathPipeline(
   curve: Curve
 ): { value: number; index: number; valuePct: number; indexPct: number } {
   // Call new enhanced function without distortions for backward compatibility
-  return applyPipelineF(x, y, noiseFn, curve);
+  const result = applyPipelineF(x, y, noiseFn, curve);
+  
+  // Add percentages for legacy compatibility
+  const valuePct = result.value / CONFIG.CURVE_HEIGHT;
+  const curveWidth = Math.max(1, curve['curve-width'] | 0);
+  const indexPct = curveWidth > 1 ? result.index / (curveWidth - 1) : 0;
+  
+  return { 
+    value: result.value, 
+    index: result.index, 
+    valuePct, 
+    indexPct 
+  };
 }
 
 // Normalize palette to 256 entries
@@ -306,6 +315,24 @@ export function normalizePalette(palette: PaletteColor[]): PaletteColor[] {
   }
   
   return normalized;
+}
+
+// DP-level palette application (separate from core math pipeline)
+export function applyPaletteMapping(
+  pipelineResult: { value: number; index: number },
+  palette: PaletteColor[]
+): PaletteColor {
+  if (!palette || palette.length === 0) {
+    // Grayscale fallback
+    const gray = Math.floor((pipelineResult.value / 255) * 255);
+    return { r: gray, g: gray, b: gray, a: 255 };
+  }
+  
+  // Use curve value directly as palette index (exact same as imageGenerator.worker.ts)
+  const paletteIndex = Math.min(pipelineResult.value, palette.length - 1);
+  const color = palette[paletteIndex] || { r: 128, g: 128, b: 128, a: 255 };
+  
+  return color;
 }
 
 // Default coordinate noise expressions
