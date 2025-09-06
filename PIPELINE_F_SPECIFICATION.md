@@ -18,17 +18,28 @@
 
 ## **🏗️ PIPELINE F ARCHITECTURE:**
 
-### **📦 SHARED SCRIPT (mathPipeline.ts - Always Executed):**
-- ✅ **Steps 1-4**: Coordinate input → world conversion → noise → warping  
-- ✅ **Step 9**: Distance scaling with `curve['curve-index-scaling']`
-- ✅ **Steps 10-11**: Index calculation & wrapping → curve value lookup
-- ✅ **Steps 13-14**: Palette mapping → pixel rendering
+### **📦 CORE MATH PIPELINE (mathPipeline.ts - applyPipelineF):**
+**Input:** `(x, y, noiseFn, curve, distortionProfile)`  
+**Output:** `{value: 0-255, index: 0-curveWidth}`  
+**Scope:** Coordinates → Index value + Index position (**NO PALETTE**)
+
+- ✅ **Steps 1-4**: Coordinate input → world conversion → noise → warping
+- ✅ **Steps 5-7**: Conditional distortions (angular, fractal, modulus)  
+- ✅ **Step 8**: Final distance calculation (method from DP)
+- ✅ **Steps 9-11**: Distance scaling → index calculation → curve value lookup
+- ✅ **Step 12**: Checkerboard pattern (if enabled)
+- ✅ **Output**: `{value, index}` - **PIPELINE ENDS HERE**
+
+### **🎨 DP-LEVEL PALETTE APPLICATION (Separate Function):**
+**Input:** `(pipelineResult, palette)`  
+**Output:** `{r: 0-1, g: 0-1, b: 0-1, a?: 0-1}`  
+**Scope:** Index value → Final color
 
 ### **⚙️ CONDITIONAL PROCESSING (Based on DP Flags):**
-- 🌀 **Angular Distortion (Step 5)**: Only if `DP['angular-distortion'] === true`
-- 🌊 **Fractal Distortion (Step 6)**: Only if `DP['fractal-distortion'] === true`  
-- 📐 **Distance Modulus (Step 7)**: Only if `DP['distance-modulus'] > 0`
-- 🎲 **Checkerboard (Step 12)**: Only if `DP['checkerboard-pattern'] === true`
+- 🌀 **Angular Distortion**: Only if `DP['angular-distortion'] === true`
+- 🌊 **Fractal Distortion**: Only if `DP['fractal-distortion'] === true`  
+- 📐 **Distance Modulus**: Only if `DP['distance-modulus'] > 0`
+- 🎲 **Checkerboard**: Only if `DP['checkerboard-pattern'] === true`
 
 ### **📊 CURRENT DP: ZorWED (Most Recent)**
 ```json
@@ -160,21 +171,44 @@ if (selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0) 
 }
 ```
 
+---
+
+## **🎨 DP-LEVEL PALETTE APPLICATION (Separate from Core Pipeline F):**
+
 ### **STEP 13: PALETTE COLOR MAPPING**
 ```javascript
-// Map curve value directly to palette index
-const paletteIndex = v  // Use curve value directly as palette index
+// DP-level function: applyPaletteMapping(pipelineResult, palette)
+const paletteIndex = pipelineResult.value  // Use curve value directly as palette index
 const color = normalizedPalette[paletteIndex]  // Direct array lookup
-// ✅ CRITICAL: v (0-255) maps directly to palette[0-255]
+// ✅ CRITICAL: value (0-255) maps directly to palette[0-255]
+// ✅ Returns: {r: 0-1, g: 0-1, b: 0-1, a?: 0-1}
 ```
 
-### **STEP 14: PIXEL RENDERING**
+### **STEP 14: PIXEL RENDERING (Application-Specific)**
 ```javascript
-// Apply color to canvas pixel
-rgba[pixelIndex + 0] = color.r | 0    // Red channel
-rgba[pixelIndex + 1] = color.g | 0    // Green channel  
-rgba[pixelIndex + 2] = color.b | 0    // Blue channel
-rgba[pixelIndex + 3] = (color.a == null ? 255 : color.a) | 0  // Alpha channel
+// Convert normalized color to pixel values and apply to canvas
+rgba[pixelIndex + 0] = Math.floor(color.r * 255)  // Red channel
+rgba[pixelIndex + 1] = Math.floor(color.g * 255)  // Green channel  
+rgba[pixelIndex + 2] = Math.floor(color.b * 255)  // Blue channel
+rgba[pixelIndex + 3] = color.a ? Math.floor(color.a * 255) : 255  // Alpha channel
+```
+
+---
+
+## **🔧 FUNCTION USAGE:**
+
+### **Core Pipeline F (Math Only):**
+```javascript
+const pipelineResult = applyPipelineF(x, y, noiseFn, curve, distortionProfile)
+// Returns: {value: 0-255, index: 0-curveWidth}
+// Pipeline F ends here - ready for palette application
+```
+
+### **Palette Application (DP Level):**
+```javascript
+const finalColor = applyPaletteMapping(pipelineResult, palette)
+// Returns: {r: 0-1, g: 0-1, b: 0-1, a?: 0-1}
+// Ready for pixel rendering
 ```
 
 ---
