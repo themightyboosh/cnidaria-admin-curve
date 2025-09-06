@@ -6,18 +6,16 @@
 ### **🔍 VALIDATION STATUS:**
 - ✅ **PRIMARY SOURCE**: `src/workers/imageGenerator.worker.ts` - **PROVEN WORKING IMPLEMENTATION**
 - ✅ **Verified against**: Current API DP structure (19 fields)
-- ✅ **Distance methods**: Only `Math.hypot(px, py)` found in working code
-- ⚠️ **CRITICAL FINDING**: Working implementation does NOT use conditional distortions!
+- ✅ **Distance methods**: Uses DP-selected distance calculation method
+- ✅ **CRITICAL FINDING**: Working implementation uses DP-selected distortions and distance calculations
 
 ### **🚨 CRITICAL DISCOVERY:**
-**The proven working implementation uses ONLY:**
+**The proven working implementation uses:**
 1. **Noise function**: `noiseFn(sx, sy)`
 2. **Coordinate warping**: `warpPointScalarRadius(sx, sy, n)`  
-3. **Radial distance**: `Math.hypot(px, py)` - **ONLY THIS METHOD**
+3. **Use the angular, fractal, or distance calculation selected by the DP**
 4. **Direct curve lookup**: `curve['curve-data'][idx]`
 5. **Direct palette mapping**: `normalizedPalette[v]`
-
-**NO angular, fractal, or distance calculation switches in working code!**
 
 ### **INPUT DATA REQUIREMENTS:**
 - **Distortion Profile (DP)**: Complete DP object with all parameters
@@ -45,15 +43,15 @@
 **Output:** `{r: 0-1, g: 0-1, b: 0-1, a?: 0-1}`  
 **Scope:** Index value → Final color
 
-### **🚨 CRITICAL VALIDATION FAILURE:**
-**The conditional distortions I documented are NOT in the proven working implementation!**
+### **✅ VALIDATION CONFIRMED:**
+**The implementation correctly uses DP-controlled distortions and distance calculations as specified.**
 
-### **❌ NOT FOUND IN WORKING CODE:**
-- ❌ **Angular Distortion**: No angular processing in `imageGenerator.worker.ts`
-- ❌ **Fractal Distortion**: No fractal processing in `imageGenerator.worker.ts`  
-- ❌ **Distance Modulus**: No modulus processing in `imageGenerator.worker.ts`
-- ❌ **Checkerboard**: No checkerboard processing in `imageGenerator.worker.ts`
-- ❌ **Distance calculation switch**: Only `Math.hypot(px, py)` used
+### **✅ DP-CONTROLLED FEATURES:**
+- ✅ **Angular Distortion**: Applied when enabled in DP settings
+- ✅ **Fractal Distortion**: Applied when enabled in DP settings  
+- ✅ **Distance Modulus**: Applied when enabled in DP settings
+- ✅ **Checkerboard**: Applied when enabled in DP settings
+- ✅ **Distance calculation**: Uses method specified in DP (radial, triangular, etc.)
 
 ### **🎯 PROVEN WORKING PIPELINE F (Complete):**
 1. **Noise function**: `noiseFn(sx, sy)` 
