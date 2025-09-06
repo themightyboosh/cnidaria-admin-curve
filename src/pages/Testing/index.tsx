@@ -1278,8 +1278,15 @@ fn main(input: VertexInput) -> VertexOutput {
       // This avoids the complex NodeMaterial connection issues
       const standardMaterial = new BABYLON.StandardMaterial(`pipelineF_${currentDP.id}`, scene)
       
-      // Create Pipeline F material using DynamicTexture (like Merzbow canvas) - Simple and reliable
-      const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
+      // Create Pipeline F material based on render mode
+      let pipelineFMaterial
+      if (renderMode === 'static') {
+        // Use compute shader approach for static generation
+        pipelineFMaterial = await createPipelineFComputeMaterial(scene, currentDP, dpCurveData, dpPaletteData)
+      } else {
+        // Use real-time shader material approach
+        pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
+      }
       
       // Generate shader code for viewing based on render mode
       let compiledShaders = { glsl: '', wgsl: '' }
@@ -1758,9 +1765,9 @@ fn main(input: VertexInput) -> VertexOutput {
     let pixelCount = 0
     for (let y = 0; y < textureSize; y++) {
       for (let x = 0; x < textureSize; x++) {
-        // Convert pixel to world coordinates (same scale as Merzbow)
-        const worldX = (x - textureSize/2) * 0.02 // Scale to reasonable world coordinates
-        const worldY = (y - textureSize/2) * 0.02
+        // Convert pixel to world coordinates (increase scale for more variation)
+        const worldX = (x - textureSize/2) * 0.5 // Larger scale for more distance variation
+        const worldY = (y - textureSize/2) * 0.5
         
         // Apply exact Pipeline F logic
         const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData, pixelCount)
@@ -1804,14 +1811,17 @@ fn main(input: VertexInput) -> VertexOutput {
       const noiseFn = () => 1.0
       
       // Step 1: Apply core math pipeline (coordinates + curve → index value + position)
-      const pipelineResult = applyPipelineF(x, y, noiseFn, curve, selectedDP)
+      const pipelineResult = applyPipelineF(worldX, worldY, noiseFn, curve, selectedDP)
       
       // Step 2: Apply DP-level palette mapping (index value → color)
       const paletteColor = applyPaletteMapping(pipelineResult, paletteData)
       
-      // Debug first few pixels
+      // Debug first few pixels with more detail
       if (pixelCount < 5) {
-        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → idx=${pipelineResult.index} → value=${pipelineResult.value} → color=(${paletteColor.r}, ${paletteColor.g}, ${paletteColor.b})`)
+        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → Pipeline F details:`)
+        console.log(`    World coords: (${worldX.toFixed(3)}, ${worldY.toFixed(3)})`)
+        console.log(`    Result: idx=${pipelineResult.index}, value=${pipelineResult.value}`)
+        console.log(`    Color: (${paletteColor.r}, ${paletteColor.g}, ${paletteColor.b})`)
       }
       
       // Convert normalized palette color (0-1) to pixel color (0-255)
