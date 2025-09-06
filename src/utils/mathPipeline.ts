@@ -189,39 +189,99 @@ export function warpPointScalarRadius(x: number, y: number, n: number): [number,
   return [0, 0];
 }
 
-// 6-step math pipeline
-export function applyMathPipeline(
+// Enhanced Pipeline F with distortion support
+export function applyPipelineF(
   x: number, 
   y: number, 
   noiseFn: (x: number, y: number) => number,
-  curve: Curve
+  curve: Curve,
+  distortionProfile?: any
 ): { value: number; index: number; valuePct: number; indexPct: number } {
   // Step 1: Read x,y from the grid (already provided)
   
   // Step 2: Compute n = gpuExpression(x,y); form p' per the scalar-radius contract
   const n = noiseFn(x, y);
-  const [px, py] = warpPointScalarRadius(x, y, n);
+  let [px, py] = warpPointScalarRadius(x, y, n);
   
-  // Step 3: d = length(p')
-  const d = Math.hypot(px, py);
+  // Step 3: Apply conditional distortions based on DP settings
+  if (distortionProfile) {
+    // Angular distortion (if enabled)
+    if (distortionProfile['angular-distortion']) {
+      const angle = Math.atan2(py, px);
+      const radius = Math.hypot(px, py);
+      const newAngle = angle + Math.sin(
+        angle * distortionProfile['angular-frequency'] + 
+        distortionProfile['angular-offset'] * 0.017453
+      ) * distortionProfile['angular-amplitude'] * 0.01;
+      
+      px = Math.cos(newAngle) * radius;
+      py = Math.sin(newAngle) * radius;
+    }
+    
+    // Fractal distortion (if enabled)
+    if (distortionProfile['fractal-distortion']) {
+      px += Math.sin(py * distortionProfile['fractal-scale-1']) * distortionProfile['fractal-strength'] * 0.3;
+      py += Math.cos(px * distortionProfile['fractal-scale-2']) * distortionProfile['fractal-strength'] * 0.3;
+      px += Math.sin(py * distortionProfile['fractal-scale-3']) * distortionProfile['fractal-strength'] * 0.1;
+    }
+    
+    // Distance modulus (if enabled)
+    if (distortionProfile['distance-modulus'] > 0) {
+      const modulus = distortionProfile['distance-modulus'];
+      px = ((px + modulus * 0.5) % modulus) - modulus * 0.5;
+      py = ((py + modulus * 0.5) % modulus) - modulus * 0.5;
+    }
+  }
   
-  // Step 4: Scale: d' = d * curve-index-scaling
+  // Step 4: Calculate final distance using selected method
+  let d = 0;
+  const distanceCalc = distortionProfile?.['distance-calculation'] || 'radial';
+  switch (distanceCalc) {
+    case 'radial': d = Math.hypot(px, py); break;
+    case 'cartesian-x': d = Math.abs(px); break;
+    case 'cartesian-y': d = Math.abs(py); break;
+    case 'manhattan': d = Math.abs(px) + Math.abs(py); break;
+    case 'chebyshev': d = Math.max(Math.abs(px), Math.abs(py)); break;
+    case 'triangular': d = Math.abs(px) + Math.abs(py); break; // Same as manhattan
+    default: d = Math.hypot(px, py);
+  }
+  
+  // Step 5: Scale: d' = d * curve-index-scaling
   const dPrime = d * curve['curve-index-scaling'];
   
-  // Step 5: Wrap+clamp: idx = clamp(floor(d' mod curve-width), 0, curve-width−1)
+  // Step 6: Wrap+clamp: idx = clamp(floor(d' mod curve-width), 0, curve-width−1)
   const curveWidth = Math.max(1, curve['curve-width'] | 0);
   let idx = Math.floor(dPrime % curveWidth);
   if (idx < 0) idx += curveWidth; // handle negative mod if any
   if (idx >= curveWidth) idx = curveWidth - 1;
   
-  // Step 6: Lookup: v = curve-data[idx] (0..255)
-  const v = curve['curve-data'][idx] | 0; // 0..255
+  // Step 7: Lookup: v = curve-data[idx] (0..255)
+  let v = curve['curve-data'][idx] | 0; // 0..255
+  
+  // Step 8: Apply checkerboard pattern (if enabled)
+  if (distortionProfile?.['checkerboard-pattern'] && distortionProfile['checkerboard-steps'] > 0) {
+    const checker = Math.floor(d / distortionProfile['checkerboard-steps']);
+    if (checker % 2 > 0.5) {
+      v = 255 - v; // Invert curve value for checkerboard effect
+    }
+  }
   
   // Compute percentages  
   const valuePct = v / CONFIG.CURVE_HEIGHT;
   const indexPct = curveWidth > 1 ? idx / (curveWidth - 1) : 0;
   
   return { value: v, index: idx, valuePct, indexPct };
+}
+
+// Legacy function for backward compatibility
+export function applyMathPipeline(
+  x: number, 
+  y: number, 
+  noiseFn: (x: number, y: number) => number,
+  curve: Curve
+): { value: number; index: number; valuePct: number; indexPct: number } {
+  // Call new enhanced function without distortions for backward compatibility
+  return applyPipelineF(x, y, noiseFn, curve);
 }
 
 // Normalize palette to 256 entries

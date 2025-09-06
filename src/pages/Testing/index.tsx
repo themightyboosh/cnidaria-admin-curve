@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Modal from '../../components/shared/Modal'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
+import { applyPipelineF, buildNoiseFn } from '../../utils/mathPipeline'
 import './Testing.css'
 
 type GeometryType = 'sphere' | 'cube' | 'landscape-box'
@@ -1775,52 +1776,38 @@ fn main(input: VertexInput) -> VertexOutput {
     return material
   }
 
-  // Apply exact Pipeline F logic (from mathPipeline.ts - applyMathPipeline function)
+  // Apply exact Pipeline F logic using centralized mathPipeline.ts function
   const applyProvenPipelineFLogic = (x: number, y: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number) => {
     try {
-      // Step 1: Apply noise function (simplified for now - using coordinates directly)
-      const n = 1.0 // Noise function result (simplified)
-      
-      // Step 2: Warp coordinates using scalar-radius (from warpPointScalarRadius)
-      const [px, py] = [x * n, y * n]
-      
-      // Step 3: Calculate distance (from Math.hypot)
-      const d = Math.hypot(px, py)
-      
-      // Step 4: Scale distance (from curve-index-scaling)
-      const curveIndexScaling = selectedDP['curve-scaling'] || 1.0
-      const dPrime = d * curveIndexScaling
-      
-      // Step 5: Wrap and clamp index (from existing logic)
-      const curveWidth = curveData ? Math.min(curveData.length, 256) : 256
-      let idx = Math.floor(dPrime % curveWidth)
-      if (idx < 0) idx += curveWidth
-      if (idx >= curveWidth) idx = curveWidth - 1
-      
-      // Step 6: Lookup curve value (from curve-data[idx]) - use actual value as-is
-      let curveValue = 0.5 // Default fallback
-      if (curveData && curveData.length > 0) {
-        const rawValue = curveData[idx] || 0
-        curveValue = rawValue // ✅ Use actual curve value as-is (don't normalize!)
-      } else {
-        curveValue = idx / 255.0 // Fallback: linear ramp
+      // Create curve object that matches mathPipeline.ts interface
+      const curve = {
+        'curve-data': curveData || [],
+        'curve-width': curveData ? curveData.length : 256,
+        'curve-index-scaling': selectedDP['curve-scaling'] || 1.0
       }
+      
+      // Use simple noise function (simplified for 3D texture generation)
+      const noiseFn = () => 1.0
+      
+      // Apply centralized Pipeline F with distortions
+      const result = applyPipelineF(x, y, noiseFn, curve, selectedDP)
+      const v = result.value // This is the final curve value (0-255)
       
       // Debug first few pixels
       if (pixelCount < 5) {
-        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → d=${d.toFixed(3)} → idx=${idx} → curveValue=${curveValue.toFixed(3)}`)
+        console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → idx=${result.index} → curveValue=${v}`)
       }
       
-      // Map curveValue to palette color (EXACT same logic as imageGenerator.worker.ts)
+      // Map curve value to palette color (EXACT same logic as imageGenerator.worker.ts)
       if (paletteData && paletteData.length > 0) {
         // Use curve value directly as palette index (like existing code: normalizedPalette[v])
-        const paletteIndex = Math.min(Math.floor(curveValue), paletteData.length - 1)
+        const paletteIndex = Math.min(v, paletteData.length - 1) // v is already 0-255 integer
         const color = paletteData[paletteIndex] || { r: 0.7, g: 0.7, b: 0.7 }
         
         // Check if alpha is present in the palette data
         const hasAlpha = color.a !== undefined
         
-        const result = { 
+        const colorResult = { 
           r: Math.floor(color.r * 255), 
           g: Math.floor(color.g * 255), 
           b: Math.floor(color.b * 255)
@@ -1828,28 +1815,28 @@ fn main(input: VertexInput) -> VertexOutput {
         
         // Only add alpha if it exists in the palette
         if (hasAlpha) {
-          result.a = Math.floor(color.a * 255)
+          colorResult.a = Math.floor(color.a * 255)
         }
         
         if (pixelCount < 3) {
           const colorStr = hasAlpha 
-            ? `(${result.r}, ${result.g}, ${result.b}, ${result.a})`
-            : `(${result.r}, ${result.g}, ${result.b})`
+            ? `(${colorResult.r}, ${colorResult.g}, ${colorResult.b}, ${colorResult.a})`
+            : `(${colorResult.r}, ${colorResult.g}, ${colorResult.b})`
           console.log(`    → paletteIndex=${paletteIndex} → color=${colorStr} ${hasAlpha ? 'RGBA' : 'RGB'}`)
         }
         
-        return result
+        return colorResult
       }
       
       // Grayscale fallback (RGB only)
-      const gray = Math.floor(curveValue * 255)
+      const gray = Math.floor((v / 255.0) * 255) // Normalize v for grayscale
       if (pixelCount < 3) {
         console.log(`    → grayscale fallback: ${gray} (RGB)`)
       }
       return { r: gray, g: gray, b: gray }
       
     } catch (error) {
-      // Error fallback with alpha
+      // Error fallback
       return { r: 128, g: 128, b: 128, a: 255 }
     }
   }
@@ -2678,6 +2665,20 @@ void main() {
                 disabled={!generatedShaderCode}
               >
                 👁️ {showShaderCode ? 'Hide' : 'Show'} Shader Code
+              </button>
+              
+              <button 
+                onClick={() => {
+                  if (generatedShaderCode?.glsl) {
+                    setCustomWGSL(generatedShaderCode.glsl)
+                    setTestMessage('✅ Copied generated GLSL to WGSL Editor')
+                  }
+                }}
+                className="test-btn"
+                style={{ backgroundColor: '#28a745', flex: 1 }}
+                disabled={!generatedShaderCode}
+              >
+                📋 Copy to WGSL Editor
               </button>
               
               <button 
