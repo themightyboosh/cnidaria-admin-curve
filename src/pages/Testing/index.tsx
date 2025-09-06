@@ -1761,9 +1761,10 @@ fn main(input: VertexInput) -> VertexOutput {
     let pixelCount = 0
     for (let y = 0; y < textureSize; y++) {
       for (let x = 0; x < textureSize; x++) {
-        // Convert pixel to world coordinates (increase scale for more variation)
-        const worldX = (x - textureSize/2) * 0.5 // Larger scale for more distance variation
-        const worldY = (y - textureSize/2) * 0.5
+        // Convert pixel to world coordinates (match Merzbow coordinate scale)
+        // Merzbow uses logical coordinates from centerSpiral: range roughly -256 to +256
+        const worldX = (x - textureSize/2) * 2.0 // Scale to match Merzbow coordinate range
+        const worldY = (y - textureSize/2) * 2.0
         
         // Apply exact Pipeline F logic
         const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData, pixelCount)
@@ -1780,8 +1781,18 @@ fn main(input: VertexInput) -> VertexOutput {
     
     console.log(`🎨 Generated ${pixelCount} pixels using Pipeline F mathematics`)
     
+    // Check if imageData has variation (not all same color)
+    const firstPixel = [imageData.data[0], imageData.data[1], imageData.data[2]]
+    const midPixel = [imageData.data[32768], imageData.data[32769], imageData.data[32770]]
+    const lastPixel = [imageData.data[262140], imageData.data[262141], imageData.data[262142]]
+    console.log('🔍 Texture variation check:')
+    console.log(`  First pixel: (${firstPixel.join(', ')})`)
+    console.log(`  Middle pixel: (${midPixel.join(', ')})`)
+    console.log(`  Last pixel: (${lastPixel.join(', ')})`)
+    
     context.putImageData(imageData, 0, 0)
     pipelineFTexture.update()
+    console.log('🎨 DynamicTexture updated and applied')
     
     // Create material with Pipeline F texture
     const material = new BABYLON.StandardMaterial(`pipelineF_${selectedDP.id}`, scene)
@@ -1800,7 +1811,17 @@ fn main(input: VertexInput) -> VertexOutput {
       const curve = {
         'curve-data': curveData || [],
         'curve-width': curveData ? curveData.length : 256,
-        'curve-index-scaling': selectedDP['curve-scaling'] || 1.0
+        'curve-index-scaling': (selectedDP['curve-scaling'] || 1.0) * 0.1 // Scale down for better curve utilization
+      }
+      
+      // Debug curve parameters
+      if (pixelCount < 1) {
+        console.log('📊 Curve parameters:', {
+          dataLength: curve['curve-data'].length,
+          width: curve['curve-width'], 
+          scaling: curve['curve-index-scaling'],
+          sampleValues: curve['curve-data'].slice(0, 10)
+        })
       }
       
       // Use simple noise function (simplified for 3D texture generation)
