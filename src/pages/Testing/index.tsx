@@ -1899,7 +1899,7 @@ ${distortionCode}
       const curve = {
         'curve-data': curveData || [],
         'curve-width': curveData ? curveData.length : 256,
-        'curve-index-scaling': (selectedDP['curve-scaling'] || 1.0) * 0.1 // Scale down for better curve utilization
+        'curve-index-scaling': (selectedDP['curve-scaling'] || 1.0) * 10.0 // Scale up for proper index distribution
       }
       
       // Comprehensive validation of DP → curve → Pipeline F data flow
