@@ -1855,7 +1855,7 @@ ${distortionCode}
         const worldY = (y - textureSize/2) * 2.0
         
         // Apply exact Pipeline F logic
-        const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData, pixelCount)
+        const result = applyProvenPipelineFLogic(worldX, worldY, selectedDP, curveData, paletteData, pixelCount, enhancedDP)
         
         const pixelIndex = (y * textureSize + x) * 4
         imageData.data[pixelIndex] = result.r
@@ -1893,13 +1893,17 @@ ${distortionCode}
   }
 
   // Apply exact Pipeline F logic using centralized mathPipeline.ts function
-  const applyProvenPipelineFLogic = (worldX: number, worldY: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number) => {
+  const applyProvenPipelineFLogic = (worldX: number, worldY: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number, enhancedDP?: any) => {
     try {
       // Create curve object that matches mathPipeline.ts interface
+      // Use the curve's own index scaling, not DP curve-scaling
+      const curveIndexScaling = enhancedDP.linkedCurve?.['curve-index-scaling'] || enhancedDP.linkedCurve?.['index-scaling'] || 1.0
+      console.log('🔍 Using curve index scaling from curve data:', curveIndexScaling)
+      
       const curve = {
         'curve-data': curveData || [],
         'curve-width': curveData ? curveData.length : 256,
-        'curve-index-scaling': (selectedDP['curve-scaling'] || 1.0) * 10.0 // Scale up for proper index distribution
+        'curve-index-scaling': curveIndexScaling // Use curve's own scaling, not DP scaling
       }
       
       // Comprehensive validation of DP → curve → Pipeline F data flow
