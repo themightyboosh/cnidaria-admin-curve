@@ -1573,11 +1573,16 @@ fn main(input: VertexInput) -> VertexOutput {
       uniform float hasCurveTexture;
       uniform float hasPaletteTexture;
       
+      // World-anchored coordinate mapping (non-self-referential to mesh bounds)
+      uniform vec2 uWorldOrigin; // world-space origin for mapping
+      uniform float uWorldScale; // world-to-pipeline scale factor
+      
       void main() {
         // Pipeline F: World Position → Distance → Curve Value → Palette Color
         
-        // Step 1: Convert 3D world position to 2D coordinate
-        vec2 p = vWorldPosition.xz;
+        // Step 1: Convert 3D world position to world-anchored 2D coordinate
+        // Anchor in world space so moving/scaling the mesh does not change pattern scale
+        vec2 p = (vWorldPosition.xz - uWorldOrigin) * uWorldScale;
         
         // Step 2: Apply Pipeline F distortions
         ${selectedDP['distance-modulus'] > 0 ? `
@@ -1607,8 +1612,12 @@ fn main(input: VertexInput) -> VertexOutput {
         // Step 4: Lookup curve value from 8-bit data texture (with fallback)
         float curveValue = 0.5; // Default fallback
         if (hasCurveTexture > 0.5) {
-          float normalizedDistance = clamp(distance * 0.00392157, 0.0, 1.0); // 1/255 = 0.00392157
-          vec2 curveCoord = vec2(normalizedDistance, 0.5);
+          // Convert scaled distance to discrete curve index with wrapping (0..255)
+          float curveWidth = 256.0;
+          float idx = floor(mod(distance, curveWidth));
+          if (idx < 0.0) idx += curveWidth;
+          float t = idx / (curveWidth - 1.0);
+          vec2 curveCoord = vec2(t, 0.5);
           curveValue = texture2D(curveTexture, curveCoord).r;
         }
         
@@ -1644,7 +1653,7 @@ fn main(input: VertexInput) -> VertexOutput {
       },
       {
         attributes: ["position", "normal", "uv"],
-        uniforms: ["world", "worldViewProjection", "hasCurveTexture", "hasPaletteTexture"],
+        uniforms: ["world", "worldViewProjection", "hasCurveTexture", "hasPaletteTexture", "uWorldOrigin", "uWorldScale"],
         samplers: ["curveTexture", "paletteTexture"]
       }
     )
@@ -1659,6 +1668,9 @@ fn main(input: VertexInput) -> VertexOutput {
     
     shaderMaterial.setFloat("hasCurveTexture", hasCurve ? 1.0 : 0.0)
     shaderMaterial.setFloat("hasPaletteTexture", hasPalette ? 1.0 : 0.0)
+    // Set default world-anchored mapping (parity with Merzbow proven values)
+    shaderMaterial.setVector2("uWorldOrigin", new BABYLON.Vector2(0.0, 0.0))
+    shaderMaterial.setFloat("uWorldScale", 2.0)
     
     // Bind textures only if available
     if (hasCurve) {
@@ -1874,7 +1886,6 @@ fn main(input: VertexInput) -> VertexOutput {
       // Debug first few pixels with complete Pipeline F step validation
       if (pixelCount < 3) {
         console.log(`\n🔍 PIXEL ${pixelCount} PIPELINE F VALIDATION:`)
-        console.log(`📍 Pixel coords: (${x}, ${y})`)
         console.log(`🌍 World coords: (${worldX.toFixed(3)}, ${worldY.toFixed(3)})`)
         
         // Manual step-by-step validation
