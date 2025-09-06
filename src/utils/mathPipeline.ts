@@ -1,3 +1,24 @@
+// 🚨 CRITICAL: SHARED PIPELINE F MATHEMATICS - DO NOT MODIFY WITHOUT EXTREME CARE
+// 
+// This file contains the authoritative Pipeline F implementation used by:
+// - Merzbow (PNG generation)
+// - Testing page (3D texture generation)  
+// - WebGPU services (image processing)
+// - All future Pipeline F applications
+//
+// ⚠️ WARNING: Changes to this file affect ALL Pipeline F implementations
+// ⚠️ WARNING: Must maintain backward compatibility with existing applications
+// ⚠️ WARNING: Test thoroughly against Merzbow before any modifications
+//
+// 📋 MODIFICATION PROCESS:
+// 1. Create specification document for proposed changes
+// 2. Validate against proven working implementations
+// 3. Test with Merzbow to ensure no visual changes
+// 4. Update all dependent applications
+// 5. Update Pipeline F specification document
+//
+// 🎯 GOAL: Single source of truth for all Pipeline F mathematics
+
 // Math Pipeline for 1024x1024 PNG Generation
 // Hard-coded configuration values
 export const CONFIG = {
@@ -189,7 +210,10 @@ export function warpPointScalarRadius(x: number, y: number, n: number): [number,
   return [0, 0];
 }
 
-// Core Pipeline F: coordinates + curve → index value + index position (NO PALETTE)
+// 🚨 CRITICAL FUNCTION: Core Pipeline F Mathematics
+// ⚠️ DO NOT MODIFY: This is the authoritative Pipeline F implementation
+// 📊 Used by: Merzbow, Testing page, WebGPU services, all Pipeline F applications
+// 🎯 Purpose: coordinates + curve → index value + index position (NO PALETTE)
 export function applyPipelineF(
   x: number, 
   y: number, 
@@ -320,7 +344,9 @@ export function normalizePalette(palette: PaletteColor[]): PaletteColor[] {
   return normalized;
 }
 
-// DP-level palette application (separate from core math pipeline)
+// 🎨 CRITICAL FUNCTION: DP-Level Palette Application
+// ⚠️ DO NOT MODIFY: Authoritative palette mapping for all Pipeline F applications
+// 📊 Purpose: Pipeline F result → final color (separate from core math pipeline)
 export function applyPaletteMapping(
   pipelineResult: { value: number; index: number },
   palette: PaletteColor[]

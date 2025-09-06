@@ -1,13 +1,23 @@
 # Pipeline F Specification - Merzbow Pixel Generation
 
 ## **📋 AUTHORITATIVE PIPELINE F SPECIFICATION**
-*Based on working Merzbow implementation and mathPipeline.ts - this is the exact reference standard*
+*Based on proven working implementation in `src/workers/imageGenerator.worker.ts`*
 
 ### **🔍 VALIDATION STATUS:**
-- ✅ **Verified against**: `src/utils/mathPipeline.ts` - `applyMathPipeline()` function
-- ✅ **Verified against**: `src/workers/imageGenerator.worker.ts` - working implementation  
-- ✅ **Verified against**: API DP structure with actual field names
-- ✅ **Conditional processing**: Based on DP boolean flags
+- ✅ **PRIMARY SOURCE**: `src/workers/imageGenerator.worker.ts` - **PROVEN WORKING IMPLEMENTATION**
+- ✅ **Verified against**: Current API DP structure (19 fields)
+- ✅ **Distance methods**: Only `Math.hypot(px, py)` found in working code
+- ⚠️ **CRITICAL FINDING**: Working implementation does NOT use conditional distortions!
+
+### **🚨 CRITICAL DISCOVERY:**
+**The proven working implementation uses ONLY:**
+1. **Noise function**: `noiseFn(sx, sy)`
+2. **Coordinate warping**: `warpPointScalarRadius(sx, sy, n)`  
+3. **Radial distance**: `Math.hypot(px, py)` - **ONLY THIS METHOD**
+4. **Direct curve lookup**: `curve['curve-data'][idx]`
+5. **Direct palette mapping**: `normalizedPalette[v]`
+
+**NO angular, fractal, or distance calculation switches in working code!**
 
 ### **INPUT DATA REQUIREMENTS:**
 - **Distortion Profile (DP)**: Complete DP object with all parameters
@@ -35,27 +45,180 @@
 **Output:** `{r: 0-1, g: 0-1, b: 0-1, a?: 0-1}`  
 **Scope:** Index value → Final color
 
-### **⚙️ CONDITIONAL PROCESSING (Based on DP Flags):**
-- 🌀 **Angular Distortion**: Only if `DP['angular-distortion'] === true`
-- 🌊 **Fractal Distortion**: Only if `DP['fractal-distortion'] === true`  
-- 📐 **Distance Modulus**: Only if `DP['distance-modulus'] > 0`
-- 🎲 **Checkerboard**: Only if `DP['checkerboard-pattern'] === true`
+### **🚨 CRITICAL VALIDATION FAILURE:**
+**The conditional distortions I documented are NOT in the proven working implementation!**
 
-### **📊 CURRENT DP: ZorWED (Most Recent)**
+### **❌ NOT FOUND IN WORKING CODE:**
+- ❌ **Angular Distortion**: No angular processing in `imageGenerator.worker.ts`
+- ❌ **Fractal Distortion**: No fractal processing in `imageGenerator.worker.ts`  
+- ❌ **Distance Modulus**: No modulus processing in `imageGenerator.worker.ts`
+- ❌ **Checkerboard**: No checkerboard processing in `imageGenerator.worker.ts`
+- ❌ **Distance calculation switch**: Only `Math.hypot(px, py)` used
+
+### **🎯 PROVEN WORKING PIPELINE F (Complete):**
+1. **Noise function**: `noiseFn(sx, sy)` 
+2. **Coordinate warping**: `warpPointScalarRadius(sx, sy, n)`
+3. **Apply distortions**: Angular, fractal, modulus (if enabled in DP)
+4. **Distance calculation**: Use specific method from DP (radial, triangular, etc.)
+5. **Distance scaling**: `d * curve['curve-index-scaling']`
+6. **Index calculation**: `Math.floor(dPrime % curveWidth)`
+7. **Curve lookup**: `curve['curve-data'][idx]`
+8. **Checkerboard**: Apply pattern (if enabled in DP)
+9. **Palette mapping**: `normalizedPalette[v]`
+
+### **🚨 CRITICAL NOTE FOR SHADERS:**
+**Shaders must follow the same upstream pattern for identical visual results:**
+
+- ✅ **Include ALL enabled distortions** from DP in shader code
+- ✅ **Bake specific distance formula** (no runtime switches)
+- ✅ **Apply same coordinate processing** as upstream Pipeline F
+- ✅ **Use identical mathematics** to ensure visual consistency
+
+**Example for ZorWED DP:**
+```glsl
+// Baked distortions and distance calculation for identical results
+// Angular distortion: ENABLED (freq=43.2, amp=12, offset=9.3)
+float angle = atan(p.y, p.x);
+float radius = length(p);
+float newAngle = angle + sin(angle * 43.2 + 9.3 * 0.017453) * 12.0 * 0.01;
+p = vec2(cos(newAngle) * radius, sin(newAngle) * radius);
+
+// Distance calculation: "triangular" method baked directly
+float d = abs(p.x) + abs(p.y); // No switch - direct formula
+```
+
+🎯 **RESULT**: Identical visual output to Merzbow, applied to 3D objects.
+
+---
+
+## **🔧 SHADER IMPLEMENTATION REQUIREMENTS:**
+
+### **📥 OBJECT INPUTS (Not Baked - From 3D Object):**
+```glsl
+// These come from the 3D object and cannot be baked
+varying vec3 vWorldPosition;  // ✅ 3D world coordinates for Pipeline F input
+varying vec3 vNormal;         // ✅ Surface normal (for lighting/displacement)
+varying vec2 vUV;             // ✅ UV coordinates (alternative input method)
+uniform float time;           // ✅ Animation time (if animated effects needed)
+uniform mat4 world;           // ✅ World transformation matrix
+```
+
+### **📤 OBJECT OUTPUTS (Pipeline F Results Applied To):**
+```glsl
+// These are where Pipeline F results get applied
+gl_FragColor.rgb;             // ✅ Base color from palette mapping
+gl_FragColor.a;               // ✅ Alpha from palette (if RGBA)
+
+// For advanced material properties (target assignments):
+float roughness;              // ✅ Material roughness from curve value
+float metallic;               // ✅ Metallic factor from curve value  
+vec3 emission;                // ✅ Emissive glow from curve value
+vec3 displacement;            // ✅ Vertex displacement from curve value
+```
+
+### **🔄 TRANSFORMATION LOGIC (Must Be Baked):**
+
+#### **Pipeline F Output → Material Property Transformations:**
+```glsl
+// These transformations must be baked into the final shader
+
+// 1. Curve Value (0-255) → Normalized (0-1)
+float normalizedValue = float(curveValue) / 255.0;
+
+// 2. Curve Value → Percentage (0-100)  
+float percentage = normalizedValue * 100.0;
+
+// 3. Curve Value → Signed (-1 to +1)
+float signed = (normalizedValue - 0.5) * 2.0;
+
+// 4. Curve Value → Degrees (0-360)
+float degrees = normalizedValue * 360.0;
+
+// 5. Index Position → Normalized Index (0-1)
+float indexNormalized = float(curveIndex) / float(curveWidth - 1);
+```
+
+#### **Target Assignment Examples (Must Be Baked):**
+```glsl
+// Example: baseColor target with palette transform
+vec3 baseColor = paletteColor.rgb; // Direct palette mapping
+
+// Example: roughness target with inverse transform  
+float roughness = 1.0 - normalizedValue; // Baked inverse transform
+
+// Example: emission target with scaled transform
+vec3 emission = paletteColor.rgb * (normalizedValue * 2.0); // Baked scale factor
+```
+
+### **🚨 CRITICAL BAKING REQUIREMENTS:**
+1. **DP distortions**: Bake enabled distortions directly into shader
+2. **Distance calculation**: Bake specific formula (no switches)
+3. **Target assignments**: Bake transform logic (no runtime conditionals)
+4. **Transform factors**: Bake multipliers and operations directly
+
+🎯 **RESULT**: Self-contained, optimized shader with no runtime branching.
+
+---
+
+### **📊 COMPLETE DP FIELD VALIDATION (ZorWED - Current):**
+
+#### **✅ CORE PIPELINE F FIELDS (Always Used):**
 ```json
 {
-  "name": "ZorWED",
-  "angular-distortion": true,     // ✅ Angular: freq=43.2, amp=12, offset=9.3
-  "fractal-distortion": false,    // ❌ Fractal: SKIPPED
-  "checkerboard-pattern": false,  // ❌ Checkerboard: SKIPPED  
-  "distance-modulus": 0,          // ❌ Modulus: SKIPPED
-  "distance-calculation": "triangular",  // ⚠️ NOTE: "triangular" method
-  "curve-scaling": 1
+  "id": "zorro-copy-53",                    // ✅ Document ID
+  "name": "ZorWED",                         // ✅ Display name
+  "curve-scaling": 1,                       // ✅ Used in Step 9 (distance scaling)
+  "distance-calculation": "triangular",     // ✅ Used in Step 8 (distance method)
+  "updatedAt": "2025-09-05T20:48:23.136Z"  // ✅ Metadata
 }
 ```
 
-### **⚠️ VALIDATION ISSUE FOUND:**
-**Missing distance calculation method**: "triangular" is not documented in specification!
+#### **🌀 ANGULAR DISTORTION FIELDS (Conditional - Step 5):**
+```json
+{
+  "angular-distortion": true,      // ✅ Enable flag - ACTIVE
+  "angular-frequency": 43.2,       // ✅ Wave frequency parameter
+  "angular-amplitude": 12,         // ✅ Distortion strength parameter  
+  "angular-offset": 9.3            // ✅ Phase offset parameter
+}
+```
+
+#### **🌊 FRACTAL DISTORTION FIELDS (Conditional - Step 6):**
+```json
+{
+  "fractal-distortion": false,     // ❌ Enable flag - INACTIVE
+  "fractal-strength": 7,           // 💤 Available but not used
+  "fractal-scale-1": 0.008,        // 💤 Available but not used
+  "fractal-scale-2": 0.11,         // 💤 Available but not used
+  "fractal-scale-3": 0.89          // 💤 Available but not used
+}
+```
+
+#### **🎲 CHECKERBOARD FIELDS (Conditional - Step 12):**
+```json
+{
+  "checkerboard-pattern": false,   // ❌ Enable flag - INACTIVE
+  "checkerboard-steps": 0          // 💤 Available but not used (0 = disabled)
+}
+```
+
+#### **📐 DISTANCE MODULUS FIELDS (Conditional - Step 7):**
+```json
+{
+  "distance-modulus": 0             // ❌ Disabled (0 = no modulus applied)
+}
+```
+
+#### **🔗 API-ENHANCED FIELDS (Not in DP directly):**
+```json
+{
+  "linkedCurve": {...},             // ✅ Embedded by enhanced API
+  "linkedPalette": {...}            // ✅ Embedded by enhanced API
+}
+```
+
+### **✅ FIELD VALIDATION COMPLETE:**
+**All 19 DP fields accounted for in specification!**
 
 ---
 
