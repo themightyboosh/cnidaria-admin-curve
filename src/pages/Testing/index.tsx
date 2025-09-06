@@ -1547,9 +1547,53 @@ fn main(input: VertexInput) -> VertexOutput {
     }
   }
 
+  // Helper to build distortion code safely (prevents Babel parsing issues)
+  const buildDistortionCode = (dp: any): string => {
+    if (!dp) return ''
+    
+    let code = ''
+    
+    // Distance modulus wrapping
+    if (dp['distance-modulus'] && dp['distance-modulus'] > 0) {
+      const modulus = dp['distance-modulus'].toFixed(1)
+      code += `  // Distance modulus wrapping\n  let modulus = ${modulus}f;\n  p = (p + modulus * 0.5) % modulus - modulus * 0.5;\n\n`
+    }
+    
+    // Angular distortion
+    if (dp['angular-distortion']) {
+      const freq = (dp['angular-frequency'] || 1.0).toFixed(1)
+      const amp = (dp['angular-amplitude'] || 1.0).toFixed(1)
+      const offset = (dp['angular-offset'] || 0.0).toFixed(1)
+      code += `  // Angular distortion\n  let angle = atan2(p.y, p.x);\n  let radius = length(p);\n  let newAngle = angle + sin(angle * ${freq}f + ${offset}f * 0.017453f) * ${amp}f * 0.01f;\n  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);\n\n`
+    }
+    
+    // Fractal distortion
+    if (dp['fractal-distortion']) {
+      const strength = (dp['fractal-strength'] || 1.0).toFixed(1)
+      const scale1 = (dp['fractal-scale-1'] || 0.1).toFixed(3)
+      const scale2 = (dp['fractal-scale-2'] || 0.1).toFixed(3)
+      const scale3 = (dp['fractal-scale-3'] || 0.1).toFixed(3)
+      code += `  // Fractal distortion (3-scale system)\n  p.x += sin(p.y * ${scale1}f) * ${strength}f * 0.3f;\n  p.y += cos(p.x * ${scale2}f) * ${strength}f * 0.3f;\n  p.x += sin(p.y * ${scale3}f) * ${strength}f * 0.1f;\n\n`
+    }
+    
+    // Checkerboard pattern
+    if (dp['checkerboard-pattern'] && dp['checkerboard-steps'] && dp['checkerboard-steps'] > 0) {
+      const stepInverse = (1.0 / dp['checkerboard-steps']).toFixed(6)
+      code += `  // Checkerboard pattern\n  let checker = floor(distance * ${stepInverse}f);\n  if (checker % 2.0f > 0.5f) {\n    curveValue = 1.0f - curveValue;\n  }\n\n`
+    }
+    
+    return code
+  }
+
   // Create actual Pipeline F ShaderMaterial using proper WGSL structure
   const createPipelineFShaderMaterial = (scene: any, selectedDP: any, curveTexture: any, paletteTexture: any, targets: TargetAssignment[]) => {
     const { BABYLON } = babylonScene
+    
+    // Validate inputs to prevent parsing errors
+    if (!selectedDP || !selectedDP.id) {
+      console.error('❌ Invalid DP provided to shader material creation')
+      return null
+    }
     
     // Generate unique shader names to avoid conflicts
     const shaderBaseName = `pipelineF_${selectedDP.id}`
@@ -1597,7 +1641,11 @@ fn main(input: VertexInputs) -> VertexOutputs {
 }
 `
     
-    // Create WGSL fragment shader with baked Pipeline F mathematics
+    // Build WGSL fragment shader with safe parameter injection
+    const distortionCode = buildDistortionCode(selectedDP)
+    const distanceCalculation = getDistanceCalculationWGSL(selectedDP['distance-calculation'] || 'radial')
+    const curveScaling = (selectedDP['curve-scaling'] || 1.0).toFixed(4)
+    
     const fragmentShader = `
 struct VertexOutputs {
   @builtin(position) position: vec4f,
@@ -1630,29 +1678,10 @@ fn main(input: VertexOutputs) -> @location(0) vec4f {
   var p = (input.worldPosition.xz - uniforms.worldOrigin) * uniforms.worldScale;
   
   // Step 2: Apply Pipeline F distortions (baked from DP parameters)
-  ${selectedDP['distance-modulus'] > 0 ? `
-  // Distance modulus wrapping
-  let modulus = ${selectedDP['distance-modulus'].toFixed(1)}f;
-  p = (p + modulus * 0.5) % modulus - modulus * 0.5;
-  ` : ''}
-  
-  ${selectedDP['angular-distortion'] ? `
-  // Angular distortion
-  let angle = atan2(p.y, p.x);
-  let radius = length(p);
-  let newAngle = angle + sin(angle * ${selectedDP['angular-frequency'].toFixed(1)}f + ${selectedDP['angular-offset'].toFixed(1)}f * 0.017453f) * ${selectedDP['angular-amplitude'].toFixed(1)}f * 0.01f;
-  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);
-  ` : ''}
-  
-  ${selectedDP['fractal-distortion'] ? `
-  // Fractal distortion (3-scale system)
-  p.x += sin(p.y * ${selectedDP['fractal-scale-1'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f;
-  p.y += cos(p.x * ${selectedDP['fractal-scale-2'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.3f;
-  p.x += sin(p.y * ${selectedDP['fractal-scale-3'].toFixed(3)}f) * ${selectedDP['fractal-strength'].toFixed(1)}f * 0.1f;
-  ` : ''}
+${distortionCode}
   
   // Step 3: Calculate distance using selected method (baked)
-  var distance = ${getDistanceCalculationWGSL(selectedDP['distance-calculation'])} * ${selectedDP['curve-scaling'].toFixed(4)}f;
+  var distance = ${distanceCalculation} * ${curveScaling}f;
   
   // Step 4: Lookup curve value from 8-bit data texture
   var curveValue = 0.5f; // Default fallback
@@ -1665,14 +1694,6 @@ fn main(input: VertexOutputs) -> @location(0) vec4f {
     let curveCoord = vec2f(t, 0.5f);
     curveValue = textureSample(curveTexture, curveSampler, curveCoord).r;
   }
-  
-  // Step 5: Apply checkerboard pattern if enabled (baked)
-  ${selectedDP['checkerboard-pattern'] && selectedDP['checkerboard-steps'] > 0 ? `
-  let checker = floor(distance * ${(1.0 / selectedDP['checkerboard-steps']).toFixed(6)}f);
-  if (checker % 2.0f > 0.5f) {
-    curveValue = 1.0f - curveValue;
-  }
-  ` : ''}
   
   // Step 6: Use curveValue to lookup palette color (Merzbow logic)
   var finalColor = vec3f(curveValue, curveValue, curveValue); // Grayscale fallback
