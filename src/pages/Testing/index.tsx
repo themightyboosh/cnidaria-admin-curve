@@ -1558,12 +1558,15 @@ fn main(input: VertexInput) -> VertexOutput {
   const buildDistortionCode = (dp: any): string => {
     if (!dp) return ''
     
-    let code = ''
+    let code = '  // DISTORTION GENERATION CHOICES:\n'
     
     // Distance modulus wrapping
     if (dp['distance-modulus'] && dp['distance-modulus'] > 0) {
       const modulus = dp['distance-modulus'].toFixed(1)
+      code += '  // CHOICE: Distance modulus ENABLED (modulus=' + modulus + ')\n'
       code += '  // Distance modulus wrapping\n  let modulus = ' + modulus + 'f;\n  p = (p + modulus * 0.5) % modulus - modulus * 0.5;\n\n'
+    } else {
+      code += '  // CHOICE: Distance modulus DISABLED\n'
     }
     
     // Angular distortion
@@ -1571,7 +1574,10 @@ fn main(input: VertexInput) -> VertexOutput {
       const freq = (dp['angular-frequency'] || 1.0).toFixed(1)
       const amp = (dp['angular-amplitude'] || 1.0).toFixed(1)
       const offset = (dp['angular-offset'] || 0.0).toFixed(1)
+      code += '  // CHOICE: Angular distortion ENABLED (freq=' + freq + ', amp=' + amp + ', offset=' + offset + ')\n'
       code += '  // Angular distortion\n  let angle = atan2(p.y, p.x);\n  let radius = length(p);\n  let newAngle = angle + sin(angle * ' + freq + 'f + ' + offset + 'f * 0.017453f) * ' + amp + 'f * 0.01f;\n  p = vec2f(cos(newAngle) * radius, sin(newAngle) * radius);\n\n'
+    } else {
+      code += '  // CHOICE: Angular distortion DISABLED\n'
     }
     
     // Fractal distortion
@@ -1580,13 +1586,19 @@ fn main(input: VertexInput) -> VertexOutput {
       const scale1 = (dp['fractal-scale-1'] || 0.1).toFixed(3)
       const scale2 = (dp['fractal-scale-2'] || 0.1).toFixed(3)
       const scale3 = (dp['fractal-scale-3'] || 0.1).toFixed(3)
+      code += '  // CHOICE: Fractal distortion ENABLED (strength=' + strength + ', scales=' + scale1 + ',' + scale2 + ',' + scale3 + ')\n'
       code += '  // Fractal distortion (3-scale system)\n  p.x += sin(p.y * ' + scale1 + 'f) * ' + strength + 'f * 0.3f;\n  p.y += cos(p.x * ' + scale2 + 'f) * ' + strength + 'f * 0.3f;\n  p.x += sin(p.y * ' + scale3 + 'f) * ' + strength + 'f * 0.1f;\n\n'
+    } else {
+      code += '  // CHOICE: Fractal distortion DISABLED\n'
     }
     
     // Checkerboard pattern
     if (dp['checkerboard-pattern'] && dp['checkerboard-steps'] && dp['checkerboard-steps'] > 0) {
       const stepInverse = (1.0 / dp['checkerboard-steps']).toFixed(6)
+      code += '  // CHOICE: Checkerboard ENABLED (steps=' + dp['checkerboard-steps'] + ')\n'
       code += '  // Checkerboard pattern\n  let checker = floor(distance * ' + stepInverse + 'f);\n  if (checker % 2.0f > 0.5f) {\n    curveValue = 1.0f - curveValue;\n  }\n\n'
+    } else {
+      code += '  // CHOICE: Checkerboard DISABLED\n'
     }
     
     return code
@@ -1648,12 +1660,26 @@ fn main(input: VertexInputs) -> VertexOutputs {
 }
 `
     
-    // Build WGSL fragment shader with safe parameter injection
+    // Build WGSL fragment shader with safe parameter injection and generation comments
     const distortionCode = buildDistortionCode(selectedDP)
     const distanceCalculation = getDistanceCalculationWGSL(selectedDP['distance-calculation'] || 'radial')
     const curveScaling = (selectedDP['curve-scaling'] || 1.0).toFixed(4)
     
-    const fragmentShader = `
+    // Generate detailed comments about choices made by the generator
+    const generationChoices = `
+// 🤖 SHADER GENERATION CHOICES:
+// DP: ${selectedDP.name} (ID: ${selectedDP.id})
+// Distance Calculation: ${selectedDP['distance-calculation'] || 'radial'} (from DP setting)
+// Angular Distortion: ${selectedDP['angular-distortion'] ? 'ENABLED' : 'DISABLED'} (freq=${selectedDP['angular-frequency'] || 'N/A'}, amp=${selectedDP['angular-amplitude'] || 'N/A'}, offset=${selectedDP['angular-offset'] || 'N/A'})
+// Fractal Distortion: ${selectedDP['fractal-distortion'] ? 'ENABLED' : 'DISABLED'} (strength=${selectedDP['fractal-strength'] || 'N/A'})
+// Distance Modulus: ${selectedDP['distance-modulus'] > 0 ? 'ENABLED (' + selectedDP['distance-modulus'] + ')' : 'DISABLED'}
+// Checkerboard: ${selectedDP['checkerboard-pattern'] ? 'ENABLED (' + selectedDP['checkerboard-steps'] + ' steps)' : 'DISABLED'}
+// Curve Scaling: ${curveScaling} (from DP curve-scaling)
+// World Scale: 2.0 (for Merzbow parity)
+// World Origin: (0.0, 0.0) (world-anchored mapping)
+`
+    
+    const fragmentShader = `${generationChoices}
 struct VertexOutputs {
   @builtin(position) position: vec4f,
   @location(0) worldPosition: vec3f,
@@ -2101,7 +2127,23 @@ ${distortionCode}
       ? paletteData.slice(0, 256).map((c: any) => `vec4f(${c.r}, ${c.g}, ${c.b}, ${c.a || 1.0})`).join(', ')
       : Array.from({length: 256}, (_, i) => `vec4f(${i/255}, ${i/255}, ${i/255}, 1.0)`).join(', ')
     
-    return `
+    // Generate detailed comments about compute shader choices
+    const computeGenerationChoices = `
+// 🤖 COMPUTE SHADER GENERATION CHOICES:
+// DP: ${selectedDP.name} (ID: ${selectedDP.id})
+// Distance Calculation: ${selectedDP['distance-calculation'] || 'radial'} (baked into shader)
+// Angular Distortion: ${selectedDP['angular-distortion'] ? 'ENABLED' : 'DISABLED'} (freq=${selectedDP['angular-frequency'] || 'N/A'}, amp=${selectedDP['angular-amplitude'] || 'N/A'}, offset=${selectedDP['angular-offset'] || 'N/A'})
+// Fractal Distortion: ${selectedDP['fractal-distortion'] ? 'ENABLED' : 'DISABLED'} (strength=${selectedDP['fractal-strength'] || 'N/A'})
+// Distance Modulus: ${selectedDP['distance-modulus'] > 0 ? 'ENABLED (' + selectedDP['distance-modulus'] + ')' : 'DISABLED'}
+// Checkerboard: ${selectedDP['checkerboard-pattern'] ? 'ENABLED (' + selectedDP['checkerboard-steps'] + ' steps)' : 'DISABLED'}
+// Curve Data: ${curveData ? curveData.length + ' values' : 'fallback'} (embedded as constants)
+// Palette Data: ${paletteData ? paletteData.length + ' colors' : 'fallback'} (embedded as constants)
+// Texture Size: 512x512 (matches Merzbow output)
+// World Scale: Configurable via uniform (for coordinate mapping)
+// Curve Scaling: Configurable via uniform (from curve data)
+`
+
+    return `${computeGenerationChoices}
 // 🔥 Pipeline F Compute Shader (Static, Maximum Performance)
 // Baked for DP: ${selectedDP.name}
 // WebGPU-native WGSL with embedded curve and palette data
