@@ -1280,7 +1280,7 @@ fn main(input: VertexInput) -> VertexOutput {
       
       // For now, use the working DynamicTexture approach for both modes
       // TODO: Implement actual compute shader execution for static mode
-      const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
+      const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData, enhancedDP)
       
       console.log(`🎯 Using ${renderMode} mode (DynamicTexture implementation for both)`)
       
@@ -1830,7 +1830,7 @@ ${distortionCode}
   }
 
   // Create Pipeline F material using proven mathematics (replicates Merzbow canvas generation)
-  const createPipelineFTextureMaterial = (scene: any, selectedDP: any, curveData: any, paletteData: any) => {
+  const createPipelineFTextureMaterial = (scene: any, selectedDP: any, curveData: any, paletteData: any, enhancedDP?: any) => {
     const { BABYLON } = babylonScene
     
     console.log('🎨 Creating Pipeline F texture using proven mathematics...')
