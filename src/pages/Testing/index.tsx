@@ -2122,18 +2122,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
   }
 
-  // Helper for distance calculation WGSL
-  const getDistanceCalculationWGSL = (type: string): string => {
-    switch(type) {
-      case 'radial': return 'length(p)'
-      case 'cartesian-x': return 'abs(p.x)'
-      case 'cartesian-y': return 'abs(p.y)'
-      case 'manhattan': return 'abs(p.x) + abs(p.y)'
-      case 'chebyshev': return 'max(abs(p.x), abs(p.y))'
-      default: return 'length(p)'
-    }
-  }
-
   // Apply Pipeline F NodeMaterial to mesh
   const applyPipelineFNodeMaterial = async () => {
     if (!babylonScene || !babylonScene.mesh) {
