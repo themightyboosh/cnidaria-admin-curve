@@ -1947,19 +1947,8 @@ ${distortionCode}
         return 1.0 + Math.sin(x * 0.01) * 0.1 + Math.cos(y * 0.01) * 0.1
       }
       
-      // Step 1: Apply PROVEN WORKING Pipeline F (simplified - no conditional distortions)
-      // Matches imageGenerator.worker.ts exactly
-      const n = noiseFn(worldX, worldY)
-      const [px, py] = warpPointScalarRadius(worldX, worldY, n)
-      const d = Math.hypot(px, py) // ONLY radial distance
-      const dPrime = d * curve['curve-index-scaling']
-      const curveWidth = Math.max(1, curve['curve-width'] | 0)
-      let idx = Math.floor(dPrime % curveWidth)
-      if (idx < 0) idx += curveWidth
-      if (idx >= curveWidth) idx = curveWidth - 1
-      const v = curve['curve-data'][idx] | 0 // 0..255
-      
-      const pipelineResult = { value: v, index: idx }
+      // Step 1: Apply Pipeline F with DP-selected distortions and distance calculations
+      const pipelineResult = applyPipelineF(worldX, worldY, noiseFn, curve, selectedDP)
       
       // Emergency validation - check if Pipeline F is working at all
       if (pixelCount < 1) {
