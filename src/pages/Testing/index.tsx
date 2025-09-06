@@ -182,6 +182,7 @@ const Testing: React.FC = () => {
   const [pipelineFMaterial, setPipelineFMaterial] = useState<any>(null)
   const [generatedShaderCode, setGeneratedShaderCode] = useState<{glsl: string, wgsl: string} | null>(null)
   const [isShaderViewerOpen, setIsShaderViewerOpen] = useState(false)
+  const [showShaderCode, setShowShaderCode] = useState(false)
 
   // WGSL live editor
   const defaultCheckerWGSL = `
@@ -1466,6 +1467,7 @@ fn main(input: VertexInput) -> VertexOutput {
         b: paletteBTexture,
         a: paletteATexture,
         hasAlpha
+      }
     }
     
     return { curveTexture, paletteTexture }
@@ -2724,12 +2726,12 @@ void main() {
               </button>
               
               <button 
-                onClick={viewGeneratedShader}
+                onClick={() => setShowShaderCode(!showShaderCode)}
                 className="test-btn"
                 style={{ backgroundColor: '#17a2b8', flex: 1 }}
                 disabled={!generatedShaderCode}
               >
-                👁️ View Shader Code
+                👁️ {showShaderCode ? 'Hide' : 'Show'} Shader Code
               </button>
               
               <button 
@@ -2746,6 +2748,57 @@ void main() {
             {pipelineFMaterial && (
               <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#d4edda', borderRadius: '4px', fontSize: '12px', color: '#155724' }}>
                 ✅ NodeMaterial generated for {pipelineFMaterial.distortionProfile?.name || 'Unknown DP'}
+              </div>
+            )}
+
+            {/* Shader Code Viewer (Expandable Section - No Modal) */}
+            {showShaderCode && generatedShaderCode && (
+              <div style={{ marginTop: '15px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8f9fa' }}>
+                <h4 style={{ marginBottom: '15px', color: '#333' }}>Generated Shader Code</h4>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <h5>GLSL Fragment Shader:</h5>
+                  <pre style={{ 
+                    backgroundColor: '#1e1e1e', 
+                    color: '#d4d4d4', 
+                    padding: '15px', 
+                    borderRadius: '4px', 
+                    fontSize: '11px',
+                    overflow: 'auto',
+                    maxHeight: '300px',
+                    lineHeight: '1.4'
+                  }}>
+                    {generatedShaderCode.glsl}
+                  </pre>
+                </div>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <h5>WGSL (Auto-Generated):</h5>
+                  <pre style={{ 
+                    backgroundColor: '#1e1e1e', 
+                    color: '#d4d4d4', 
+                    padding: '15px', 
+                    borderRadius: '4px', 
+                    fontSize: '11px',
+                    overflow: 'auto',
+                    maxHeight: '200px',
+                    lineHeight: '1.4'
+                  }}>
+                    {generatedShaderCode.wgsl}
+                  </pre>
+                </div>
+
+                {/* Shader Metadata */}
+                {pipelineFMaterial?.distortionProfile && (
+                  <div style={{ padding: '15px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
+                    <h5>Shader Metadata:</h5>
+                    <p><strong>Distortion Profile:</strong> {pipelineFMaterial.distortionProfile.name}</p>
+                    <p><strong>Curve Reference:</strong> {pipelineFMaterial.curveData ? 'Loaded' : 'None'}</p>
+                    <p><strong>Palette Reference:</strong> {pipelineFMaterial.paletteData ? 'Loaded' : 'None'}</p>
+                    <p><strong>Target Assignments:</strong> {targetAssignments.filter(t => t.enabled).length} active</p>
+                    <p><strong>Generated:</strong> {new Date().toLocaleString()}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2893,68 +2946,6 @@ void main() {
           />
         </div>
       </div>
-
-      {/* Modals */}
-      {isWGSLModalOpen && (
-        <Modal isOpen={isWGSLModalOpen} onClose={() => setIsWGSLModalOpen(false)} title="WGSL Shader (Final)">
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px', lineHeight: '1.4', maxHeight: '60vh', overflow: 'auto' }}>
-{lastWGSL}
-          </pre>
-        </Modal>
-      )}
-
-      {/* Shader Code Viewer Modal */}
-      {isShaderViewerOpen && generatedShaderCode && (
-        <Modal 
-          isOpen={isShaderViewerOpen}
-          onClose={() => setIsShaderViewerOpen(false)}
-          title="Generated Shader Code"
-        >
-          <div style={{ maxHeight: '70vh', overflow: 'auto' }}>
-            <div style={{ marginBottom: '20px' }}>
-              <h4>GLSL Fragment Shader:</h4>
-              <pre style={{ 
-                backgroundColor: '#1e1e1e', 
-                color: '#d4d4d4', 
-                padding: '15px', 
-                borderRadius: '4px', 
-                fontSize: '12px',
-                overflow: 'auto',
-                maxHeight: '200px'
-              }}>
-                {generatedShaderCode.glsl}
-              </pre>
-            </div>
-            
-            <div style={{ marginBottom: '20px' }}>
-              <h4>WGSL Auto-Generated:</h4>
-              <pre style={{ 
-                backgroundColor: '#1e1e1e', 
-                color: '#d4d4d4', 
-                padding: '15px', 
-                borderRadius: '4px', 
-                fontSize: '12px',
-                overflow: 'auto',
-                maxHeight: '200px'
-              }}>
-                {generatedShaderCode.wgsl}
-              </pre>
-            </div>
-
-            {/* Shader Metadata */}
-            {pipelineFMaterial?.distortionProfile && (
-              <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                <h4>Shader Metadata:</h4>
-                <p><strong>Distortion Profile:</strong> {pipelineFMaterial.distortionProfile.name}</p>
-                <p><strong>Curve Reference:</strong> {pipelineFMaterial.curveData ? 'Loaded' : 'None'}</p>
-                <p><strong>Palette Reference:</strong> {pipelineFMaterial.paletteData ? 'Loaded' : 'None'}</p>
-                <p><strong>Target Assignments:</strong> {targetAssignments.filter(t => t.enabled).length} active</p>
-                <p><strong>Generated:</strong> {new Date().toLocaleString()}</p>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }
