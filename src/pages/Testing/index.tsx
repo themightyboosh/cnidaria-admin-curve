@@ -1278,15 +1278,11 @@ fn main(input: VertexInput) -> VertexOutput {
       // This avoids the complex NodeMaterial connection issues
       const standardMaterial = new BABYLON.StandardMaterial(`pipelineF_${currentDP.id}`, scene)
       
-      // Create Pipeline F material based on render mode
-      let pipelineFMaterial
-      if (renderMode === 'static') {
-        // Use compute shader approach for static generation
-        pipelineFMaterial = await createPipelineFComputeMaterial(scene, currentDP, dpCurveData, dpPaletteData)
-      } else {
-        // Use real-time shader material approach
-        pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
-      }
+      // For now, use the working DynamicTexture approach for both modes
+      // TODO: Implement actual compute shader execution for static mode
+      const pipelineFMaterial = createPipelineFTextureMaterial(scene, currentDP, dpCurveData, dpPaletteData)
+      
+      console.log(`🎯 Using ${renderMode} mode (DynamicTexture implementation for both)`)
       
       // Generate shader code for viewing based on render mode
       let compiledShaders = { glsl: '', wgsl: '' }
