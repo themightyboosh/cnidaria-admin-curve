@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Modal from '../../components/shared/Modal'
 import Header from '../../components/Header'
 import { apiUrl } from '../../config/environments'
-import { applyPipelineF, applyPaletteMapping, buildNoiseFn } from '../../utils/mathPipeline'
+import { applyPipelineF, applyPaletteMapping, buildNoiseFn, warpPointScalarRadius } from '../../utils/mathPipeline'
 import './Testing.css'
 
 type GeometryType = 'sphere' | 'cube' | 'landscape-box'
@@ -1896,14 +1896,15 @@ ${distortionCode}
   const applyProvenPipelineFLogic = (worldX: number, worldY: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number, enhancedDP?: any) => {
     try {
       // Create curve object that matches mathPipeline.ts interface
-      // Use the curve's own index scaling, not DP curve-scaling
-      const curveIndexScaling = enhancedDP.linkedCurve?.['curve-index-scaling'] || enhancedDP.linkedCurve?.['index-scaling'] || 1.0
-      console.log('🔍 Using curve index scaling from curve data:', curveIndexScaling)
+      // Use PROVEN WORKING implementation - simple radial distance only
+      // From imageGenerator.worker.ts: d = Math.hypot(px, py); dPrime = d * curve['curve-index-scaling']
+      const curveIndexScaling = enhancedDP?.linkedCurve?.['curve-index-scaling'] || 1.0
+      console.log('🔍 Using proven curve index scaling:', curveIndexScaling)
       
       const curve = {
         'curve-data': curveData || [],
         'curve-width': curveData ? curveData.length : 256,
-        'curve-index-scaling': curveIndexScaling // Use curve's own scaling, not DP scaling
+        'curve-index-scaling': curveIndexScaling // Use curve's own scaling from API
       }
       
       // Comprehensive validation of DP → curve → Pipeline F data flow
@@ -1946,8 +1947,19 @@ ${distortionCode}
         return 1.0 + Math.sin(x * 0.01) * 0.1 + Math.cos(y * 0.01) * 0.1
       }
       
-      // Step 1: Apply core math pipeline (coordinates + curve → index value + position)
-      const pipelineResult = applyPipelineF(worldX, worldY, noiseFn, curve, selectedDP)
+      // Step 1: Apply PROVEN WORKING Pipeline F (simplified - no conditional distortions)
+      // Matches imageGenerator.worker.ts exactly
+      const n = noiseFn(worldX, worldY)
+      const [px, py] = warpPointScalarRadius(worldX, worldY, n)
+      const d = Math.hypot(px, py) // ONLY radial distance
+      const dPrime = d * curve['curve-index-scaling']
+      const curveWidth = Math.max(1, curve['curve-width'] | 0)
+      let idx = Math.floor(dPrime % curveWidth)
+      if (idx < 0) idx += curveWidth
+      if (idx >= curveWidth) idx = curveWidth - 1
+      const v = curve['curve-data'][idx] | 0 // 0..255
+      
+      const pipelineResult = { value: v, index: idx }
       
       // Emergency validation - check if Pipeline F is working at all
       if (pixelCount < 1) {
