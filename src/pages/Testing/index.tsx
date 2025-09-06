@@ -1797,11 +1797,11 @@ fn main(input: VertexInput) -> VertexOutput {
       if (idx < 0) idx += curveWidth
       if (idx >= curveWidth) idx = curveWidth - 1
       
-      // Step 6: Lookup curve value (from curve-data[idx]) and normalize
+      // Step 6: Lookup curve value (from curve-data[idx]) - use actual value as-is
       let curveValue = 0.5 // Default fallback
       if (curveData && curveData.length > 0) {
         const rawValue = curveData[idx] || 0
-        curveValue = rawValue / 255.0 // Normalize 0-255 to 0-1 range
+        curveValue = rawValue // ✅ Use actual curve value as-is (don't normalize!)
       } else {
         curveValue = idx / 255.0 // Fallback: linear ramp
       }
@@ -1811,9 +1811,10 @@ fn main(input: VertexInput) -> VertexOutput {
         console.log(`  Pixel ${pixelCount}: (${x.toFixed(2)}, ${y.toFixed(2)}) → d=${d.toFixed(3)} → idx=${idx} → curveValue=${curveValue.toFixed(3)}`)
       }
       
-      // Map curveValue to palette color (exact Merzbow logic) with conditional RGBA support
+      // Map curveValue to palette color (EXACT same logic as imageGenerator.worker.ts)
       if (paletteData && paletteData.length > 0) {
-        const paletteIndex = Math.floor(curveValue * (paletteData.length - 1))
+        // Use curve value directly as palette index (like existing code: normalizedPalette[v])
+        const paletteIndex = Math.min(Math.floor(curveValue), paletteData.length - 1)
         const color = paletteData[paletteIndex] || { r: 0.7, g: 0.7, b: 0.7 }
         
         // Check if alpha is present in the palette data
