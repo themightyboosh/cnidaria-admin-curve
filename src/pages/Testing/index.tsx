@@ -1816,7 +1816,7 @@ ${distortionCode}
     // Bind textures and samplers for WGSL
     if (hasCurve) {
       shaderMaterial.setTexture("curveTexture", curveTexture)
-      shaderMaterial.setTextureSampler("curveSampler", new BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      // Note: Babylon.js handles sampler creation automatically for WGSL
       console.log('📊 Curve texture bound to WGSL shader')
     } else {
       console.warn('⚠️ Curve texture not ready or missing - using fallback')
@@ -1824,7 +1824,7 @@ ${distortionCode}
     
     if (hasPalette) {
       shaderMaterial.setTexture("paletteTexture", paletteTexture)
-      shaderMaterial.setTextureSampler("paletteSampler", new BABYLON.Texture.NEAREST_SAMPLINGMODE)
+      // Note: Babylon.js handles sampler creation automatically for WGSL
       console.log('🎨 Palette texture bound to WGSL shader')
     } else {
       console.warn('⚠️ Palette texture not ready or missing - using grayscale fallback')
