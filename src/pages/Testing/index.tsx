@@ -1805,7 +1805,7 @@ fn main(input: VertexInput) -> VertexOutput {
   }
 
   // Apply exact Pipeline F logic using centralized mathPipeline.ts function
-  const applyProvenPipelineFLogic = (x: number, y: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number) => {
+  const applyProvenPipelineFLogic = (worldX: number, worldY: number, selectedDP: any, curveData: any, paletteData: any, pixelCount: number) => {
     try {
       // Create curve object that matches mathPipeline.ts interface
       const curve = {
