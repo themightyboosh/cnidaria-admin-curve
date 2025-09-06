@@ -3004,27 +3004,53 @@ void main() {
               <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                 <input 
                   type="radio" 
-                  checked={renderMode === 'static'}
-                  onChange={() => setRenderMode('static')}
+                  checked={renderMode === 'dynamic_texture'}
+                  onChange={() => setRenderMode('dynamic_texture')}
                   style={{ marginRight: '8px' }}
                 />
-                <span>🔥 <strong>Compute Shader</strong> (Static, Max Performance)</span>
+                <span>🎨 <strong>DynamicTexture</strong> (CPU-Generated)</span>
               </label>
               <div style={{ fontSize: '12px', color: '#666', marginLeft: '24px', marginBottom: '8px' }}>
-                Generate Pipeline F texture once using WebGPU compute shader. Best for static patterns.
+                Generate Pipeline F on CPU, apply with StandardMaterial. Most compatible.
               </div>
               
               <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                 <input 
                   type="radio" 
-                  checked={renderMode === 'realtime'}
-                  onChange={() => setRenderMode('realtime')}
+                  checked={renderMode === 'compute_shader'}
+                  onChange={() => setRenderMode('compute_shader')}
                   style={{ marginRight: '8px' }}
                 />
-                <span>⚡ <strong>ShaderMaterial</strong> (Real-time, Max Flexibility)</span>
+                <span>🔥 <strong>Compute Shader</strong> (WebGPU Static)</span>
+              </label>
+              <div style={{ fontSize: '12px', color: '#666', marginLeft: '24px', marginBottom: '8px' }}>
+                Generate Pipeline F texture using WebGPU compute shader. Maximum performance.
+              </div>
+              
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  checked={renderMode === 'shader_material'}
+                  onChange={() => setRenderMode('shader_material')}
+                  style={{ marginRight: '8px' }}
+                />
+                <span>⚡ <strong>ShaderMaterial</strong> (Real-time WGSL)</span>
+              </label>
+              <div style={{ fontSize: '12px', color: '#666', marginLeft: '24px', marginBottom: '8px' }}>
+                Real-time Pipeline F calculation in WGSL fragment shader. Maximum flexibility.
+              </div>
+              
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  checked={renderMode === 'procedural_texture'}
+                  onChange={() => setRenderMode('procedural_texture')}
+                  style={{ marginRight: '8px' }}
+                />
+                <span>🌊 <strong>ProceduralTexture</strong> (GPU-Generated)</span>
               </label>
               <div style={{ fontSize: '12px', color: '#666', marginLeft: '24px' }}>
-                Calculate Pipeline F per-pixel during rendering. Best for animated effects.
+                Generate Pipeline F using Babylon.js ProceduralTexture. GPU-based texture generation.
               </div>
             </div>
           </div>
