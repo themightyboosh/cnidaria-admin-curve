@@ -1857,6 +1857,17 @@ fn main(input: VertexInput) -> VertexOutput {
       // Step 1: Apply core math pipeline (coordinates + curve → index value + position)
       const pipelineResult = applyPipelineF(worldX, worldY, noiseFn, curve, selectedDP)
       
+      // Emergency validation - check if Pipeline F is working at all
+      if (pixelCount < 1) {
+        console.log('🚨 EMERGENCY VALIDATION - First pixel Pipeline F call:')
+        console.log('  applyPipelineF function available:', typeof applyPipelineF)
+        console.log('  applyPaletteMapping function available:', typeof applyPaletteMapping)
+        console.log('  Input coords:', worldX, worldY)
+        console.log('  Curve object:', curve)
+        console.log('  DP object keys:', Object.keys(selectedDP))
+        console.log('  Pipeline F result:', pipelineResult)
+      }
+      
       // Step 2: Apply DP-level palette mapping (index value → color)
       const paletteColor = applyPaletteMapping(pipelineResult, paletteData)
       
@@ -1905,7 +1916,13 @@ fn main(input: VertexInput) -> VertexOutput {
       return pixelColor
       
     } catch (error) {
-      // Error fallback
+      // Error fallback with detailed error logging (fix scoping)
+      if (pixelCount < 3) {
+        console.error(`❌ PIPELINE F ERROR for pixel ${pixelCount}:`, error)
+        console.error('  Input coords:', x, y)
+        console.error('  applyPipelineF available:', typeof applyPipelineF)
+        console.error('  applyPaletteMapping available:', typeof applyPaletteMapping)
+      }
       return { r: 128, g: 128, b: 128, a: 255 }
     }
   }

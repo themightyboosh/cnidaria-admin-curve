@@ -296,7 +296,6 @@ export function applyPipelineF(
 
 // Legacy function for backward compatibility (adds percentages for existing code)
 // TODO: Remove once all applications migrate to applyPipelineF + applyPaletteMapping
-/*
 export function applyMathPipeline(
   x: number, 
   y: number, 
@@ -318,7 +317,6 @@ export function applyMathPipeline(
     indexPct 
   };
 }
-*/
 
 // Normalize palette to 256 entries
 export function normalizePalette(palette: PaletteColor[]): PaletteColor[] {
